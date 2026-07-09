@@ -1,0 +1,68 @@
+{
+  "name": "delta-peacock",
+  "version": "0.0.0",
+  "description": "Guideline-anchored, provider-agnostic PR reviewer. Your rules, any SCM, any LLM.",
+  "keywords": [
+    "code-review",
+    "pull-request",
+    "ai",
+    "llm",
+    "guidelines",
+    "ci"
+  ],
+  "license": "Apache-2.0",
+  "author": "Nicola Carkaxhija",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nicolacarkaxhija/delta-peacock.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "bin": {
+    "delta-peacock": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.9.4",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
+  }
+}
