@@ -45,6 +45,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docs:check": "node scripts/check-docs.mjs",
+    "schema:update": "vitest run tests/config-schema.test.ts -u",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -64,6 +65,8 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   }
 }
