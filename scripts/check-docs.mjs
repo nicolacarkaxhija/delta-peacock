@@ -27,13 +27,21 @@ function markdownFilesUnder(dir) {
 }
 
 function linkTargets(file) {
-  const content = readFileSync(file, "utf8");
+  const content = readFileSync(file, "utf8")
+    .replace(/```[\s\S]*?```/g, "") // fenced blocks hold examples, not links
+    .replace(/`[^`\n]*`/g, ""); // same for inline code
   const targets = [];
   for (const match of content.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
     const raw = match[1];
     if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) continue; // http:, https:, mailto:, ...
     if (raw.startsWith("#")) continue; // in-page anchor
-    targets.push(raw.split("#")[0]);
+    let target = raw.split("#")[0];
+    try {
+      target = decodeURIComponent(target);
+    } catch {
+      // leave an undecodable target as written; the existence check will flag it
+    }
+    targets.push(target);
   }
   return targets;
 }
@@ -62,6 +70,28 @@ for (const [dir, files] of byDirectory) {
     if (!indexed.has(document)) {
       problems.push(`orphan: ${relative(document)} is not referenced by ${relative(index)}`);
     }
+  }
+}
+
+// Uniqueness rule: a document belongs to exactly one registry. Any second
+// registry entry, in its own INDEX or another, is a duplicate.
+const indexFiles = docsFiles.filter((file) => path.basename(file) === "INDEX.md");
+const registryEntries = new Map();
+for (const index of indexFiles) {
+  for (const target of linkTargets(index)) {
+    const resolved = path.resolve(path.dirname(index), target);
+    if (!registryEntries.has(resolved)) registryEntries.set(resolved, []);
+    registryEntries.get(resolved).push(index);
+  }
+}
+for (const [document, indexes] of registryEntries) {
+  if (
+    indexes.length > 1 &&
+    docsFiles.includes(document) &&
+    path.basename(document) !== "INDEX.md"
+  ) {
+    const where = indexes.map((index) => relative(index)).join(", ");
+    problems.push(`duplicate registry entry: ${relative(document)} is registered by ${where}`);
   }
 }
 
