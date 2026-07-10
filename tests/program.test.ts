@@ -1,6 +1,9 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildProgram } from "../src/index.js";
+import { runCli } from "../src/index.js";
+import { describeError } from "../src/run-cli.js";
 
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
   name: string;
@@ -8,38 +11,114 @@ const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.
   description: string;
 };
 
-function captureOutput(argv: string[]): { stdout: string; commanderCode: string } {
-  const program = buildProgram();
-  program.exitOverride();
-  let stdout = "";
-  program.configureOutput({
-    writeOut: (text) => {
-      stdout += text;
-    },
-  });
-  let commanderCode = "";
-  try {
-    program.parse(argv, { from: "user" });
-  } catch (error) {
-    commanderCode = (error as { code: string }).code;
-  }
-  return { stdout, commanderCode };
+interface RunResult {
+  code: number;
+  stdout: string;
+  stderr: string;
 }
 
-describe("program", () => {
-  it("is named after the package", () => {
-    expect(buildProgram().name()).toBe(manifest.name);
+async function run(
+  argv: string[],
+  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+): Promise<RunResult> {
+  let stdout = "";
+  let stderr = "";
+  const code = await runCli(argv, {
+    cwd: options.cwd ?? mkdtempSync(path.join(tmpdir(), "peacock-cli-")),
+    env: options.env ?? {},
+    out: (text) => {
+      stdout += text;
+    },
+    err: (text) => {
+      stderr += text;
+    },
   });
+  return { code, stdout, stderr };
+}
 
-  it("prints the package version on --version", () => {
-    const { stdout, commanderCode } = captureOutput(["--version"]);
+function makeRoot(yaml?: string): string {
+  const root = mkdtempSync(path.join(tmpdir(), "peacock-cli-"));
+  if (yaml !== undefined) {
+    writeFileSync(path.join(root, "delta-peacock.config.yaml"), yaml);
+  }
+  return root;
+}
+
+describe("cli", () => {
+  it("prints the package version and exits clean", async () => {
+    const { code, stdout } = await run(["--version"]);
     expect(stdout.trim()).toBe(manifest.version);
-    expect(commanderCode).toBe("commander.version");
+    expect(code).toBe(0);
   });
 
-  it("describes itself in --help", () => {
-    const { stdout, commanderCode } = captureOutput(["--help"]);
+  it("describes itself in help and exits clean", async () => {
+    const { code, stdout } = await run(["--help"]);
     expect(stdout).toContain(manifest.description);
-    expect(commanderCode).toBe("commander.helpDisplayed");
+    expect(stdout).toContain("config");
+    expect(code).toBe(0);
+  });
+
+  it("fails on an unknown command", async () => {
+    const { code, stderr } = await run(["frobnicate"]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("frobnicate");
+  });
+
+  describe("describeError", () => {
+    it.each([
+      { thrown: new Error("went wrong"), text: "went wrong" },
+      { thrown: "plain string", text: "plain string" },
+      { thrown: { code: 7 }, text: '{"code":7}' },
+      { thrown: 42, text: "42" },
+    ])("describes $text", ({ thrown, text }) => {
+      expect(describeError(thrown)).toBe(text);
+    });
+
+    it("degrades safely on unserializable values", () => {
+      const circular: Record<string, unknown> = {};
+      circular["self"] = circular;
+      expect(describeError(circular)).toBe("unserializable error");
+      expect(describeError({ toJSON: () => undefined })).toBe("unserializable error");
+    });
+  });
+
+  describe("config command", () => {
+    it("prints the resolved effective configuration", async () => {
+      const cwd = makeRoot("gate:\n  failOn: MINOR\n");
+      const { code, stdout } = await run(["config"], { cwd });
+      expect(code).toBe(0);
+      const printed = JSON.parse(stdout) as {
+        gate: { failOn: string };
+        review: { target: string };
+      };
+      expect(printed.gate.failOn).toBe("MINOR");
+      expect(printed.review.target).toBe("main");
+    });
+
+    it("applies environment overrides from the injected environment", async () => {
+      const cwd = makeRoot("gate:\n  failOn: MINOR\n");
+      const { code, stdout } = await run(["config"], {
+        cwd,
+        env: { DELTA_PEACOCK_GATE_FAIL_ON: "MAJOR" },
+      });
+      expect(code).toBe(0);
+      expect((JSON.parse(stdout) as { gate: { failOn: string } }).gate.failOn).toBe("MAJOR");
+    });
+
+    it("exits with the tool-error code listing every violation", async () => {
+      const cwd = makeRoot("gate:\n  failOn: WHENEVER\nmodel:\n  provider: acme\n");
+      const { code, stderr } = await run(["config"], { cwd });
+      expect(code).toBe(1);
+      expect(stderr).toContain("gate.failOn");
+      expect(stderr).toContain("model.provider");
+      expect(stderr).toContain("2 problem(s)");
+    });
+
+    it("surfaces unreadable yaml as a tool error", async () => {
+      const cwd = makeRoot("gate: [unclosed\n");
+      const { code, stderr } = await run(["config"], { cwd });
+      expect(code).toBe(1);
+      expect(stderr.length).toBeGreaterThan(0);
+    });
   });
 });
