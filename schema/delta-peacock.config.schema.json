@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "model": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "anthropic",
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "bedrock",
+            "openrouter",
+            "openai-compatible"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseUrl": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
+    "review": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "target": {
+          "default": "main",
+          "type": "string",
+          "minLength": 1
+        },
+        "guidelinesDir": {
+          "default": "guidelines",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "gate": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "failOn": {
+          "default": "none",
+          "type": "string",
+          "enum": [
+            "none",
+            "BLOCKER",
+            "CRITICAL",
+            "MAJOR",
+            "MINOR",
+            "INFO"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "report": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
