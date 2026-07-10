@@ -28,6 +28,8 @@ node dist/cli.js --version
 
 Commits follow the conventional commit format, enforced by a commit hook. The changelog and versioning are generated from them.
 
+The domain vocabulary lives in CONTEXT.md; design decisions live in the ADR registry; product and technical docs sit behind the PRD and spec registries.
+
 ## License
 
 Apache-2.0
