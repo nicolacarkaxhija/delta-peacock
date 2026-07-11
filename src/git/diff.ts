@@ -110,8 +110,25 @@ export interface AcquiredDiff {
   skipped?: "too-large";
 }
 
-export function acquireDiff(cwd: string, request: DiffRequest): AcquiredDiff {
-  const { ref, notices } = resolveTargetRef(cwd, request.target, request.fetchTarget);
+/** The b-side paths of every file chunk in a unified diff. */
+export function changedFilesFromDiff(diff: string): string[] {
+  const files: string[] = [];
+  for (const match of diff.matchAll(/^diff --git a\/.* b\/(.+)$/gm)) {
+    const filePath = match[1]?.replace(/^"|"$/g, "");
+    if (filePath !== undefined) files.push(filePath);
+  }
+  return files;
+}
+
+export function acquireDiff(
+  cwd: string,
+  request: DiffRequest,
+  preResolved?: ResolvedTarget,
+): AcquiredDiff {
+  const resolved = preResolved ?? resolveTargetRef(cwd, request.target, request.fetchTarget);
+  const ref = resolved.ref;
+  // when the caller resolved the target itself it already surfaced those notices
+  const notices = preResolved ? [] : [...resolved.notices];
 
   let mode: "incremental" | "full" = "full";
   let text: string;
