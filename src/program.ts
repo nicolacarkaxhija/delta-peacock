@@ -19,14 +19,29 @@ interface ReviewCommandOptions {
   failOn?: string;
   guidelinesDir?: string;
   report?: string;
+  include?: string;
+  exclude?: string;
+  maxDiffBytes?: string;
+  lastReviewedCommit?: string;
 }
+
+const REVIEW_FLAG_PATHS: Readonly<Record<keyof ReviewCommandOptions, string>> = {
+  target: "review.target",
+  failOn: "gate.failOn",
+  guidelinesDir: "review.guidelinesDir",
+  report: "output.report",
+  include: "review.include",
+  exclude: "review.exclude",
+  maxDiffBytes: "review.maxDiffBytes",
+  lastReviewedCommit: "review.lastReviewedCommit",
+};
 
 function reviewFlags(options: ReviewCommandOptions): Record<string, string> {
   const flags: Record<string, string> = {};
-  if (options.target !== undefined) flags["review.target"] = options.target;
-  if (options.failOn !== undefined) flags["gate.failOn"] = options.failOn;
-  if (options.guidelinesDir !== undefined) flags["review.guidelinesDir"] = options.guidelinesDir;
-  if (options.report !== undefined) flags["output.report"] = options.report;
+  for (const [key, dotPath] of Object.entries(REVIEW_FLAG_PATHS)) {
+    const value = options[key as keyof ReviewCommandOptions];
+    if (value !== undefined) flags[dotPath] = value;
+  }
   return flags;
 }
 
@@ -52,6 +67,10 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--fail-on <severity>", "gate threshold: BLOCKER, CRITICAL, MAJOR, MINOR, INFO or none")
     .option("--guidelines-dir <dir>", "directory holding guideline markdown files")
     .option("--report <path>", "write the JSON report to this path")
+    .option("--include <globs>", "comma-separated path globs to review")
+    .option("--exclude <globs>", "comma-separated path globs to leave out")
+    .option("--max-diff-bytes <n>", "skip reviews larger than this many bytes")
+    .option("--last-reviewed-commit <sha>", "review only changes since this commit")
     .action(async (options: ReviewCommandOptions) => {
       const code = await runReview(
         {

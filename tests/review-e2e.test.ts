@@ -212,6 +212,21 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("guideline skipped");
   });
 
+  it("skips cleanly when the diff exceeds the size ceiling", async () => {
+    const repo = makeScenario();
+    const { code, stdout } = await review(repo, undefined, "--max-diff-bytes", "10");
+    expect(code).toBe(0);
+    expect(stdout).toContain("review skipped");
+  });
+
+  it("excluded paths never reach the model", async () => {
+    const repo = makeScenario();
+    const { port, requests } = scriptedModel(JSON.stringify({ findings: [] }));
+    const { code } = await review(repo, port, "--exclude", "src/**");
+    expect(code).toBe(0);
+    expect(requests).toHaveLength(0); // the whole diff was excluded, no call made
+  });
+
   it("exits clean with a notice when the branch changes nothing", async () => {
     const repo = makeScenario();
     git(repo, "checkout", "-q", "-b", "quiet", "main");

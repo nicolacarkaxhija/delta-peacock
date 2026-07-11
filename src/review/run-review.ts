@@ -4,7 +4,7 @@ import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
 import { evaluateGate } from "../domain/gate.js";
 import { ToolError } from "../errors.js";
-import { mergeBaseDiff } from "../git/diff.js";
+import { acquireDiff } from "../git/diff.js";
 import { loadGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import { buildReviewPrompt } from "./prompt.js";
@@ -28,9 +28,24 @@ export async function runReview(
     return 0;
   }
 
-  const diff = mergeBaseDiff(deps.cwd, config.review.target);
+  const acquired = acquireDiff(deps.cwd, {
+    target: config.review.target,
+    fetchTarget: config.review.fetchTarget,
+    include: config.review.include,
+    exclude: config.review.exclude,
+    maxDiffBytes: config.review.maxDiffBytes,
+    ...(config.review.lastReviewedCommit !== undefined
+      ? { lastReviewedCommit: config.review.lastReviewedCommit }
+      : {}),
+  });
+  for (const notice of acquired.notices) deps.err(`${notice}\n`);
+  if (acquired.skipped === "too-large") {
+    deps.out("review skipped: the diff exceeds the configured size ceiling\n");
+    return 0;
+  }
+  const diff = acquired.text;
   if (diff.trim() === "") {
-    deps.out(`nothing to review: no changes against ${config.review.target}\n`);
+    deps.out(`nothing to review: no changes against ${acquired.targetRef}\n`);
     return 0;
   }
 
