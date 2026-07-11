@@ -1,5 +1,6 @@
 import { CommanderError } from "commander";
 import { ConfigError } from "./config/loader.js";
+import { ExitCodeError } from "./errors.js";
 import { buildProgram, type CliDeps } from "./program.js";
 
 export function describeError(error: unknown): string {
@@ -26,6 +27,9 @@ export async function runCli(argv: readonly string[], deps: CliDeps): Promise<nu
     await program.parseAsync([...argv], { from: "user" });
     return 0;
   } catch (error) {
+    if (error instanceof ExitCodeError) {
+      return error.code;
+    }
     if (error instanceof CommanderError) {
       return error.exitCode === 0 ? 0 : 1;
     }
