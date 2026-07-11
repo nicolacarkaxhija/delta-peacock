@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { loadConfig } from "./config/loader.js";
 import type { RuntimeDeps } from "./deps.js";
 import { ExitCodeError } from "./errors.js";
+import { runGuidelinesLint } from "./guidelines/lint.js";
 import { runReview } from "./review/run-review.js";
 
 const require = createRequire(import.meta.url);
@@ -18,6 +19,7 @@ interface ReviewCommandOptions {
   target?: string;
   failOn?: string;
   guidelinesDir?: string;
+  guidelinesRef?: string;
   report?: string;
   include?: string;
   exclude?: string;
@@ -29,6 +31,7 @@ const REVIEW_FLAG_PATHS: Readonly<Record<keyof ReviewCommandOptions, string>> = 
   target: "review.target",
   failOn: "gate.failOn",
   guidelinesDir: "review.guidelinesDir",
+  guidelinesRef: "review.guidelinesRef",
   report: "output.report",
   include: "review.include",
   exclude: "review.exclude",
@@ -66,6 +69,7 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--target <ref>", "branch the changes merge into")
     .option("--fail-on <severity>", "gate threshold: BLOCKER, CRITICAL, MAJOR, MINOR, INFO or none")
     .option("--guidelines-dir <dir>", "directory holding guideline markdown files")
+    .option("--guidelines-ref <ref>", "read guidelines from: target, source, or a git ref")
     .option("--report <path>", "write the JSON report to this path")
     .option("--include <globs>", "comma-separated path globs to review")
     .option("--exclude <globs>", "comma-separated path globs to leave out")
@@ -82,6 +86,20 @@ export function buildProgram(deps: CliDeps): Command {
         },
         reviewFlags(options),
       );
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
+  const guidelines = program.command("guidelines").description("guideline corpus utilities");
+  guidelines
+    .command("lint")
+    .description("validate every guideline file in the working tree")
+    .option("--guidelines-dir <dir>", "directory holding guideline markdown files")
+    .action((options: { guidelinesDir?: string }) => {
+      const flags: Record<string, string> = {};
+      if (options.guidelinesDir !== undefined) {
+        flags["review.guidelinesDir"] = options.guidelinesDir;
+      }
+      const code = runGuidelinesLint(deps, flags);
       if (code !== 0) throw new ExitCodeError(code);
     });
 

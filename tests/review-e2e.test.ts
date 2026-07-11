@@ -212,6 +212,110 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("guideline skipped");
   });
 
+  it("judges the branch by the target's rules even when the branch weakens them", async () => {
+    const repo = makeScenario();
+    // the feature branch tampers with the rule that judges it
+    write(
+      repo,
+      "guidelines/no-console.md",
+      "---\nid: no-console\nseverity: INFO\n---\n# No console statements\n\nweakened\n",
+    );
+    commitAll(repo, "weaken the rule");
+    const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "MAJOR");
+    expect(code).toBe(2); // MAIN's MAJOR severity applies, not the branch's INFO
+    expect(stdout).toContain("MAJOR");
+  });
+
+  it("honors --guidelines-ref source for the authoring loop", async () => {
+    const repo = makeScenario();
+    write(
+      repo,
+      "guidelines/no-console.md",
+      "---\nid: no-console\nseverity: INFO\n---\n# No console statements\n\nsource version\n",
+    );
+    commitAll(repo, "adjust rule on branch");
+    const { code, stdout } = await review(
+      repo,
+      scriptedModel(CITED).port,
+      "--guidelines-ref",
+      "source",
+      "--fail-on",
+      "MAJOR",
+    );
+    expect(code).toBe(0); // the working-tree INFO severity applies
+    expect(stdout).toContain("INFO");
+  });
+
+  it("filters out guidelines that do not apply to the changed files", async () => {
+    const repo = makeScenario();
+    write(
+      repo,
+      "guidelines/python-only.md",
+      "---\nid: python-only\nseverity: MAJOR\nlanguages: [python]\n---\npython rule\n",
+    );
+    git(repo, "checkout", "-q", "main");
+    write(
+      repo,
+      "guidelines/python-only.md",
+      "---\nid: python-only\nseverity: MAJOR\nlanguages: [python]\n---\npython rule\n",
+    );
+    commitAll(repo, "python rule on main");
+    git(repo, "checkout", "-q", "feature");
+    const { port, requests } = scriptedModel(CITED);
+    const { code, stderr } = await review(repo, port);
+    expect(code).toBe(0);
+    expect(stderr).toContain("1 guideline(s) do not apply");
+    expect(requests[0]?.system).not.toContain("python-only");
+  });
+
+  it("exits clean when no guideline applies to the change at all", async () => {
+    const repo = makeRepo();
+    write(
+      repo,
+      "guidelines/python-only.md",
+      "---\nid: python-only\nseverity: MAJOR\nlanguages: [python]\n---\npython rule\n",
+    );
+    commitAll(repo, "python rule");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/app.js", "changed js\n");
+    commitAll(repo, "js change");
+    const { code, stdout } = await review(repo, undefined);
+    expect(code).toBe(0);
+    expect(stdout).toContain("no guidelines apply");
+  });
+
+  it("runs guidelines lint through the cli with an explicit dir", async () => {
+    const repo = makeRepo();
+    write(repo, "rules/a.md", "---\nid: a\nseverity: MAJOR\n---\nbody\n");
+    let stdout = "";
+    const code = await runCli(["guidelines", "lint", "--guidelines-dir", "rules"], {
+      cwd: repo,
+      env: {},
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+    });
+    expect(code).toBe(0);
+    expect(stdout).toContain("1 usable");
+  });
+
+  it("maps a failing guidelines lint to exit 1 through the cli", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/bad.md", "---\nseverity: MAJOR\n---\nbody\n");
+    let stderr = "";
+    const code = await runCli(["guidelines", "lint"], {
+      cwd: repo,
+      env: {},
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+    });
+    expect(code).toBe(1);
+    expect(stderr).toContain('"id"');
+  });
+
   it("skips cleanly when the diff exceeds the size ceiling", async () => {
     const repo = makeScenario();
     const { code, stdout } = await review(repo, undefined, "--max-diff-bytes", "10");

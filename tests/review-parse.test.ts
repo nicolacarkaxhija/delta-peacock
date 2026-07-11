@@ -10,6 +10,9 @@ const guideline: Guideline = {
   title: "No console statements",
   body: "Use the logger instead.",
   sourcePath: "guidelines/no-console.md",
+  languages: [],
+  paths: [],
+  tags: [],
 };
 
 const byId = new Map([[guideline.id, guideline]]);
