@@ -3,6 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Guideline } from "../domain/guideline.js";
 import { SEVERITIES, type Severity } from "../domain/severity.js";
+import { ToolError } from "../errors.js";
 
 export interface LoadedGuidelines {
   guidelines: Guideline[];
@@ -77,7 +78,9 @@ function parseGuidelineFile(filePath: string): { guideline: Guideline } | { prob
 
 export function loadGuidelines(dir: string): LoadedGuidelines {
   if (!existsSync(dir)) {
-    return { guidelines: [], problems: [`guidelines directory not found: ${dir}`] };
+    throw new ToolError(
+      `guidelines directory not found: ${dir}; check review.guidelinesDir or run init`,
+    );
   }
   const guidelines: Guideline[] = [];
   const problems: string[] = [];

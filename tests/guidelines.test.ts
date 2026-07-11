@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { ToolError } from "../src/errors.js";
 import { loadGuidelines } from "../src/guidelines/loader.js";
 import { write } from "./helpers/git.js";
 
@@ -90,9 +91,7 @@ describe("guidelines loader", () => {
     expect(problems).toEqual([]);
   });
 
-  it("reports a missing directory as a problem", () => {
-    const { guidelines, problems } = loadGuidelines(path.join(makeDir(), "absent"));
-    expect(guidelines).toEqual([]);
-    expect(problems[0]).toContain("not found");
+  it("treats a missing directory as a tool error", () => {
+    expect(() => loadGuidelines(path.join(makeDir(), "absent"))).toThrow(ToolError);
   });
 });

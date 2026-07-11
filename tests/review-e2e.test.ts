@@ -189,14 +189,27 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("model call failed");
   });
 
-  it("exits clean with a notice when there are no guidelines", async () => {
+  it("treats a missing guidelines directory as a tool error", async () => {
     const repo = makeRepo();
     git(repo, "checkout", "-q", "-b", "feature");
     write(repo, "src/app.js", "changed\n");
     commitAll(repo, "change");
-    const { code, stdout } = await review(repo, undefined);
+    const { code, stderr } = await review(repo, undefined);
+    expect(code).toBe(1);
+    expect(stderr).toContain("guidelines directory not found");
+  });
+
+  it("exits clean with a notice when the directory holds no usable guidelines", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/broken.md", "# not a guideline\n");
+    commitAll(repo, "broken guideline");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/app.js", "changed\n");
+    commitAll(repo, "change");
+    const { code, stdout, stderr } = await review(repo, undefined);
     expect(code).toBe(0);
     expect(stdout).toContain("no usable guidelines");
+    expect(stderr).toContain("guideline skipped");
   });
 
   it("exits clean with a notice when the branch changes nothing", async () => {
