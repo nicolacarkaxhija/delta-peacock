@@ -3,7 +3,10 @@ import { z } from "zod";
 import { ENV_VARS } from "../src/config/loader.js";
 import { ConfigSchema } from "../src/config/schema.js";
 
-const jsonSchema = z.toJSONSchema(ConfigSchema, { io: "input" });
+const jsonSchema = {
+  $id: "https://raw.githubusercontent.com/nicolacarkaxhija/delta-peacock/main/schema/delta-peacock.config.schema.json",
+  ...z.toJSONSchema(ConfigSchema, { io: "input" }),
+};
 
 function leafPaths(node: unknown, trail: string[] = []): string[] {
   if (typeof node !== "object" || node === null) return [];
@@ -25,7 +28,7 @@ describe("config json schema", () => {
     const leaves = new Set(leafPaths(jsonSchema));
     const mapped = Object.values(ENV_VARS);
     expect(new Set(mapped)).toEqual(leaves);
-    expect(mapped.length).toBe(new Set(mapped).size);
+    expect(mapped).toHaveLength(new Set(mapped).size);
   });
 
   it("prefixes every environment variable consistently", () => {
