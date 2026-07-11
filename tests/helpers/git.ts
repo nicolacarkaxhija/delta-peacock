@@ -36,3 +36,14 @@ export function makeRepo(): string {
   commitAll(cwd, "base");
   return cwd;
 }
+
+/** A clone of the given repo, wired to it as origin. */
+export function cloneRepo(origin: string): string {
+  const cwd = mkdtempSync(path.join(tmpdir(), "peacock-clone-"));
+  git(cwd, "clone", "-q", origin, ".");
+  return cwd;
+}
+
+export function headSha(cwd: string): string {
+  return git(cwd, "rev-parse", "HEAD").trim();
+}
