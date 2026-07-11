@@ -1,8 +1,8 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
 import { loadConfig } from "./config/loader.js";
+import type { RuntimeDeps } from "./deps.js";
 import { ExitCodeError } from "./errors.js";
-import type { ModelPort } from "./model/port.js";
 import { runReview } from "./review/run-review.js";
 
 const require = createRequire(import.meta.url);
@@ -12,14 +12,7 @@ const manifest = require("../package.json") as {
   description: string;
 };
 
-export interface CliDeps {
-  cwd: string;
-  env: Readonly<Record<string, string | undefined>>;
-  out: (text: string) => void;
-  err: (text: string) => void;
-  /** The model-port seam: tests inject a scripted fake here. */
-  modelPort?: ModelPort;
-}
+export type CliDeps = RuntimeDeps;
 
 interface ReviewCommandOptions {
   target?: string;
