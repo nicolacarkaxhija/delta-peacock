@@ -42,6 +42,11 @@
           "type": "string",
           "minLength": 1
         },
+        "guidelinesRef": {
+          "default": "target",
+          "type": "string",
+          "minLength": 1
+        },
         "fetchTarget": {
           "default": true,
           "type": "boolean"

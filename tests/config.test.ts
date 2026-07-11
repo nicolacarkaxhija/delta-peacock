@@ -141,6 +141,14 @@ describe("config loading", () => {
     expect(config.review.fetchTarget).toBe(false);
   });
 
+  it("accepts a true boolean string", () => {
+    const config = loadConfig({
+      root: makeRoot(),
+      env: { DELTA_PEACOCK_REVIEW_FETCH_TARGET: "true" },
+    });
+    expect(config.review.fetchTarget).toBe(true);
+  });
+
   it("rejects unusable number and boolean strings with clear paths", () => {
     const problems = problemsOf(() =>
       loadConfig({
