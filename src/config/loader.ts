@@ -109,23 +109,35 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-function readFileLayer(root: string): Record<string, unknown> {
+function readFileLayer(root: string): { layer: Record<string, unknown>; problems: string[] } {
   const filePath = path.join(root, CONFIG_FILE_NAME);
-  if (!existsSync(filePath)) return {};
+  if (!existsSync(filePath)) return { layer: {}, problems: [] };
   const parsed: unknown = parseYaml(readFileSync(filePath, "utf8")) ?? {};
   if (!isPlainObject(parsed)) {
     throw new ConfigError([`${CONFIG_FILE_NAME} must hold a mapping of settings`]);
   }
-  const credentialKeys = findCredentialKeys(parsed);
-  if (credentialKeys.length > 0) {
-    throw new ConfigError(
-      credentialKeys.map(
-        (key) =>
-          `${key}: credentials do not belong in the config file; use environment variables instead`,
-      ),
-    );
+  return {
+    layer: parsed,
+    problems: findCredentialKeys(parsed).map(
+      (key) =>
+        `${key}: credentials do not belong in the config file; use environment variables instead`,
+    ),
+  };
+}
+
+/** Keys already flagged as credentials should not be re-reported as merely unknown. */
+function describeIssue(
+  issue: { code: string; path: PropertyKey[]; message: string; keys?: string[] },
+  flaggedKeys: ReadonlySet<string>,
+): string | undefined {
+  if (issue.code === "unrecognized_keys" && issue.keys !== undefined) {
+    const kept = issue.keys.filter((key) => !flaggedKeys.has(key));
+    if (kept.length === 0) return undefined;
+    const where = issue.path.length > 0 ? issue.path.join(".") : "config";
+    return `${where}: unrecognized key(s): ${kept.join(", ")}`;
   }
-  return parsed;
+  const where = issue.path.length > 0 ? issue.path.join(".") : "config";
+  return `${where}: ${issue.message}`;
 }
 
 export function loadConfig(options: LoadConfigOptions = {}): Config {
@@ -144,15 +156,25 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     setPath(flagsLayer, dotPath, value);
   }
 
-  const merged = mergeDeep(mergeDeep(readFileLayer(root), envLayer), flagsLayer);
+  const file = readFileLayer(root);
+  const problems = [...file.problems];
+  const flaggedKeys = new Set(
+    file.problems.map((problem) => problem.split(":")[0]?.split(".").at(-1) ?? ""),
+  );
+
+  const merged = mergeDeep(mergeDeep(file.layer, envLayer), flagsLayer);
   const result = ConfigSchema.safeParse(merged);
   if (!result.success) {
-    throw new ConfigError(
-      result.error.issues.map((issue) => {
-        const where = issue.path.length > 0 ? issue.path.join(".") : "config";
-        return `${where}: ${issue.message}`;
-      }),
-    );
+    for (const issue of result.error.issues) {
+      const described = describeIssue(issue, flaggedKeys);
+      if (described !== undefined) problems.push(described);
+    }
+    // problems cannot be empty here: dedupe only removes keys the credential
+    // guard already reported, so either list contributes at least one entry
+    throw new ConfigError(problems);
+  }
+  if (problems.length > 0) {
+    throw new ConfigError(problems);
   }
   return deepFreeze(result.data);
 }

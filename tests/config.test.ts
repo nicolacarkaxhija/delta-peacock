@@ -83,6 +83,16 @@ describe("config loading", () => {
     expect(problems.join("\n")).toContain("model.provider");
   });
 
+  it("reports credential keys and schema violations in the same pass", () => {
+    const problems = problemsOf(() =>
+      loadConfig({ root: makeRoot("gate:\n  failOn: WHENEVER\nmodel:\n  apiKey: sk-x\n") }),
+    );
+    const joined = problems.join("\n");
+    expect(joined).toContain("model.apiKey");
+    expect(joined).toContain("gate.failOn");
+    expect(joined.match(/apiKey/g)).toHaveLength(1);
+  });
+
   it("rejects credential-shaped keys in the file, pointing at environment variables", () => {
     const problems = problemsOf(() =>
       loadConfig({ root: makeRoot("model:\n  apiKey: sk-something\n") }),
