@@ -2,7 +2,11 @@ import { spawnSync } from "node:child_process";
 import { ToolError } from "../errors.js";
 
 export function runGit(cwd: string, args: readonly string[]): string {
-  const result = spawnSync("git", [...args], { cwd, encoding: "utf8" });
+  const result = spawnSync("git", [...args], {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
   if (result.error) {
     throw new ToolError(`git could not run: ${result.error.message}`);
   }
