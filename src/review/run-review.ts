@@ -1,25 +1,18 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
+import type { RuntimeDeps } from "../deps.js";
 import { evaluateGate } from "../domain/gate.js";
 import { ToolError } from "../errors.js";
 import { mergeBaseDiff } from "../git/diff.js";
 import { loadGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
-import type { ModelPort } from "../model/port.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
 import { renderReview } from "./render.js";
 import { buildReport } from "./report.js";
 
-export interface ReviewDeps {
-  cwd: string;
-  env: Readonly<Record<string, string | undefined>>;
-  out: (text: string) => void;
-  err: (text: string) => void;
-  /** The model-port seam: tests inject a scripted fake here. */
-  modelPort?: ModelPort;
-}
+export type ReviewDeps = RuntimeDeps;
 
 export async function runReview(
   deps: ReviewDeps,
@@ -52,16 +45,17 @@ export async function runReview(
   }
 
   const byId = new Map(guidelines.map((guideline) => [guideline.id, guideline]));
-  const { violations, droppedUncited } = parseReviewResponse(reply.text, byId);
+  const { violations, droppedUncited, adjustedLines } = parseReviewResponse(reply.text, byId);
   const gate = evaluateGate(violations, config.gate.failOn);
 
-  deps.out(renderReview({ violations, droppedUncited, gate }));
+  deps.out(renderReview({ violations, droppedUncited, adjustedLines, gate }));
 
   if (config.output.report !== undefined) {
     const reportPath = path.resolve(deps.cwd, config.output.report);
     const report = buildReport({
       violations,
       droppedUncited,
+      adjustedLines,
       gate,
       ...(reply.usage ? { usage: reply.usage } : {}),
     });
