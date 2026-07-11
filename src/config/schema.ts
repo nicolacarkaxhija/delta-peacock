@@ -12,6 +12,8 @@ export const ModelSchema = z.strictObject({
 export const ReviewSchema = z.strictObject({
   target: z.string().min(1).default("main"),
   guidelinesDir: z.string().min(1).default("guidelines"),
+  /** Where guidelines are read from: target (default, tamper-resistant), source, or a git ref. */
+  guidelinesRef: z.string().min(1).default("target"),
   /** Fetch the target from origin before diffing so stale local refs never lie (ADR 0004). */
   fetchTarget: z.boolean().default(true),
   /** Commit last reviewed; when set and still reachable, only newer changes are reviewed. */
