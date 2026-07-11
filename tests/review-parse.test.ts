@@ -59,10 +59,18 @@ describe("parseReviewResponse", () => {
     expect(parseReviewResponse(wrapped, byId).violations).toHaveLength(1);
   });
 
-  it("falls back to the guideline title and line 1 on sloppy fields", () => {
+  it("falls back to the guideline title and line 1 on sloppy fields, counting the fix", () => {
     const sloppy = response([{ guidelineId: "no-console", file: "src/app.js", line: -5 }]);
-    const { violations } = parseReviewResponse(sloppy, byId);
+    const { violations, adjustedLines } = parseReviewResponse(sloppy, byId);
     expect(violations[0]).toMatchObject({ line: 1, title: "No console statements" });
+    expect(adjustedLines).toBe(1);
+  });
+
+  it("recovers the JSON when a chatty response holds several fenced blocks", () => {
+    const chatty = ["```md", "some notes", "```", "and the result:", response([finding])].join(
+      "\n",
+    );
+    expect(parseReviewResponse(chatty, byId).violations).toHaveLength(1);
   });
 
   it.each([
@@ -97,6 +105,7 @@ describe("rendering and reporting edges", () => {
         },
       ],
       droppedUncited: 0,
+      adjustedLines: 0,
       gate: { threshold: "none", failing: 0, failed: false },
     });
     expect(text).toContain("[no-console] t");
@@ -108,6 +117,7 @@ describe("rendering and reporting edges", () => {
     const report = buildReport({
       violations: [],
       droppedUncited: 0,
+      adjustedLines: 0,
       gate: { threshold: "none", failing: 0, failed: false },
     });
     expect("usage" in report).toBe(false);
