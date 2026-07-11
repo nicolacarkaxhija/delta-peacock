@@ -149,7 +149,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
   if (!result.success) {
     throw new ConfigError(
       result.error.issues.map((issue) => {
-        const where = issue.path.join(".") || "config";
+        const where = issue.path.length > 0 ? issue.path.join(".") : "config";
         return `${where}: ${issue.message}`;
       }),
     );
