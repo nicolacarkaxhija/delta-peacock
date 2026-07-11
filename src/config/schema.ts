@@ -12,6 +12,15 @@ export const ModelSchema = z.strictObject({
 export const ReviewSchema = z.strictObject({
   target: z.string().min(1).default("main"),
   guidelinesDir: z.string().min(1).default("guidelines"),
+  /** Fetch the target from origin before diffing so stale local refs never lie (ADR 0004). */
+  fetchTarget: z.boolean().default(true),
+  /** Commit last reviewed; when set and still reachable, only newer changes are reviewed. */
+  lastReviewedCommit: z.string().min(1).optional(),
+  /** Path globs; empty include means everything, exclude always wins. */
+  include: z.array(z.string()).default([]),
+  exclude: z.array(z.string()).default([]),
+  /** Reviews larger than this are skipped, never truncated. */
+  maxDiffBytes: z.number().int().positive().default(1_000_000),
 });
 
 export const GateSchema = z.strictObject({

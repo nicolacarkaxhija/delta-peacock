@@ -41,6 +41,34 @@
           "default": "guidelines",
           "type": "string",
           "minLength": 1
+        },
+        "fetchTarget": {
+          "default": true,
+          "type": "boolean"
+        },
+        "lastReviewedCommit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "include": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxDiffBytes": {
+          "default": 1000000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "additionalProperties": false

@@ -127,6 +127,35 @@ describe("config loading", () => {
     expect(problems.join("\n")).toContain("config:");
   });
 
+  it("coerces list, number and boolean settings from string sources", () => {
+    const config = loadConfig({
+      root: makeRoot(),
+      env: {
+        DELTA_PEACOCK_REVIEW_INCLUDE: "src/**, lib/**",
+        DELTA_PEACOCK_REVIEW_MAX_DIFF_BYTES: "2048",
+        DELTA_PEACOCK_REVIEW_FETCH_TARGET: "false",
+      },
+    });
+    expect(config.review.include).toEqual(["src/**", "lib/**"]);
+    expect(config.review.maxDiffBytes).toBe(2048);
+    expect(config.review.fetchTarget).toBe(false);
+  });
+
+  it("rejects unusable number and boolean strings with clear paths", () => {
+    const problems = problemsOf(() =>
+      loadConfig({
+        root: makeRoot(),
+        env: {
+          DELTA_PEACOCK_REVIEW_MAX_DIFF_BYTES: "ten",
+          DELTA_PEACOCK_REVIEW_FETCH_TARGET: "yes",
+        },
+      }),
+    );
+    const joined = problems.join("\n");
+    expect(joined).toContain("review.maxDiffBytes");
+    expect(joined).toContain("review.fetchTarget");
+  });
+
   it("treats an empty config file as no overrides", () => {
     const config = loadConfig({ root: makeRoot("") });
     expect(config.gate.failOn).toBe("none");

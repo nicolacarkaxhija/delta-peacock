@@ -13,9 +13,38 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_MODEL_BASE_URL: "model.baseUrl",
   DELTA_PEACOCK_REVIEW_TARGET: "review.target",
   DELTA_PEACOCK_REVIEW_GUIDELINES_DIR: "review.guidelinesDir",
+  DELTA_PEACOCK_REVIEW_FETCH_TARGET: "review.fetchTarget",
+  DELTA_PEACOCK_REVIEW_LAST_REVIEWED_COMMIT: "review.lastReviewedCommit",
+  DELTA_PEACOCK_REVIEW_INCLUDE: "review.include",
+  DELTA_PEACOCK_REVIEW_EXCLUDE: "review.exclude",
+  DELTA_PEACOCK_REVIEW_MAX_DIFF_BYTES: "review.maxDiffBytes",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
 };
+
+/** String sources (env, flags) coerce into these shapes before validation. */
+const ARRAY_PATHS = new Set(["review.include", "review.exclude"]);
+const NUMBER_PATHS = new Set(["review.maxDiffBytes"]);
+const BOOLEAN_PATHS = new Set(["review.fetchTarget"]);
+
+function coerceStringValue(dotPath: string, raw: string): unknown {
+  if (ARRAY_PATHS.has(dotPath)) {
+    return raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part !== "");
+  }
+  if (NUMBER_PATHS.has(dotPath)) {
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? raw : parsed;
+  }
+  if (BOOLEAN_PATHS.has(dotPath)) {
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+    return raw;
+  }
+  return raw;
+}
 
 export class ConfigError extends Error {
   readonly problems: readonly string[];
@@ -148,12 +177,14 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
   const envLayer: Record<string, unknown> = {};
   for (const [name, dotPath] of Object.entries(ENV_VARS)) {
     const value = env[name];
-    if (value !== undefined && value !== "") setPath(envLayer, dotPath, value);
+    if (value !== undefined && value !== "") {
+      setPath(envLayer, dotPath, coerceStringValue(dotPath, value));
+    }
   }
 
   const flagsLayer: Record<string, unknown> = {};
   for (const [dotPath, value] of Object.entries(flags)) {
-    setPath(flagsLayer, dotPath, value);
+    setPath(flagsLayer, dotPath, coerceStringValue(dotPath, value));
   }
 
   const file = readFileLayer(root);
