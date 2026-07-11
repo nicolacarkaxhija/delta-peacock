@@ -112,6 +112,16 @@ describe("config loading", () => {
     }).toThrow(TypeError);
   });
 
+  it("labels root-level problems as config", () => {
+    const problems = problemsOf(() => loadConfig({ root: makeRoot(), flags: { "": "x" } }));
+    expect(problems.join("\n")).toContain("config:");
+  });
+
+  it("treats an empty config file as no overrides", () => {
+    const config = loadConfig({ root: makeRoot("") });
+    expect(config.gate.failOn).toBe("none");
+  });
+
   it("rejects a config file that is not a mapping", () => {
     const problems = problemsOf(() => loadConfig({ root: makeRoot("- just\n- a\n- list\n") }));
     expect(problems.join("\n")).toContain("mapping");
