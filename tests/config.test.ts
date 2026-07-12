@@ -141,6 +141,13 @@ describe("config loading", () => {
     expect(config.review.fetchTarget).toBe(false);
   });
 
+  it("passes unparseable json env values through to validation", () => {
+    const problems = problemsOf(() =>
+      loadConfig({ root: makeRoot(), env: { DELTA_PEACOCK_REDACTION_PATTERNS: "not json" } }),
+    );
+    expect(problems.join("\n")).toContain("redaction.patterns");
+  });
+
   it("accepts a true boolean string", () => {
     const config = loadConfig({
       root: makeRoot(),

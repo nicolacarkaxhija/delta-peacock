@@ -163,6 +163,43 @@
         }
       },
       "additionalProperties": false
+    },
+    "scm": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "local",
+          "type": "string",
+          "enum": [
+            "github",
+            "bitbucket",
+            "local"
+          ]
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pullRequest": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "commitStatus": {
+          "default": true,
+          "type": "boolean"
+        },
+        "baseUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "dryRun": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
