@@ -6,7 +6,13 @@ import type { RuntimeDeps } from "../deps.js";
 import type { Finding } from "../domain/finding.js";
 import { evaluateGate } from "../domain/gate.js";
 import { ToolError } from "../errors.js";
-import { acquireDiff, changedFilesFromDiff, resolveTargetRef } from "../git/diff.js";
+import {
+  acquireDiff,
+  changedFilesFromDiff,
+  filterDiffByPath,
+  resolveTargetRef,
+  type AcquiredDiff,
+} from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
@@ -47,20 +53,25 @@ export async function runReview(
     return 0;
   }
 
-  const acquired = acquireDiff(
-    deps.cwd,
-    {
-      target: config.review.target,
-      fetchTarget: config.review.fetchTarget,
-      include: config.review.include,
-      exclude: config.review.exclude,
-      maxDiffBytes: config.review.maxDiffBytes,
-      ...(config.review.lastReviewedCommit !== undefined
-        ? { lastReviewedCommit: config.review.lastReviewedCommit }
-        : {}),
-    },
-    resolvedTarget,
-  );
+  let acquired: AcquiredDiff;
+  try {
+    acquired = acquireDiff(
+      deps.cwd,
+      {
+        target: config.review.target,
+        fetchTarget: config.review.fetchTarget,
+        include: config.review.include,
+        exclude: config.review.exclude,
+        maxDiffBytes: config.review.maxDiffBytes,
+        ...(config.review.lastReviewedCommit !== undefined
+          ? { lastReviewedCommit: config.review.lastReviewedCommit }
+          : {}),
+      },
+      resolvedTarget,
+    );
+  } catch (error) {
+    acquired = await apiDiffFallback(deps, config, error);
+  }
   for (const notice of acquired.notices) deps.err(`${notice}\n`);
   if (acquired.skipped === "too-large") {
     deps.out("review skipped: the diff exceeds the configured size ceiling\n");
@@ -172,6 +183,32 @@ function partitionFindings(findings: readonly Finding[], config: Config) {
       )
       .slice(0, config.review.maxProposedGuidelines),
   };
+}
+
+/**
+ * When local git cannot produce the diff (shallow or absent clone), the SCM
+ * host's own PR diff serves as the fallback, with degraded capabilities.
+ */
+async function apiDiffFallback(
+  deps: ReviewDeps,
+  config: Config,
+  cause: unknown,
+): Promise<AcquiredDiff> {
+  if (config.scm.provider === "local") throw cause;
+  const scm = deps.scmPort ?? buildScmPort(config, deps.env);
+  if (scm.fetchPullRequestDiff === undefined) throw cause;
+  const causeMessage = cause instanceof Error ? cause.message.split("\n")[0] : String(cause);
+  const raw = await scm.fetchPullRequestDiff();
+  const text = filterDiffByPath(raw, config.review.include, config.review.exclude);
+  const notices = [
+    `local git diff unavailable (${String(causeMessage)}); using the SCM API diff instead`,
+    "incremental review and target fetching degrade in API-diff mode",
+  ];
+  if (Buffer.byteLength(text, "utf8") > config.review.maxDiffBytes) {
+    notices.push("diff exceeds the configured size ceiling");
+    return { text: "", mode: "full", targetRef: "scm api", notices, skipped: "too-large" };
+  }
+  return { text, mode: "full", targetRef: "scm api", notices };
 }
 
 /**
