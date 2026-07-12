@@ -5,21 +5,40 @@ import type { ScmPort, StatusState } from "./port.js";
 
 const MARKER_PREFIX = "<!-- delta-peacock:";
 const SUMMARY_MARKER = "<!-- delta-peacock:summary -->";
-const FINDING_MARKER = /<!-- delta-peacock:finding:([0-9a-f]+) -->/;
+const FINDING_MARKER = /^<!-- delta-peacock:finding:([0-9a-f]+(?:-\d+)?) -->$/;
 
 function findingMarker(fingerprint: string): string {
   return `${MARKER_PREFIX}finding:${fingerprint} -->`;
 }
 
-export function renderCommentBody(finding: Finding): string {
+/** Only a marker on the comment's final line counts; quoting one in prose does not. */
+function markerFingerprint(body: string): string | undefined {
+  const lastLine = body.trimEnd().split("\n").at(-1) ?? "";
+  return FINDING_MARKER.exec(lastLine)?.[1];
+}
+
+export function renderCommentBody(finding: Finding, fingerprint: string): string {
   const cite =
     finding.kind === "violation" ? `\`${finding.guidelineId}\`` : "observation (general pass)";
   const lines = [`**${finding.severity}** ${finding.title} — ${cite}`, "", finding.body];
   if (finding.suggestion !== undefined) {
     lines.push("", "```suggestion", finding.suggestion, "```");
   }
-  lines.push("", findingMarker(fingerprintOf(finding)));
+  lines.push("", findingMarker(fingerprint));
   return lines.join("\n");
+}
+
+/** One unique fingerprint per finding, suffixing genuine collisions. */
+export function fingerprintEntries(
+  findings: readonly Finding[],
+): { fingerprint: string; finding: Finding }[] {
+  const used = new Map<string, number>();
+  return findings.map((finding) => {
+    const base = fingerprintOf(finding);
+    const count = used.get(base) ?? 0;
+    used.set(base, count + 1);
+    return { fingerprint: count === 0 ? base : `${base}-${String(count)}`, finding };
+  });
 }
 
 function gateSummaryLine(gate: GateDecision): string {
@@ -82,13 +101,15 @@ async function reconcileInlineComments(
   findings: readonly Finding[],
   outcome: PublishOutcome,
 ): Promise<void> {
-  const desired = new Map(findings.map((finding) => [fingerprintOf(finding), finding] as const));
-  const existing = (await scm.listInlineComments()).filter((comment) =>
-    comment.body.includes(`${MARKER_PREFIX}finding:`),
+  const desired = new Map(
+    fingerprintEntries(findings).map(({ fingerprint, finding }) => [fingerprint, finding]),
+  );
+  const existing = (await scm.listInlineComments()).filter(
+    (comment) => markerFingerprint(comment.body) !== undefined,
   );
   const seen = new Set<string>();
   for (const comment of existing) {
-    const fingerprint = FINDING_MARKER.exec(comment.body)?.[1];
+    const fingerprint = markerFingerprint(comment.body);
     const finding = fingerprint === undefined ? undefined : desired.get(fingerprint);
     if (fingerprint === undefined || finding === undefined || seen.has(fingerprint)) {
       await scm.deleteComment(comment.id);
@@ -96,7 +117,7 @@ async function reconcileInlineComments(
       continue;
     }
     seen.add(fingerprint);
-    const body = renderCommentBody(finding);
+    const body = renderCommentBody(finding, fingerprint);
     if (body === comment.body) {
       outcome.unchanged += 1;
     } else {
@@ -107,7 +128,7 @@ async function reconcileInlineComments(
   for (const [fingerprint, finding] of desired) {
     if (seen.has(fingerprint)) continue;
     await scm.createInlineComment({
-      body: renderCommentBody(finding),
+      body: renderCommentBody(finding, fingerprint),
       path: finding.file,
       line: finding.line,
     });
