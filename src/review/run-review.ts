@@ -10,6 +10,7 @@ import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
+import { compileCustomPatterns, redactDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { buildReport } from "./report.js";
 
@@ -77,8 +78,14 @@ export async function runReview(
     return 0;
   }
 
+  const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns));
+  const redactionTotal = Object.values(redacted.counts).reduce((sum, n) => sum + n, 0);
+  if (redactionTotal > 0) {
+    deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted before the model call\n`);
+  }
+
   const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
-  const request = buildReviewPrompt(guidelines, diff);
+  const request = buildReviewPrompt(guidelines, redacted.text);
   let reply;
   try {
     reply = await modelPort.complete(request);
@@ -99,6 +106,7 @@ export async function runReview(
       violations,
       droppedUncited,
       adjustedLines,
+      redactions: redacted.counts,
       gate,
       ...(reply.usage ? { usage: reply.usage } : {}),
     });

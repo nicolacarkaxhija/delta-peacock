@@ -268,6 +268,40 @@ describe("review end to end (local mode)", () => {
     expect(requests[0]?.system).not.toContain("python-only");
   });
 
+  it("redacts a planted secret before it can reach the model", async () => {
+    const repo = makeScenario();
+    write(
+      repo,
+      "src/app.js",
+      'const key = "AKIAIOSFODNN7EXAMPLE";\nconst mail = "someone@example.com";\n',
+    );
+    commitAll(repo, "leak a credential");
+    const { port, requests } = scriptedModel(CITED);
+    const { code, stderr } = await review(repo, port, "--report", "red.json");
+    expect(code).toBe(0);
+    expect(requests[0]?.user).not.toContain("AKIAIOSFODNN7EXAMPLE");
+    expect(requests[0]?.user).not.toContain("someone@example.com");
+    expect(requests[0]?.user).toContain("[redacted:aws-access-key]");
+    expect(stderr).toContain("redacted before the model call");
+    const report = JSON.parse(readFileSync(path.join(repo, "red.json"), "utf8")) as ReviewReport;
+    expect(report.redactions["aws-access-key"]).toBe(1);
+    expect(report.redactions["email"]).toBe(1);
+  });
+
+  it("aborts as a tool error when a configured redaction pattern is broken", async () => {
+    const repo = makeScenario();
+    write(
+      repo,
+      "delta-peacock.config.yaml",
+      'redaction:\n  patterns:\n    - name: broken\n      pattern: "(["\n',
+    );
+    const { port, requests } = scriptedModel(CITED);
+    const { code, stderr } = await review(repo, port);
+    expect(code).toBe(1);
+    expect(stderr).toContain("broken");
+    expect(requests).toHaveLength(0); // nothing reached the model
+  });
+
   it("exits clean when no guideline applies to the change at all", async () => {
     const repo = makeRepo();
     write(
