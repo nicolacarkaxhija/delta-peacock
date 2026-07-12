@@ -38,6 +38,17 @@ function isAncestorOfHead(cwd: string, ref: string): boolean {
   }
 }
 
+/** True when no target commit entered this branch after the anchor. */
+function targetUnchangedSince(cwd: string, targetRef: string, anchor: string): boolean {
+  try {
+    const mergeBase = runGit(cwd, ["merge-base", targetRef, "HEAD"]).trim();
+    runGit(cwd, ["merge-base", "--is-ancestor", mergeBase, anchor]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function hasOriginRemote(cwd: string): boolean {
   return runGit(cwd, ["remote"])
     .split("\n")
@@ -73,6 +84,13 @@ export function resolveTargetRef(
   return { ref: target, notices };
 }
 
+/** The b-side path of a chunk's `diff --git` header; handles git's quoted form. */
+function headerPath(chunk: string): string | undefined {
+  const header = /^diff --git (?:"a\/.*"|a\/.*) (?:"b\/(.+)"|b\/(.+))$/m.exec(chunk);
+  if (!header) return undefined;
+  return header[1] ?? header[2];
+}
+
 /** Keep only diff chunks whose path passes the include and exclude globs. */
 export function filterDiffByPath(
   diff: string,
@@ -84,8 +102,7 @@ export function filterDiffByPath(
   const isExcluded = exclude.length === 0 ? () => false : picomatch([...exclude]);
   const chunks = diff.split(/^(?=diff --git )/m).filter((chunk) => chunk !== "");
   const kept = chunks.filter((chunk) => {
-    const header = /^diff --git a\/.* b\/(.+)$/m.exec(chunk);
-    const filePath = header?.[1]?.replace(/^"|"$/g, "");
+    const filePath = headerPath(chunk);
     if (filePath === undefined) return true; // never silently drop what we cannot parse
     return isIncluded(filePath) && !isExcluded(filePath);
   });
@@ -112,11 +129,10 @@ export interface AcquiredDiff {
 
 /** The b-side paths of every file chunk in a unified diff. */
 export function changedFilesFromDiff(diff: string): string[] {
-  const files: string[] = [];
-  for (const match of diff.matchAll(/^diff --git a\/.* b\/(.+)$/gm)) {
-    files.push(String(match[1]).replace(/^"|"$/g, ""));
-  }
-  return files;
+  return diff
+    .split(/^(?=diff --git )/m)
+    .map((chunk) => headerPath(chunk))
+    .filter((filePath): filePath is string => filePath !== undefined);
 }
 
 export function acquireDiff(
@@ -134,15 +150,22 @@ export function acquireDiff(
   const anchor = request.lastReviewedCommit;
   if (anchor !== undefined) {
     assertSafeRef(anchor);
-    if (refExists(cwd, anchor) && isAncestorOfHead(cwd, anchor)) {
-      mode = "incremental";
-      notices.push(`incremental review of changes since ${anchor.slice(0, 12)}`);
-      text = runGit(cwd, ["diff", "--no-color", `${anchor}..HEAD`, "--"]);
-    } else {
+    if (!refExists(cwd, anchor) || !isAncestorOfHead(cwd, anchor)) {
       notices.push(
         `last reviewed commit ${anchor.slice(0, 12)} is not reachable from HEAD (rebase?); reviewing the full branch`,
       );
       text = mergeBaseDiff(cwd, ref);
+    } else if (!targetUnchangedSince(cwd, ref, anchor)) {
+      // the branch pulled target commits in after the anchor; a plain
+      // anchor..HEAD diff would review target-only changes (ADR 0004)
+      notices.push(
+        `the target moved into this branch since ${anchor.slice(0, 12)}; reviewing the full branch`,
+      );
+      text = mergeBaseDiff(cwd, ref);
+    } else {
+      mode = "incremental";
+      notices.push(`incremental review of changes since ${anchor.slice(0, 12)}`);
+      text = runGit(cwd, ["diff", "--no-color", `${anchor}..HEAD`, "--"]);
     }
   } else {
     text = mergeBaseDiff(cwd, ref);
