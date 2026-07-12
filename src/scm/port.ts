@@ -29,4 +29,6 @@ export interface ScmPort {
   updateSummaryComment(id: string, body: string): Promise<void>;
   /** Commit status on the PR head, reflecting the gate. */
   postStatus(state: StatusState, description: string): Promise<void>;
+  /** The PR diff as the host computes it; the fallback when no usable clone exists. */
+  fetchPullRequestDiff?(): Promise<string>;
 }
