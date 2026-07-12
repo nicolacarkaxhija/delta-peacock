@@ -1,5 +1,6 @@
 import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
+import { createBitbucketPort } from "./bitbucket.js";
 import { createGitHubPort } from "./github.js";
 import type { ScmPort } from "./port.js";
 
@@ -22,7 +23,19 @@ export function buildScmPort(
       ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
     });
   }
+  if (config.scm.provider === "bitbucket") {
+    const token = env["BITBUCKET_TOKEN"];
+    if (token === undefined || token === "") {
+      throw new ToolError("BITBUCKET_TOKEN is not set; the bitbucket provider needs it");
+    }
+    return createBitbucketPort({
+      repository,
+      pullRequest,
+      token,
+      ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
+    });
+  }
   throw new ToolError(
-    `scm provider "${config.scm.provider}" is not wired up yet; github and local are available`,
+    `scm provider "${config.scm.provider}" is not wired up; github, bitbucket and local are available`,
   );
 }

@@ -13,7 +13,7 @@ function findingMarker(fingerprint: string): string {
 
 /** Only a marker on the comment's final line counts; quoting one in prose does not. */
 function markerFingerprint(body: string): string | undefined {
-  const lastLine = body.trimEnd().split("\n").at(-1) ?? "";
+  const lastLine = String(body.trimEnd().split("\n").at(-1));
   return FINDING_MARKER.exec(lastLine)?.[1];
 }
 

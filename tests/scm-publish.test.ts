@@ -223,6 +223,18 @@ describe("publishing to github", () => {
     }
   });
 
+  it("a passed gate posts a success status naming the threshold", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      await reviewAgainst(fake, repo, FINDING_WITH_SUGGESTION, "--fail-on", "CRITICAL");
+      expect(fake.statuses[0]?.state).toBe("success");
+      expect(fake.statuses[0]?.description).toContain("passed at failOn=CRITICAL");
+    } finally {
+      await fake.close();
+    }
+  });
+
   it("dry run: zero requests of any kind reach the server", async () => {
     const fake = await startFakeGitHub();
     try {

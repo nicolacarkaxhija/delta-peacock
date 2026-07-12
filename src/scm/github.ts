@@ -125,5 +125,18 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
         context: "delta-peacock",
       });
     },
+    async fetchPullRequestDiff(): Promise<string> {
+      const response = await fetch(`${base}/repos/${repo}/pulls/${pr}`, {
+        headers: {
+          authorization: `Bearer ${options.token}`,
+          accept: "application/vnd.github.diff",
+          "user-agent": "delta-peacock",
+        },
+      });
+      if (!response.ok) {
+        throw new ToolError(`GitHub responded ${String(response.status)} to the diff request`);
+      }
+      return response.text();
+    },
   };
 }

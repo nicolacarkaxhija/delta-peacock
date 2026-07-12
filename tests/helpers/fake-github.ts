@@ -80,7 +80,12 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
       const statuses = /^\/repos\/[^/]+\/[^/]+\/statuses\/(.+)$/;
 
       if (method === "GET" && pullMeta.test(path)) {
-        send(response, 200, { head: { sha: "headsha1234567" } });
+        if (String(request.headers.accept).includes("diff")) {
+          response.writeHead(200, { "content-type": "application/vnd.github.diff" });
+          response.end("diff --git a/api.js b/api.js\n+from the github api diff\n");
+        } else {
+          send(response, 200, { head: { sha: "headsha1234567" } });
+        }
       } else if (method === "GET" && reviewComments.test(path)) {
         send(response, 200, paginated(state.reviewComments, url));
       } else if (method === "POST" && reviewComments.test(path)) {
