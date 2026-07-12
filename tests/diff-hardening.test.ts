@@ -100,6 +100,39 @@ describe("incremental anchor", () => {
     expect(acquired.text).not.toContain("first.txt");
   });
 
+  it("falls back to a full review when target commits were merged in after the anchor", () => {
+    const repo = makeRepo();
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "first.txt", "first\n");
+    commitAll(repo, "first");
+    const anchor = headSha(repo);
+
+    // the target moves on and the developer syncs it into the branch
+    git(repo, "checkout", "-q", "main");
+    write(repo, "target-only.txt", "landed on main\n");
+    commitAll(repo, "target moves");
+    git(repo, "checkout", "-q", "feature");
+    git(
+      repo,
+      "-c",
+      "user.name=fixture",
+      "-c",
+      "user.email=fixture@example.com",
+      "merge",
+      "-q",
+      "--no-edit",
+      "main",
+    );
+    write(repo, "second.txt", "after the sync\n");
+    commitAll(repo, "second");
+
+    const acquired = acquireDiff(repo, request({ lastReviewedCommit: anchor }));
+    expect(acquired.mode).toBe("full");
+    expect(acquired.notices.join("\n")).toContain("target moved into this branch");
+    expect(acquired.text).not.toContain("target-only.txt");
+    expect(acquired.text).toContain("second.txt");
+  });
+
   it("falls back to a full review when the anchor does not resolve at all", () => {
     const repo = makeRepo();
     git(repo, "checkout", "-q", "-b", "feature");
@@ -179,6 +212,21 @@ describe("path filtering and the size ceiling", () => {
     const acquired = acquireDiff(repo, request({ exclude: ["vendor/**"] }));
     expect(acquired.text).toContain("src/real.js");
     expect(acquired.text).not.toContain("vendor/lib.js");
+  });
+
+  it("filters quoted non-ascii paths correctly", () => {
+    const quoted = [
+      'diff --git "a/vendor/f\\303\\266\\303\\266.js" "b/vendor/f\\303\\266\\303\\266.js"',
+      "index 111..222 100644",
+      "+quoted vendored change",
+      "diff --git a/src/real.js b/src/real.js",
+      "index 333..444 100644",
+      "+real change",
+      "",
+    ].join("\n");
+    const filtered = filterDiffByPath(quoted, [], ["vendor/**"]);
+    expect(filtered).not.toContain("quoted vendored change");
+    expect(filtered).toContain("real change");
   });
 
   it("keeps chunks whose header it cannot parse rather than dropping them", () => {
