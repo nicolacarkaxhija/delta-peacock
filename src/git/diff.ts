@@ -114,8 +114,7 @@ export interface AcquiredDiff {
 export function changedFilesFromDiff(diff: string): string[] {
   const files: string[] = [];
   for (const match of diff.matchAll(/^diff --git a\/.* b\/(.+)$/gm)) {
-    const filePath = match[1]?.replace(/^"|"$/g, "");
-    if (filePath !== undefined) files.push(filePath);
+    files.push(String(match[1]).replace(/^"|"$/g, ""));
   }
   return files;
 }

@@ -1,7 +1,9 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
+import type { Config } from "../config/schema.js";
 import type { RuntimeDeps } from "../deps.js";
+import type { Finding } from "../domain/finding.js";
 import { evaluateGate } from "../domain/gate.js";
 import { ToolError } from "../errors.js";
 import { acquireDiff, changedFilesFromDiff, resolveTargetRef } from "../git/diff.js";
@@ -10,6 +12,8 @@ import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
+import { buildScmPort } from "../scm/build.js";
+import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { buildReport } from "./report.js";
@@ -103,17 +107,10 @@ export async function runReview(
     observationSeverityCap: config.review.observationSeverityCap,
   });
 
-  const floor = config.review.confidenceFloor;
-  const kept = parsed.findings.filter((finding) => (finding.confidence ?? 1) >= floor);
-  const filtered = parsed.findings.filter((finding) => (finding.confidence ?? 1) < floor);
-  const violations = kept.filter((finding) => finding.kind === "violation");
-  const observations = kept.filter((finding) => finding.kind === "observation");
-  const proposals = observations
-    .flatMap((observation) =>
-      observation.proposedGuideline ? [observation.proposedGuideline] : [],
-    )
-    .slice(0, config.review.maxProposedGuidelines);
-
+  const { kept, filtered, violations, observations, proposals } = partitionFindings(
+    parsed.findings,
+    config,
+  );
   const gate = evaluateGate(kept, config.gate.failOn);
 
   deps.out(
@@ -143,5 +140,50 @@ export async function runReview(
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
   }
 
+  await publishIfConfigured(deps, config, {
+    findings: kept,
+    proposals,
+    droppedUncited: parsed.droppedUncited,
+    filtered: filtered.length,
+    gate,
+    commitStatus: config.scm.commitStatus,
+  });
+
   return gate.failed ? 2 : 0;
+}
+
+function partitionFindings(findings: readonly Finding[], config: Config) {
+  const floor = config.review.confidenceFloor;
+  const kept = findings.filter((finding) => (finding.confidence ?? 1) >= floor);
+  const filtered = findings.filter((finding) => (finding.confidence ?? 1) < floor);
+  const observations = kept.filter((finding) => finding.kind === "observation");
+  return {
+    kept,
+    filtered,
+    violations: kept.filter((finding) => finding.kind === "violation"),
+    observations,
+    proposals: observations
+      .flatMap((observation) =>
+        observation.proposedGuideline ? [observation.proposedGuideline] : [],
+      )
+      .slice(0, config.review.maxProposedGuidelines),
+  };
+}
+
+async function publishIfConfigured(
+  deps: ReviewDeps,
+  config: Config,
+  input: Parameters<typeof publishReview>[1],
+): Promise<void> {
+  if (config.scm.provider === "local") return;
+  if (config.scm.dryRun) {
+    // the hard guarantee: in a dry run, no request of any kind goes out
+    deps.err("dry run: no comments, summary or status will be posted\n");
+    return;
+  }
+  const scm = deps.scmPort ?? buildScmPort(config, deps.env);
+  const outcome = await publishReview(scm, input);
+  deps.err(
+    `published: ${String(outcome.created)} created, ${String(outcome.updated)} updated, ${String(outcome.deleted)} resolved, ${String(outcome.unchanged)} unchanged\n`,
+  );
 }
