@@ -11,6 +11,9 @@ export function evaluateGate(
   findings: readonly Finding[],
   threshold: Severity | "none",
 ): GateDecision {
-  const failing = findings.filter((finding) => meetsThreshold(finding.severity, threshold)).length;
+  // observations never gate, whatever their severity
+  const failing = findings.filter(
+    (finding) => finding.kind === "violation" && meetsThreshold(finding.severity, threshold),
+  ).length;
   return { threshold, failing, failed: failing > 0 };
 }
