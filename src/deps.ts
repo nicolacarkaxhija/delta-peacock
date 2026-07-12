@@ -1,4 +1,5 @@
 import type { ModelPort } from "./model/port.js";
+import type { ScmPort } from "./scm/port.js";
 
 /** The dependencies every command runs against; tests inject all of them. */
 export interface RuntimeDeps {
@@ -8,4 +9,6 @@ export interface RuntimeDeps {
   err: (text: string) => void;
   /** The model-port seam: tests inject a scripted fake here. */
   modelPort?: ModelPort;
+  /** SCM override; adapters are normally tested at the HTTP boundary instead. */
+  scmPort?: ScmPort;
 }

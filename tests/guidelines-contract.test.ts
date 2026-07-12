@@ -149,7 +149,11 @@ function lint(repo: string): { code: number; stdout: string; stderr: string } {
 describe("guidelines lint", () => {
   it("passes a clean corpus and reports counts", () => {
     const repo = makeRepo();
-    write(repo, "guidelines/a.md", "---\nid: a\nseverity: MAJOR\n---\nbody\n");
+    write(
+      repo,
+      "guidelines/a.md",
+      "---\nid: a\nseverity: MAJOR\nlanguages: [typescript]\n---\nbody\n",
+    );
     write(repo, "guidelines/off.md", "---\nid: off\nseverity: INFO\nenabled: false\n---\nbody\n");
     const { code, stdout } = lint(repo);
     expect(code).toBe(0);

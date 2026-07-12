@@ -39,6 +39,10 @@ const REVIEW_FLAG_PATHS: Readonly<Record<keyof ReviewCommandOptions, string>> = 
   lastReviewedCommit: "review.lastReviewedCommit",
 };
 
+interface ReviewCommandBooleans {
+  dryRun?: boolean;
+}
+
 function reviewFlags(options: ReviewCommandOptions): Record<string, string> {
   const flags: Record<string, string> = {};
   for (const [key, dotPath] of Object.entries(REVIEW_FLAG_PATHS)) {
@@ -75,7 +79,10 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--exclude <globs>", "comma-separated path globs to leave out")
     .option("--max-diff-bytes <n>", "skip reviews larger than this many bytes")
     .option("--last-reviewed-commit <sha>", "review only changes since this commit")
-    .action(async (options: ReviewCommandOptions) => {
+    .option("--dry-run", "suppress every outbound write, whatever is configured")
+    .action(async (options: ReviewCommandOptions & ReviewCommandBooleans) => {
+      const flags = reviewFlags(options);
+      if (options.dryRun === true) flags["scm.dryRun"] = "true";
       const code = await runReview(
         {
           cwd: deps.cwd,
@@ -83,8 +90,9 @@ export function buildProgram(deps: CliDeps): Command {
           out: deps.out,
           err: deps.err,
           ...(deps.modelPort ? { modelPort: deps.modelPort } : {}),
+          ...(deps.scmPort ? { scmPort: deps.scmPort } : {}),
         },
-        reviewFlags(options),
+        flags,
       );
       if (code !== 0) throw new ExitCodeError(code);
     });
