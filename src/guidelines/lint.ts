@@ -19,7 +19,9 @@ export function runGuidelinesLint(
   const problems = [...loaded.problems];
   for (const guideline of loaded.guidelines) {
     if (guideline.body === "") {
-      problems.push(`${guideline.sourcePath}: empty body; a guideline needs its rule spelled out`);
+      problems.push(
+        `${guideline.sourcePath}: empty body; a guideline needs its expectations spelled out`,
+      );
     }
     for (const language of guideline.languages) {
       if (!isKnownLanguage(language)) {
