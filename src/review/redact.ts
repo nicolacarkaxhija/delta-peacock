@@ -19,7 +19,8 @@ const BUILT_IN: readonly RedactionPattern[] = [
   { name: "slack-token", regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g },
   { name: "api-key", regex: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
   { name: "jwt", regex: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{5,}\b/g },
-  { name: "bearer-token", regex: /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/g },
+  // [ \t] only: \s would cross newlines and swallow diff line markers
+  { name: "bearer-token", regex: /\bBearer[ \t]+[A-Za-z0-9._~+/=-]{20,}/g },
   { name: "email", regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g },
 ];
 

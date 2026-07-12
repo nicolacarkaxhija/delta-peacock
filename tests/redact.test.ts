@@ -28,6 +28,13 @@ describe("redactDiff", () => {
     expect(counts["private-key-block"]).toBe(1);
   });
 
+  it("never lets a bearer match cross a line break and eat diff markers", () => {
+    const diff = "+auth header uses Bearer\n+const next_line_value = compute(input_value);\n";
+    const { text, counts } = redactDiff(diff);
+    expect(text).toBe(diff);
+    expect(counts).toEqual({});
+  });
+
   it("leaves ordinary diffs untouched with empty counts", () => {
     const diff =
       "diff --git a/x b/x\nindex 3b18e512dba79e4c8300dd08aeb37f8e728b8dad..1234567 100644\n+const x = 1;\n";
