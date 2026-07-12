@@ -23,6 +23,14 @@ export const ReviewSchema = z.strictObject({
   exclude: z.array(z.string()).default([]),
   /** Reviews larger than this are skipped, never truncated. */
   maxDiffBytes: z.number().int().positive().default(1_000_000),
+  /** Findings under this confidence stay in the report but are never rendered or posted. */
+  confidenceFloor: z.number().min(0).max(1).default(0.5),
+  /** Opt-in: let the model report observations that cite no guideline. */
+  generalPass: z.boolean().default(false),
+  /** The most severe an observation can ever be. */
+  observationSeverityCap: z.enum(SEVERITIES).default("MINOR"),
+  /** How many proposed guidelines a single review may surface. */
+  maxProposedGuidelines: z.number().int().min(0).default(3),
 });
 
 export const GateSchema = z.strictObject({

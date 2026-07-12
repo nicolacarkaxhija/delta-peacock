@@ -19,6 +19,10 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_INCLUDE: "review.include",
   DELTA_PEACOCK_REVIEW_EXCLUDE: "review.exclude",
   DELTA_PEACOCK_REVIEW_MAX_DIFF_BYTES: "review.maxDiffBytes",
+  DELTA_PEACOCK_REVIEW_CONFIDENCE_FLOOR: "review.confidenceFloor",
+  DELTA_PEACOCK_REVIEW_GENERAL_PASS: "review.generalPass",
+  DELTA_PEACOCK_REVIEW_OBSERVATION_SEVERITY_CAP: "review.observationSeverityCap",
+  DELTA_PEACOCK_REVIEW_MAX_PROPOSED_GUIDELINES: "review.maxProposedGuidelines",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_REDACTION_PATTERNS: "redaction.patterns",
@@ -26,8 +30,12 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
 
 /** String sources (env, flags) coerce into these shapes before validation. */
 const ARRAY_PATHS = new Set(["review.include", "review.exclude"]);
-const NUMBER_PATHS = new Set(["review.maxDiffBytes"]);
-const BOOLEAN_PATHS = new Set(["review.fetchTarget"]);
+const NUMBER_PATHS = new Set([
+  "review.maxDiffBytes",
+  "review.confidenceFloor",
+  "review.maxProposedGuidelines",
+]);
+const BOOLEAN_PATHS = new Set(["review.fetchTarget", "review.generalPass"]);
 const JSON_PATHS = new Set(["redaction.patterns"]);
 
 function coerceStringValue(dotPath: string, raw: string): unknown {
