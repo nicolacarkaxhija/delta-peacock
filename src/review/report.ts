@@ -7,6 +7,8 @@ export interface ReviewReport {
   findings: (Violation & { fingerprint: string })[];
   droppedUncitedFindings: number;
   adjustedLines: number;
+  /** Replacement counts per redaction pattern that fired. */
+  redactions: Record<string, number>;
   gate: GateDecision;
   usage?: ModelUsage;
 }
@@ -15,6 +17,7 @@ export function buildReport(input: {
   violations: readonly Violation[];
   droppedUncited: number;
   adjustedLines: number;
+  redactions?: Record<string, number>;
   gate: GateDecision;
   usage?: ModelUsage;
 }): ReviewReport {
@@ -26,6 +29,7 @@ export function buildReport(input: {
     })),
     droppedUncitedFindings: input.droppedUncited,
     adjustedLines: input.adjustedLines,
+    redactions: input.redactions ?? {},
     gate: input.gate,
     ...(input.usage ? { usage: input.usage } : {}),
   };
