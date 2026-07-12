@@ -193,7 +193,17 @@ export function resolveGuidelines(
   const notices: string[] = [];
   if (guidelinesRef !== "source") {
     const ref = guidelinesRef === "target" ? targetRef : guidelinesRef;
-    const files = readGitRefGuidelines(cwd, ref, guidelinesDir);
+    let files: GuidelineFile[] | undefined;
+    try {
+      files = readGitRefGuidelines(cwd, ref, guidelinesDir);
+    } catch (error) {
+      // a shallow or partial clone may not hold the target ref at all; only
+      // the default mode may degrade, a pin must stay tamper-resistant
+      if (guidelinesRef !== "target") throw error;
+      notices.push(
+        `could not read guidelines from ${ref} (${String((error as Error).message.split("\n")[0])}); using the working tree`,
+      );
+    }
     if (files !== undefined) {
       return { ...loadGuidelinesFromFiles(files), origin: ref, notices };
     }
@@ -203,9 +213,11 @@ export function resolveGuidelines(
         `no guidelines found on the pinned ref ${ref}; refusing to fall back to the working tree`,
       );
     }
-    notices.push(
-      `no guidelines found on ${ref}; using the working tree (expected while bootstrapping)`,
-    );
+    if (notices.length === 0) {
+      notices.push(
+        `no guidelines found on ${ref}; using the working tree (expected while bootstrapping)`,
+      );
+    }
   }
   const files = readWorkingTreeGuidelines(path.resolve(cwd, guidelinesDir));
   return { ...loadGuidelinesFromFiles(files), origin: "working tree", notices };
