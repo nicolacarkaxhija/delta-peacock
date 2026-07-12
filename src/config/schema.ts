@@ -41,6 +41,19 @@ export const OutputSchema = z.strictObject({
   report: z.string().min(1).optional(),
 });
 
+export const ScmSchema = z.strictObject({
+  provider: z.enum(["github", "bitbucket", "local"]).default("local"),
+  /** owner/repo on GitHub, workspace/repo on Bitbucket. */
+  repository: z.string().min(1).optional(),
+  pullRequest: z.number().int().positive().optional(),
+  /** Post a commit status reflecting the gate. */
+  commitStatus: z.boolean().default(true),
+  /** API base override for enterprise hosts and tests. */
+  baseUrl: z.url().optional(),
+  /** The hard guarantee: no write of any kind leaves the process. */
+  dryRun: z.boolean().default(false),
+});
+
 export const RedactionSchema = z.strictObject({
   /** Extra patterns applied on top of the built-ins; each compiles as a global RegExp. */
   patterns: z
@@ -55,6 +68,7 @@ export const ConfigSchema = z
     gate: GateSchema.prefault({}),
     output: OutputSchema.prefault({}),
     redaction: RedactionSchema.prefault({}),
+    scm: ScmSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {
@@ -63,6 +77,22 @@ export const ConfigSchema = z
         path: ["model", "baseUrl"],
         message: "model.baseUrl is required when model.provider is openai-compatible",
       });
+    }
+    if (config.scm.provider !== "local") {
+      if (config.scm.repository === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["scm", "repository"],
+          message: `scm.repository is required when scm.provider is ${config.scm.provider}`,
+        });
+      }
+      if (config.scm.pullRequest === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["scm", "pullRequest"],
+          message: `scm.pullRequest is required when scm.provider is ${config.scm.provider}`,
+        });
+      }
     }
   });
 

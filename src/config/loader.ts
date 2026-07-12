@@ -26,6 +26,12 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_REDACTION_PATTERNS: "redaction.patterns",
+  DELTA_PEACOCK_SCM_PROVIDER: "scm.provider",
+  DELTA_PEACOCK_SCM_REPOSITORY: "scm.repository",
+  DELTA_PEACOCK_SCM_PULL_REQUEST: "scm.pullRequest",
+  DELTA_PEACOCK_SCM_COMMIT_STATUS: "scm.commitStatus",
+  DELTA_PEACOCK_SCM_BASE_URL: "scm.baseUrl",
+  DELTA_PEACOCK_SCM_DRY_RUN: "scm.dryRun",
 };
 
 /** String sources (env, flags) coerce into these shapes before validation. */
@@ -34,8 +40,14 @@ const NUMBER_PATHS = new Set([
   "review.maxDiffBytes",
   "review.confidenceFloor",
   "review.maxProposedGuidelines",
+  "scm.pullRequest",
 ]);
-const BOOLEAN_PATHS = new Set(["review.fetchTarget", "review.generalPass"]);
+const BOOLEAN_PATHS = new Set([
+  "review.fetchTarget",
+  "review.generalPass",
+  "scm.commitStatus",
+  "scm.dryRun",
+]);
 const JSON_PATHS = new Set(["redaction.patterns"]);
 
 function coerceStringValue(dotPath: string, raw: string): unknown {
