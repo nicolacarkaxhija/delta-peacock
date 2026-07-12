@@ -103,6 +103,13 @@ describe("resolveGuidelines", () => {
     expect(resolved.guidelines).toHaveLength(1);
   });
 
+  it("refuses to fall back when an explicitly pinned ref has no guidelines", () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", RULE_V1);
+    git(repo, "branch", "-q", "empty-ref");
+    expect(() => resolveGuidelines(repo, "empty-ref", "guidelines", "main")).toThrow("pinned ref");
+  });
+
   it("reads from an explicitly pinned ref", () => {
     const repo = makeRepo();
     write(repo, "guidelines/no-console.md", RULE_V1);

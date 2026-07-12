@@ -160,8 +160,9 @@ export function readGitRefGuidelines(
   dir: string,
 ): GuidelineFile[] | undefined {
   assertSafeRef(ref);
-  const listing = runGit(cwd, ["ls-tree", "-r", "--name-only", ref, "--", dir]);
-  const paths = listing.split("\n").filter((line) => line.trim().endsWith(".md"));
+  // -z gives raw NUL-separated paths, so quoted non-ASCII names cannot slip through
+  const listing = runGit(cwd, ["ls-tree", "-r", "--name-only", "-z", ref, "--", dir]);
+  const paths = listing.split("\0").filter((line) => line.endsWith(".md"));
   if (paths.length === 0) return undefined;
   return paths.map((filePath) => ({
     displayPath: `${ref}:${filePath}`,
@@ -195,6 +196,12 @@ export function resolveGuidelines(
     const files = readGitRefGuidelines(cwd, ref, guidelinesDir);
     if (files !== undefined) {
       return { ...loadGuidelinesFromFiles(files), origin: ref, notices };
+    }
+    if (guidelinesRef !== "target") {
+      // an explicitly pinned ref must not silently fall back to PR-controlled content
+      throw new ToolError(
+        `no guidelines found on the pinned ref ${ref}; refusing to fall back to the working tree`,
+      );
     }
     notices.push(
       `no guidelines found on ${ref}; using the working tree (expected while bootstrapping)`,
