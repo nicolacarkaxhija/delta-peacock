@@ -21,14 +21,23 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_MAX_DIFF_BYTES: "review.maxDiffBytes",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
+  DELTA_PEACOCK_REDACTION_PATTERNS: "redaction.patterns",
 };
 
 /** String sources (env, flags) coerce into these shapes before validation. */
 const ARRAY_PATHS = new Set(["review.include", "review.exclude"]);
 const NUMBER_PATHS = new Set(["review.maxDiffBytes"]);
 const BOOLEAN_PATHS = new Set(["review.fetchTarget"]);
+const JSON_PATHS = new Set(["redaction.patterns"]);
 
 function coerceStringValue(dotPath: string, raw: string): unknown {
+  if (JSON_PATHS.has(dotPath)) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
   if (ARRAY_PATHS.has(dotPath)) {
     return raw
       .split(",")
