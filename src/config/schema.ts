@@ -33,12 +33,20 @@ export const OutputSchema = z.strictObject({
   report: z.string().min(1).optional(),
 });
 
+export const RedactionSchema = z.strictObject({
+  /** Extra patterns applied on top of the built-ins; each compiles as a global RegExp. */
+  patterns: z
+    .array(z.strictObject({ name: z.string().min(1), pattern: z.string().min(1) }))
+    .default([]),
+});
+
 export const ConfigSchema = z
   .strictObject({
     model: ModelSchema.prefault({}),
     review: ReviewSchema.prefault({}),
     gate: GateSchema.prefault({}),
     output: OutputSchema.prefault({}),
+    redaction: RedactionSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {
