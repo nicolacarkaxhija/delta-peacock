@@ -11,7 +11,7 @@ function renderGuideline(guideline: Guideline): string {
 }
 
 const RESPONSE_SHAPE =
-  '{"findings": [{"guidelineId": "<id>", "file": "<path from the diff>", "line": <new-file line number>, "title": "<short summary>", "body": "<what is wrong and how to fix it>", "confidence": <0..1>}]}';
+  '{"findings": [{"guidelineId": "<id>", "file": "<path from the diff>", "line": <new-file line number>, "title": "<short summary>", "body": "<what is wrong and how to fix it>", "confidence": <0..1>, "suggestion": "<exact replacement code for the flagged line(s), only when a concrete fix exists>"}]}';
 
 const GENERAL_PASS = [
   "",

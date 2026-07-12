@@ -12,6 +12,7 @@ const RawFinding = z.object({
   body: z.string().default(""),
   severity: z.enum(SEVERITIES).optional(),
   confidence: z.number().min(0).max(1).optional(),
+  suggestion: z.string().optional(),
   proposedGuideline: z
     .object({
       id: z.string().min(1),
@@ -83,6 +84,8 @@ function normalizeLine(raw: unknown): { line: number; adjusted: boolean } {
 /** Undefined means the finding is uncited and the general pass is off: dropped. */
 function toFinding(raw: RawShape, line: number, options: ParseOptions): Finding | undefined {
   const confidence = raw.confidence !== undefined ? { confidence: raw.confidence } : {};
+  const suggestion =
+    raw.suggestion !== undefined && raw.suggestion !== "" ? { suggestion: raw.suggestion } : {};
   const guideline =
     raw.guidelineId === undefined ? undefined : options.guidelinesById.get(raw.guidelineId);
   if (guideline !== undefined) {
@@ -95,6 +98,7 @@ function toFinding(raw: RawShape, line: number, options: ParseOptions): Finding 
       title: raw.title === "" ? guideline.title : raw.title,
       body: raw.body,
       ...confidence,
+      ...suggestion,
     };
     return violation;
   }
@@ -107,6 +111,7 @@ function toFinding(raw: RawShape, line: number, options: ParseOptions): Finding 
     title: raw.title === "" ? "Observation" : raw.title,
     body: raw.body,
     ...confidence,
+    ...suggestion,
     ...(raw.proposedGuideline ? { proposedGuideline: raw.proposedGuideline } : {}),
   };
   return observation;
