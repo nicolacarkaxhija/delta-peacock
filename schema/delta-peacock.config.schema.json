@@ -74,6 +74,33 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "confidenceFloor": {
+          "default": 0.5,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "generalPass": {
+          "default": false,
+          "type": "boolean"
+        },
+        "observationSeverityCap": {
+          "default": "MINOR",
+          "type": "string",
+          "enum": [
+            "BLOCKER",
+            "CRITICAL",
+            "MAJOR",
+            "MINOR",
+            "INFO"
+          ]
+        },
+        "maxProposedGuidelines": {
+          "default": 3,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "additionalProperties": false
