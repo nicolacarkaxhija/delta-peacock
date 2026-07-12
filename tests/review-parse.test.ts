@@ -108,6 +108,18 @@ describe("parseReviewResponse", () => {
     );
   });
 
+  it("drops an empty suggestion string instead of rendering an empty block", () => {
+    const { findings } = parseReviewResponse(
+      response([
+        { ...finding, suggestion: "" },
+        { ...finding, line: 9, suggestion: "fixed()" },
+      ]),
+      options(),
+    );
+    expect(findings[0] && "suggestion" in findings[0]).toBe(false);
+    expect(findings[1]?.suggestion).toBe("fixed()");
+  });
+
   it("tolerates a fenced JSON response", () => {
     const fenced = "```json\n" + response([finding]) + "\n```";
     expect(parseReviewResponse(fenced, options()).findings).toHaveLength(1);
