@@ -140,6 +140,71 @@ describe("publishing to github", () => {
     }
   });
 
+  it("a later all-clear run resolves stale comments and turns the status green", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      await reviewAgainst(fake, repo, FINDING_WITH_SUGGESTION, "--fail-on", "MAJOR");
+      expect(fake.reviewComments).toHaveLength(1);
+      expect(fake.statuses.at(-1)?.state).toBe("failure");
+
+      // the next push leaves nothing to review against the target
+      git(repo, "checkout", "-q", "main");
+      git(repo, "-c", "user.name=f", "-c", "user.email=f@e", "merge", "-q", "--no-edit", "feature");
+      git(repo, "checkout", "-q", "feature");
+      const { code } = await reviewAgainst(
+        fake,
+        repo,
+        FINDING_WITH_SUGGESTION,
+        "--fail-on",
+        "MAJOR",
+      );
+      expect(code).toBe(0);
+      expect(fake.reviewComments).toHaveLength(0); // stale finding resolved
+      expect(fake.statuses.at(-1)?.state).toBe("success");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("keeps distinct comments for two findings sharing a fingerprint base", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      const twin = JSON.stringify({
+        findings: [
+          { guidelineId: "no-console", file: "src/app.js", line: 2, title: "First", body: "a" },
+          { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Second", body: "b" },
+        ],
+      });
+      const { stderr } = await reviewAgainst(fake, repo, twin);
+      expect(stderr).toContain("2 created");
+      expect(fake.reviewComments).toHaveLength(2);
+      // and the re-run stays stable
+      const again = await reviewAgainst(fake, repo, twin);
+      expect(again.stderr).toContain("0 created, 0 updated, 0 resolved, 2 unchanged");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("never deletes a human comment that quotes a marker", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      fake.reviewComments.push({
+        id: 999,
+        body: "I saw `<!-- delta-peacock:finding:aaaaaaaaaaaa -->` in the docs, neat!",
+        path: "src/app.js",
+        line: 1,
+      });
+      await reviewAgainst(fake, repo, FINDING_WITH_SUGGESTION);
+      expect(fake.reviewComments.some((comment) => comment.id === 999)).toBe(true);
+    } finally {
+      await fake.close();
+    }
+  });
+
   it("gate failure posts a failure status and still exits 2", async () => {
     const fake = await startFakeGitHub();
     try {

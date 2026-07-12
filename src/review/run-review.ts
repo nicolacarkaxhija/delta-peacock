@@ -43,6 +43,7 @@ export async function runReview(
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);
   if (loaded.guidelines.length === 0) {
     deps.out("no usable guidelines found; nothing to review against\n");
+    await publishAllClear(deps, config);
     return 0;
   }
 
@@ -63,11 +64,13 @@ export async function runReview(
   for (const notice of acquired.notices) deps.err(`${notice}\n`);
   if (acquired.skipped === "too-large") {
     deps.out("review skipped: the diff exceeds the configured size ceiling\n");
+    await publishAllClear(deps, config);
     return 0;
   }
   const diff = acquired.text;
   if (diff.trim() === "") {
     deps.out(`nothing to review: no changes against ${acquired.targetRef}\n`);
+    await publishAllClear(deps, config);
     return 0;
   }
 
@@ -79,6 +82,7 @@ export async function runReview(
   }
   if (guidelines.length === 0) {
     deps.out("no guidelines apply to this change; nothing to review against\n");
+    await publishAllClear(deps, config);
     return 0;
   }
 
@@ -168,6 +172,21 @@ function partitionFindings(findings: readonly Finding[], config: Config) {
       )
       .slice(0, config.review.maxProposedGuidelines),
   };
+}
+
+/**
+ * A run with nothing to review still reconciles: stale comments from earlier
+ * runs resolve, the summary refreshes, and the status turns green.
+ */
+async function publishAllClear(deps: ReviewDeps, config: Config): Promise<void> {
+  await publishIfConfigured(deps, config, {
+    findings: [],
+    proposals: [],
+    droppedUncited: 0,
+    filtered: 0,
+    gate: evaluateGate([], config.gate.failOn),
+    commitStatus: config.scm.commitStatus,
+  });
 }
 
 async function publishIfConfigured(

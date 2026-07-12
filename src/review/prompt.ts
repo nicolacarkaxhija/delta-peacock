@@ -17,7 +17,7 @@ const GENERAL_PASS = [
   "",
   "Additionally, you may report a finding that no listed guideline covers when it is a real defect:",
   'omit "guidelineId", set "severity" to one of BLOCKER, CRITICAL, MAJOR, MINOR, INFO, and, when the',
-  'issue reflects a rule this team should codify, attach "proposedGuideline":',
+  'issue is something this team should codify as a guideline, attach "proposedGuideline":',
   '{"id": "<suggested-id>", "severity": "<suggested severity>", "rationale": "<one line>"}.',
 ].join("\n");
 
