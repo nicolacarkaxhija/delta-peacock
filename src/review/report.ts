@@ -1,10 +1,16 @@
-import { fingerprintOf, type Violation } from "../domain/finding.js";
+import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
 import type { ModelUsage } from "../model/port.js";
 
+export type ReportedFinding = Finding & { fingerprint: string };
+
 export interface ReviewReport {
   version: 1;
-  findings: (Violation & { fingerprint: string })[];
+  /** Rendered findings: violations and observations at or above the confidence floor. */
+  findings: ReportedFinding[];
+  /** Findings under the confidence floor; kept for tuning, never rendered or posted. */
+  filtered: ReportedFinding[];
+  proposedGuidelines: ProposedGuideline[];
   droppedUncitedFindings: number;
   adjustedLines: number;
   /** Replacement counts per redaction pattern that fired. */
@@ -14,19 +20,24 @@ export interface ReviewReport {
 }
 
 export function buildReport(input: {
-  violations: readonly Violation[];
+  findings: readonly Finding[];
+  filtered: readonly Finding[];
+  proposals: readonly ProposedGuideline[];
   droppedUncited: number;
   adjustedLines: number;
   redactions?: Record<string, number>;
   gate: GateDecision;
   usage?: ModelUsage;
 }): ReviewReport {
+  const withFingerprint = (finding: Finding): ReportedFinding => ({
+    ...finding,
+    fingerprint: fingerprintOf(finding),
+  });
   return {
     version: 1,
-    findings: input.violations.map((violation) => ({
-      ...violation,
-      fingerprint: fingerprintOf(violation),
-    })),
+    findings: input.findings.map(withFingerprint),
+    filtered: input.filtered.map(withFingerprint),
+    proposedGuidelines: [...input.proposals],
     droppedUncitedFindings: input.droppedUncited,
     adjustedLines: input.adjustedLines,
     redactions: input.redactions ?? {},
