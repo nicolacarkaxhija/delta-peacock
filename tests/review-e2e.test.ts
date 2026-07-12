@@ -268,6 +268,90 @@ describe("review end to end (local mode)", () => {
     expect(requests[0]?.system).not.toContain("python-only");
   });
 
+  it("keeps low-confidence findings out of the output but inside the report", async () => {
+    const repo = makeScenario();
+    const cited = JSON.parse(CITED) as { findings: Record<string, unknown>[] };
+    const shaky = JSON.stringify({
+      findings: [
+        { ...cited.findings[0], confidence: 0.9 },
+        {
+          guidelineId: "no-console",
+          file: "src/app.js",
+          line: 3,
+          title: "Maybe also here",
+          body: "unsure",
+          confidence: 0.2,
+        },
+      ],
+    });
+    const { code, stdout } = await review(
+      repo,
+      scriptedModel(shaky).port,
+      "--report",
+      "conf.json",
+      "--fail-on",
+      "MAJOR",
+    );
+    expect(code).toBe(2);
+    expect(stdout).toContain("1 finding(s)");
+    expect(stdout).toContain("under the confidence floor");
+    expect(stdout).not.toContain("Maybe also here");
+    const report = JSON.parse(readFileSync(path.join(repo, "conf.json"), "utf8")) as ReviewReport;
+    expect(report.findings).toHaveLength(1);
+    expect(report.filtered).toHaveLength(1);
+    expect(report.filtered[0]?.title).toBe("Maybe also here");
+  });
+
+  it("general pass observations render labeled, propose guidelines, and never gate", async () => {
+    const repo = makeScenario();
+    const withObservation = JSON.stringify({
+      findings: [
+        {
+          file: "src/app.js",
+          line: 2,
+          title: "SQL injection risk",
+          body: "String concatenation into a query.",
+          severity: "BLOCKER",
+          confidence: 0.95,
+          proposedGuideline: {
+            id: "no-sql-concat",
+            severity: "CRITICAL",
+            rationale: "recurring pattern worth codifying",
+          },
+        },
+      ],
+    });
+    const { code, stdout } = await review(
+      repo,
+      scriptedModel(withObservation).port,
+      "--fail-on",
+      "INFO",
+      "--report",
+      "obs.json",
+    );
+    // enable the general pass via env in a second run to compare gating
+    expect(code).toBe(0); // general pass OFF: uncited finding dropped, nothing gates
+    expect(stdout).toContain("1 uncited finding(s) dropped");
+
+    let stdout2 = "";
+    const code2 = await runCli(["review", "--fail-on", "INFO", "--report", "obs.json"], {
+      cwd: repo,
+      env: { DELTA_PEACOCK_REVIEW_GENERAL_PASS: "true" },
+      out: (text) => {
+        stdout2 += text;
+      },
+      err: () => undefined,
+      modelPort: scriptedModel(withObservation).port,
+    });
+    expect(code2).toBe(0); // observation present but observations never gate
+    expect(stdout2).toContain("[observation] SQL injection risk");
+    expect(stdout2).toContain("MINOR"); // BLOCKER claim capped to the default MINOR
+    expect(stdout2).toContain("no-sql-concat (CRITICAL): recurring pattern worth codifying");
+    const report = JSON.parse(readFileSync(path.join(repo, "obs.json"), "utf8")) as ReviewReport;
+    expect(report.proposedGuidelines).toHaveLength(1);
+    expect(report.findings[0]?.kind).toBe("observation");
+  });
+
   it("redacts a planted secret before it can reach the model", async () => {
     const repo = makeScenario();
     write(

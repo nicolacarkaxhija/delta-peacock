@@ -85,7 +85,9 @@ export async function runReview(
   }
 
   const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
-  const request = buildReviewPrompt(guidelines, redacted.text);
+  const request = buildReviewPrompt(guidelines, redacted.text, {
+    generalPass: config.review.generalPass,
+  });
   let reply;
   try {
     reply = await modelPort.complete(request);
@@ -95,17 +97,45 @@ export async function runReview(
   }
 
   const byId = new Map(guidelines.map((guideline) => [guideline.id, guideline]));
-  const { violations, droppedUncited, adjustedLines } = parseReviewResponse(reply.text, byId);
-  const gate = evaluateGate(violations, config.gate.failOn);
+  const parsed = parseReviewResponse(reply.text, {
+    guidelinesById: byId,
+    generalPass: config.review.generalPass,
+    observationSeverityCap: config.review.observationSeverityCap,
+  });
 
-  deps.out(renderReview({ violations, droppedUncited, adjustedLines, gate }));
+  const floor = config.review.confidenceFloor;
+  const kept = parsed.findings.filter((finding) => (finding.confidence ?? 1) >= floor);
+  const filtered = parsed.findings.filter((finding) => (finding.confidence ?? 1) < floor);
+  const violations = kept.filter((finding) => finding.kind === "violation");
+  const observations = kept.filter((finding) => finding.kind === "observation");
+  const proposals = observations
+    .flatMap((observation) =>
+      observation.proposedGuideline ? [observation.proposedGuideline] : [],
+    )
+    .slice(0, config.review.maxProposedGuidelines);
+
+  const gate = evaluateGate(kept, config.gate.failOn);
+
+  deps.out(
+    renderReview({
+      violations,
+      observations,
+      proposals,
+      droppedUncited: parsed.droppedUncited,
+      adjustedLines: parsed.adjustedLines,
+      filtered: filtered.length,
+      gate,
+    }),
+  );
 
   if (config.output.report !== undefined) {
     const reportPath = path.resolve(deps.cwd, config.output.report);
     const report = buildReport({
-      violations,
-      droppedUncited,
-      adjustedLines,
+      findings: kept,
+      filtered,
+      proposals,
+      droppedUncited: parsed.droppedUncited,
+      adjustedLines: parsed.adjustedLines,
       redactions: redacted.counts,
       gate,
       ...(reply.usage ? { usage: reply.usage } : {}),

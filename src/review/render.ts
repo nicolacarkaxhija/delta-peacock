@@ -1,16 +1,22 @@
-import type { Violation } from "../domain/finding.js";
+import type { Finding, ProposedGuideline, Violation } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
 
 export interface RenderableReview {
   violations: readonly Violation[];
+  observations: readonly Finding[];
+  proposals: readonly ProposedGuideline[];
   droppedUncited: number;
   adjustedLines: number;
+  /** How many findings sit under the confidence floor, report-only. */
+  filtered: number;
   gate: GateDecision;
 }
 
-function violationLines(violation: Violation): string[] {
-  const head = `${violation.severity.padEnd(8)} ${violation.file}:${String(violation.line)}  [${violation.guidelineId}] ${violation.title}`;
-  return violation.body === "" ? [head] : [head, `         ${violation.body}`];
+function findingLines(finding: Finding, badge: string): string[] {
+  const head = `${badge}${finding.severity.padEnd(8)} ${finding.file}:${String(finding.line)}  ${
+    finding.kind === "violation" ? `[${finding.guidelineId}]` : "[observation]"
+  } ${finding.title}`;
+  return finding.body === "" ? [head] : [head, `         ${finding.body}`];
 }
 
 function gateLine(gate: GateDecision): string {
@@ -22,14 +28,32 @@ function gateLine(gate: GateDecision): string {
 }
 
 export function renderReview(review: RenderableReview): string {
-  const findings =
-    review.violations.length === 0
-      ? ["No findings."]
-      : [
-          ...review.violations.flatMap(violationLines),
-          "",
-          `${String(review.violations.length)} finding(s)`,
-        ];
+  const sections: string[] = [];
+
+  if (review.violations.length === 0 && review.observations.length === 0) {
+    sections.push("No findings.");
+  }
+  if (review.violations.length > 0) {
+    sections.push(
+      ...review.violations.flatMap((violation) => findingLines(violation, "")),
+      "",
+      `${String(review.violations.length)} finding(s)`,
+    );
+  }
+  if (review.observations.length > 0) {
+    sections.push(
+      "",
+      "observations (general pass, never gate):",
+      ...review.observations.flatMap((observation) => findingLines(observation, "~ ")),
+    );
+  }
+  if (review.proposals.length > 0) {
+    sections.push("", "proposed guidelines:");
+    for (const proposal of review.proposals) {
+      sections.push(`  ${proposal.id} (${proposal.severity}): ${proposal.rationale}`);
+    }
+  }
+
   const notices = [
     ...(review.droppedUncited > 0
       ? [`${String(review.droppedUncited)} uncited finding(s) dropped`]
@@ -37,6 +61,9 @@ export function renderReview(review: RenderableReview): string {
     ...(review.adjustedLines > 0
       ? [`${String(review.adjustedLines)} finding(s) had no usable line and were pinned to line 1`]
       : []),
+    ...(review.filtered > 0
+      ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]
+      : []),
   ];
-  return `${[...findings, ...notices, gateLine(review.gate)].join("\n")}\n`;
+  return `${[...sections, ...notices, gateLine(review.gate)].join("\n")}\n`;
 }

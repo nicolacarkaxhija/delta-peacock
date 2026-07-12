@@ -1,23 +1,41 @@
 import { z } from "zod";
-import type { Violation } from "../domain/finding.js";
+import type { Finding, Observation, Violation } from "../domain/finding.js";
 import type { Guideline } from "../domain/guideline.js";
+import { SEVERITIES, severityRank, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 
 const RawFinding = z.object({
-  guidelineId: z.string(),
+  guidelineId: z.string().optional(),
   file: z.string().min(1),
   line: z.unknown(),
   title: z.string().default(""),
   body: z.string().default(""),
+  severity: z.enum(SEVERITIES).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  proposedGuideline: z
+    .object({
+      id: z.string().min(1),
+      severity: z.enum(SEVERITIES),
+      rationale: z.string().default(""),
+    })
+    .optional(),
 });
 
 const RawResponse = z.object({
   findings: z.array(RawFinding).default([]),
 });
 
+export interface ParseOptions {
+  guidelinesById: ReadonlyMap<string, Guideline>;
+  /** When on, uncited findings become observations instead of being dropped. */
+  generalPass: boolean;
+  /** The most severe an observation may be; the model cannot exceed it. */
+  observationSeverityCap: Severity;
+}
+
 export interface ParsedReview {
-  violations: Violation[];
-  /** Findings the model reported without citing a known guideline. */
+  findings: Finding[];
+  /** Findings the model reported without citing a known guideline, dropped. */
   droppedUncited: number;
   /** Findings whose line number was missing or invalid and got pinned to 1. */
   adjustedLines: number;
@@ -47,10 +65,54 @@ function parseJson(text: string): unknown {
   throw new ToolError(lastError);
 }
 
-export function parseReviewResponse(
-  text: string,
-  guidelinesById: ReadonlyMap<string, Guideline>,
-): ParsedReview {
+/** The cap wins whenever the model claims something more severe. */
+function capSeverity(claimed: Severity | undefined, cap: Severity): Severity {
+  if (claimed === undefined) return cap;
+  return severityRank(claimed) < severityRank(cap) ? cap : claimed;
+}
+
+type RawShape = z.infer<typeof RawFinding>;
+
+function normalizeLine(raw: unknown): { line: number; adjusted: boolean } {
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 1) {
+    return { line: raw, adjusted: false };
+  }
+  return { line: 1, adjusted: true };
+}
+
+/** Undefined means the finding is uncited and the general pass is off: dropped. */
+function toFinding(raw: RawShape, line: number, options: ParseOptions): Finding | undefined {
+  const confidence = raw.confidence !== undefined ? { confidence: raw.confidence } : {};
+  const guideline =
+    raw.guidelineId === undefined ? undefined : options.guidelinesById.get(raw.guidelineId);
+  if (guideline !== undefined) {
+    const violation: Violation = {
+      kind: "violation",
+      guidelineId: guideline.id,
+      severity: guideline.severity,
+      file: raw.file,
+      line,
+      title: raw.title === "" ? guideline.title : raw.title,
+      body: raw.body,
+      ...confidence,
+    };
+    return violation;
+  }
+  if (!options.generalPass) return undefined;
+  const observation: Observation = {
+    kind: "observation",
+    severity: capSeverity(raw.severity, options.observationSeverityCap),
+    file: raw.file,
+    line,
+    title: raw.title === "" ? "Observation" : raw.title,
+    body: raw.body,
+    ...confidence,
+    ...(raw.proposedGuideline ? { proposedGuideline: raw.proposedGuideline } : {}),
+  };
+  return observation;
+}
+
+export function parseReviewResponse(text: string, options: ParseOptions): ParsedReview {
   const result = RawResponse.safeParse(parseJson(text));
   if (!result.success) {
     throw new ToolError(
@@ -59,30 +121,18 @@ export function parseReviewResponse(
         .join("; ")}`,
     );
   }
-  const violations: Violation[] = [];
+  const findings: Finding[] = [];
   let droppedUncited = 0;
   let adjustedLines = 0;
   for (const raw of result.data.findings) {
-    const guideline = guidelinesById.get(raw.guidelineId);
-    if (guideline === undefined) {
+    const { line, adjusted } = normalizeLine(raw.line);
+    if (adjusted) adjustedLines += 1;
+    const finding = toFinding(raw, line, options);
+    if (finding === undefined) {
       droppedUncited += 1;
       continue;
     }
-    let line = 1;
-    if (typeof raw.line === "number" && Number.isInteger(raw.line) && raw.line >= 1) {
-      line = raw.line;
-    } else {
-      adjustedLines += 1;
-    }
-    violations.push({
-      kind: "violation",
-      guidelineId: guideline.id,
-      severity: guideline.severity,
-      file: raw.file,
-      line,
-      title: raw.title === "" ? guideline.title : raw.title,
-      body: raw.body,
-    });
+    findings.push(finding);
   }
-  return { violations, droppedUncited, adjustedLines };
+  return { findings, droppedUncited, adjustedLines };
 }
