@@ -41,6 +41,15 @@ export const OutputSchema = z.strictObject({
   report: z.string().min(1).optional(),
 });
 
+export const ContextSchema = z.strictObject({
+  /** Cross-file awareness strategy; repo_map costs zero extra model calls. */
+  provider: z.enum(["none", "repo_map", "agentic", "rag"]).default("repo_map"),
+  /** Ceiling for injected context, measured in approximate tokens. */
+  maxTokens: z.number().int().positive().default(4000),
+  /** Bound on agentic tool rounds before the model must conclude. */
+  maxToolRounds: z.number().int().min(1).max(20).default(6),
+});
+
 /** USD per million tokens; zero leaves the review unpriced. */
 export const CostSchema = z.strictObject({
   rateInputPer1M: z.number().min(0).default(0),
@@ -78,6 +87,7 @@ export const ConfigSchema = z
     redaction: RedactionSchema.prefault({}),
     scm: ScmSchema.prefault({}),
     cost: CostSchema.prefault({}),
+    context: ContextSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {

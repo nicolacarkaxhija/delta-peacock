@@ -32,6 +32,9 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_SCM_COMMIT_STATUS: "scm.commitStatus",
   DELTA_PEACOCK_SCM_BASE_URL: "scm.baseUrl",
   DELTA_PEACOCK_SCM_DRY_RUN: "scm.dryRun",
+  DELTA_PEACOCK_CONTEXT_PROVIDER: "context.provider",
+  DELTA_PEACOCK_CONTEXT_MAX_TOKENS: "context.maxTokens",
+  DELTA_PEACOCK_CONTEXT_MAX_TOOL_ROUNDS: "context.maxToolRounds",
   DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "cost.rateInputPer1M",
   DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "cost.rateOutputPer1M",
   DELTA_PEACOCK_COST_RATE_CACHE_READ_PER_1M: "cost.rateCacheReadPer1M",
@@ -45,6 +48,8 @@ const NUMBER_PATHS = new Set([
   "review.confidenceFloor",
   "review.maxProposedGuidelines",
   "scm.pullRequest",
+  "context.maxTokens",
+  "context.maxToolRounds",
   "cost.rateInputPer1M",
   "cost.rateOutputPer1M",
   "cost.rateCacheReadPer1M",
@@ -242,6 +247,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     // guard already reported, so either list contributes at least one entry
     throw new ConfigError(problems);
   }
+  /* v8 ignore next 3 -- credential-shaped keys are always unknown to the strict schema today, so validation fails first; kept for when a legitimate key ever matches the credential shape */
   if (problems.length > 0) {
     throw new ConfigError(problems);
   }
