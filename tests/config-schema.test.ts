@@ -33,7 +33,7 @@ describe("config json schema", () => {
 
   it("prefixes every environment variable consistently", () => {
     for (const name of Object.keys(ENV_VARS)) {
-      expect(name).toMatch(/^DELTA_PEACOCK_[A-Z_]+$/);
+      expect(name).toMatch(/^DELTA_PEACOCK_[A-Z0-9_]+$/);
     }
   });
 });

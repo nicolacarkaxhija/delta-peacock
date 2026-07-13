@@ -235,10 +235,20 @@ describe("rendering and reporting edges", () => {
     expect(normalizeUsage({ inputTokens: undefined, outputTokens: 5 })).toEqual({
       inputTokens: 0,
       outputTokens: 5,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
     });
-    expect(normalizeUsage({ inputTokens: 3, outputTokens: undefined })).toEqual({
+    expect(
+      normalizeUsage({
+        inputTokens: 3,
+        outputTokens: undefined,
+        inputTokenDetails: { cacheReadTokens: 2, cacheWriteTokens: 1 },
+      }),
+    ).toEqual({
       inputTokens: 3,
       outputTokens: 0,
+      cacheReadTokens: 2,
+      cacheWriteTokens: 1,
     });
   });
 });

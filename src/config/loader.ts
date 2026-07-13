@@ -32,6 +32,10 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_SCM_COMMIT_STATUS: "scm.commitStatus",
   DELTA_PEACOCK_SCM_BASE_URL: "scm.baseUrl",
   DELTA_PEACOCK_SCM_DRY_RUN: "scm.dryRun",
+  DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "cost.rateInputPer1M",
+  DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "cost.rateOutputPer1M",
+  DELTA_PEACOCK_COST_RATE_CACHE_READ_PER_1M: "cost.rateCacheReadPer1M",
+  DELTA_PEACOCK_COST_RATE_CACHE_WRITE_PER_1M: "cost.rateCacheWritePer1M",
 };
 
 /** String sources (env, flags) coerce into these shapes before validation. */
@@ -41,6 +45,10 @@ const NUMBER_PATHS = new Set([
   "review.confidenceFloor",
   "review.maxProposedGuidelines",
   "scm.pullRequest",
+  "cost.rateInputPer1M",
+  "cost.rateOutputPer1M",
+  "cost.rateCacheReadPer1M",
+  "cost.rateCacheWritePer1M",
 ]);
 const BOOLEAN_PATHS = new Set([
   "review.fetchTarget",

@@ -1,6 +1,7 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
 import type { ModelUsage } from "../model/port.js";
+import type { ComputedCost } from "../model/usage.js";
 
 export type ReportedFinding = Finding & { fingerprint: string };
 
@@ -17,6 +18,8 @@ export interface ReviewReport {
   redactions: Record<string, number>;
   gate: GateDecision;
   usage?: ModelUsage;
+  /** Present when any cost rate is configured. */
+  cost?: ComputedCost;
 }
 
 export function buildReport(input: {
@@ -28,6 +31,7 @@ export function buildReport(input: {
   redactions?: Record<string, number>;
   gate: GateDecision;
   usage?: ModelUsage;
+  cost?: ComputedCost;
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => ({
     ...finding,
@@ -43,5 +47,6 @@ export function buildReport(input: {
     redactions: input.redactions ?? {},
     gate: input.gate,
     ...(input.usage ? { usage: input.usage } : {}),
+    ...(input.cost ? { cost: input.cost } : {}),
   };
 }

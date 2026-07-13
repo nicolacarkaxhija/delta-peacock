@@ -41,6 +41,14 @@ export const OutputSchema = z.strictObject({
   report: z.string().min(1).optional(),
 });
 
+/** USD per million tokens; zero leaves the review unpriced. */
+export const CostSchema = z.strictObject({
+  rateInputPer1M: z.number().min(0).default(0),
+  rateOutputPer1M: z.number().min(0).default(0),
+  rateCacheReadPer1M: z.number().min(0).default(0),
+  rateCacheWritePer1M: z.number().min(0).default(0),
+});
+
 export const ScmSchema = z.strictObject({
   provider: z.enum(["github", "bitbucket", "local"]).default("local"),
   /** owner/repo on GitHub, workspace/repo on Bitbucket. */
@@ -69,6 +77,7 @@ export const ConfigSchema = z
     output: OutputSchema.prefault({}),
     redaction: RedactionSchema.prefault({}),
     scm: ScmSchema.prefault({}),
+    cost: CostSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {

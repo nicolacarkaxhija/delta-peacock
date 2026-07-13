@@ -200,6 +200,33 @@
         }
       },
       "additionalProperties": false
+    },
+    "cost": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "rateInputPer1M": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0
+        },
+        "rateOutputPer1M": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0
+        },
+        "rateCacheReadPer1M": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0
+        },
+        "rateCacheWritePer1M": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
