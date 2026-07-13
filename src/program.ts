@@ -97,6 +97,25 @@ export function buildProgram(deps: CliDeps): Command {
       if (code !== 0) throw new ExitCodeError(code);
     });
 
+  program
+    .command("doctor")
+    .description("validate the setup without reviewing anything")
+    .action(async () => {
+      const { runDoctor } = await import("./commands/doctor.js");
+      const code = await runDoctor(deps, {});
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
+  program
+    .command("init")
+    .description("scaffold config, an example guideline and a CI snippet")
+    .option("--force", "overwrite files that already exist")
+    .action(async (options: { force?: boolean }) => {
+      const { runInit } = await import("./commands/init.js");
+      const code = runInit(deps, { force: options.force === true });
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
   const guidelines = program.command("guidelines").description("guideline corpus utilities");
   guidelines
     .command("lint")

@@ -73,6 +73,23 @@ describe("bitbucket adapter errors", () => {
   });
 });
 
+describe("build for bitbucket", () => {
+  it("constructs without a base url for production use", async () => {
+    const { buildScmPort } = await import("../src/scm/build.js");
+    const { loadConfig } = await import("../src/config/loader.js");
+    const config = loadConfig({
+      root: makeRepo(),
+      env: {
+        DELTA_PEACOCK_SCM_PROVIDER: "bitbucket",
+        DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+        DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+      },
+    });
+    const port = buildScmPort(config, { BITBUCKET_TOKEN: "t" });
+    expect(typeof port.listInlineComments).toBe("function");
+  });
+});
+
 describe("github api diff", () => {
   it("fetches the host-computed diff through the accept header", async () => {
     const { createGitHubPort } = await import("../src/scm/github.js");
