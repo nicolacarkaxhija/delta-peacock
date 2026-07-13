@@ -1,0 +1,42 @@
+name: live-smoke
+
+# Manual dispatch only: the sole workflow that spends real model money,
+# by design a fraction of a cent per run (one tiny diff, one guideline).
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: model provider to smoke
+        required: true
+        type: choice
+        options: [anthropic, openrouter, bedrock, openai-compatible]
+      model_id:
+        description: model id to review with
+        required: true
+        default: claude-haiku-4-5-20251001
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: run one live review round-trip
+        run: node scripts/live-smoke.mjs
+        env:
+          DELTA_PEACOCK_MODEL_PROVIDER: ${{ inputs.provider }}
+          DELTA_PEACOCK_MODEL_ID: ${{ inputs.model_id }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
