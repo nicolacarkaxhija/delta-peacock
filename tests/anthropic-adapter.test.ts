@@ -55,7 +55,7 @@ describe("anthropic adapter contract", () => {
     expect(JSON.stringify(request?.body["messages"])).toContain("user text");
 
     expect(reply.text).toBe('{"findings": []}');
-    expect(reply.usage).toEqual({ inputTokens: 120, outputTokens: 34 });
+    expect(reply.usage).toMatchObject({ inputTokens: 120, outputTokens: 34 });
   });
 
   it("constructs without an injected fetch for production use", async () => {

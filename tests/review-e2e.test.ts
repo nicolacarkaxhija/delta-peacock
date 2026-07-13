@@ -154,6 +154,27 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("JSON");
   });
 
+  it("prices the review in the report when rates are configured", async () => {
+    const repo = makeScenario();
+    const code = await runCli(["review", "--report", "priced.json"], {
+      cwd: repo,
+      env: {
+        DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+        DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+      },
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: scriptedModel(CITED).port,
+    });
+    expect(code).toBe(0);
+    const report = JSON.parse(readFileSync(path.join(repo, "priced.json"), "utf8")) as {
+      cost?: { total: number };
+      usage?: { inputTokens: number };
+    };
+    expect(report.usage?.inputTokens).toBe(100);
+    expect(report.cost?.total).toBeCloseTo((100 / 1e6) * 3 + (25 / 1e6) * 15);
+  });
+
   it("writes a report without usage when the model measured none", async () => {
     const repo = makeScenario();
     const silent: ModelPort = {
@@ -479,7 +500,7 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("ANTHROPIC_API_KEY");
   });
 
-  it("rejects an unsupported provider with a clear message", async () => {
+  it("names the missing credential for a provider without one", async () => {
     const repo = makeScenario();
     let stderr = "";
     const code = await runCli(["review"], {
@@ -491,6 +512,6 @@ describe("review end to end (local mode)", () => {
       },
     });
     expect(code).toBe(1);
-    expect(stderr).toContain("bedrock");
+    expect(stderr).toContain("AWS_REGION");
   });
 });

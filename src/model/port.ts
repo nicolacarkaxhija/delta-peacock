@@ -6,6 +6,8 @@ export interface ModelRequest {
 export interface ModelUsage {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface ModelReply {

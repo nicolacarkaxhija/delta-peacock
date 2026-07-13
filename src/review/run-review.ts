@@ -16,6 +16,7 @@ import {
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
+import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
@@ -151,6 +152,9 @@ export async function runReview(
       redactions: redacted.counts,
       gate,
       ...(reply.usage ? { usage: reply.usage } : {}),
+      ...(reply.usage && anyRateConfigured(config.cost)
+        ? { cost: computeCost(reply.usage, config.cost) }
+        : {}),
     });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
   }
