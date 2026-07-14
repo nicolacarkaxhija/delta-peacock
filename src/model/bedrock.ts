@@ -1,5 +1,5 @@
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
-import { generateText } from "ai";
+import { generateText, stepCountIs } from "ai";
 import { normalizeUsage } from "./anthropic.js";
 import type { ModelPort, ModelReply, ModelRequest } from "./port.js";
 
@@ -29,6 +29,9 @@ export function createBedrockPort(options: BedrockPortOptions): ModelPort {
         model: provider(options.modelId),
         system: request.system,
         prompt: request.user,
+        ...(request.tools
+          ? { tools: request.tools, stopWhen: stepCountIs(request.maxToolRounds ?? 6) }
+          : {}),
       });
       return { text: result.text, usage: normalizeUsage(result.usage) };
     },
