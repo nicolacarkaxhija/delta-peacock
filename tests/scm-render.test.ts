@@ -15,6 +15,25 @@ function violation(overrides: Partial<Violation> = {}): Violation {
   };
 }
 
+describe("comment rendering", () => {
+  it("labels observation comments distinctly", async () => {
+    const { renderCommentBody } = await import("../src/scm/publish.js");
+    const body = renderCommentBody(
+      {
+        kind: "observation",
+        severity: "MINOR",
+        file: "a.js",
+        line: 1,
+        title: "magic number",
+        body: "extract it",
+      },
+      "abcdef123456",
+    );
+    expect(body).toContain("observation (general pass)");
+    expect(body).toContain("<!-- delta-peacock:finding:abcdef123456 -->");
+  });
+});
+
 describe("summary rendering", () => {
   it("shows a failed gate with its threshold and count", () => {
     const body = renderSummaryBody({

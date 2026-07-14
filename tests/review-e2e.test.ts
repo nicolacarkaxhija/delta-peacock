@@ -154,6 +154,20 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("JSON");
   });
 
+  it("honors an incremental anchor passed through the cli", async () => {
+    const repo = makeScenario();
+    const { headSha } = await import("./helpers/git.js");
+    const anchor = headSha(repo);
+    write(repo, "src/later.js", "const later = true;\n");
+    commitAll(repo, "later work");
+    const { port, requests } = scriptedModel(JSON.stringify({ findings: [] }));
+    const { code, stderr } = await review(repo, port, "--last-reviewed-commit", anchor);
+    expect(code).toBe(0);
+    expect(stderr).toContain("incremental review");
+    expect(requests[0]?.user).toContain("later.js");
+    expect(requests[0]?.user).not.toContain("console.log(name)");
+  });
+
   it("prices the review in the report when rates are configured", async () => {
     const repo = makeScenario();
     const code = await runCli(["review", "--report", "priced.json"], {

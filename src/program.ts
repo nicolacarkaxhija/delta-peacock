@@ -112,8 +112,7 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--force", "overwrite files that already exist")
     .action(async (options: { force?: boolean }) => {
       const { runInit } = await import("./commands/init.js");
-      const code = runInit(deps, { force: options.force === true });
-      if (code !== 0) throw new ExitCodeError(code);
+      runInit(deps, { force: options.force === true });
     });
 
   const guidelines = program.command("guidelines").description("guideline corpus utilities");

@@ -58,6 +58,36 @@ describe("anthropic adapter contract", () => {
     expect(reply.usage).toMatchObject({ inputTokens: 120, outputTokens: 34 });
   });
 
+  it("forwards context tools into the request body", async () => {
+    const captured: CapturedRequest[] = [];
+    const fakeFetch: typeof globalThis.fetch = (input, init) => {
+      const headers = new Headers(init?.headers);
+      const url = input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
+      captured.push({
+        url,
+        headers: Object.fromEntries(headers.entries()),
+        body: JSON.parse(init?.body as string) as Record<string, unknown>,
+      });
+      return Promise.resolve(cannedAnthropicResponse('{"findings": []}'));
+    };
+    const { tool } = await import("ai");
+    const { z } = await import("zod");
+    const port = createAnthropicPort({ apiKey: "k", modelId: "claude-test", fetch: fakeFetch });
+    const reply = await port.complete({
+      system: "s",
+      user: "u",
+      tools: {
+        ping: tool({
+          description: "answers pong",
+          inputSchema: z.object({}),
+          execute: () => Promise.resolve("pong"),
+        }),
+      },
+    });
+    expect(reply.text).toBe('{"findings": []}');
+    expect(JSON.stringify(captured[0]?.body["tools"])).toContain("ping");
+  });
+
   it("constructs without an injected fetch for production use", async () => {
     const { buildModelPort } = await import("../src/model/build.js");
     const { loadConfig } = await import("../src/config/loader.js");

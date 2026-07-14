@@ -2,6 +2,8 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
+import { buildContextProvider } from "../context/build.js";
+import { capToTokenBudget } from "../context/port.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Finding } from "../domain/finding.js";
 import { evaluateGate } from "../domain/gate.js";
@@ -104,10 +106,25 @@ export async function runReview(
     deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted before the model call\n`);
   }
 
+  const contextProvider = buildContextProvider(config);
+  const contextInput = { cwd: deps.cwd, diff: redacted.text, changedFiles };
+  const projectContext = capToTokenBudget(
+    contextProvider.systemContext(contextInput),
+    config.context.maxTokens,
+  );
+  for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
+  const contextTools = contextProvider.tools?.(contextInput);
+
   const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
-  const request = buildReviewPrompt(guidelines, redacted.text, {
-    generalPass: config.review.generalPass,
-  });
+  const request = {
+    ...buildReviewPrompt(guidelines, redacted.text, {
+      generalPass: config.review.generalPass,
+      ...(projectContext !== "" ? { projectContext } : {}),
+    }),
+    ...(contextTools !== undefined
+      ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
+      : {}),
+  };
   let reply;
   try {
     reply = await modelPort.complete(request);

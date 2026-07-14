@@ -223,6 +223,51 @@ describe("publishing to github", () => {
     }
   });
 
+  it("skips the status when commit statuses are switched off", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      let stderr = "";
+      const code = await runCli(["review"], {
+        cwd: repo,
+        env: {
+          DELTA_PEACOCK_SCM_PROVIDER: "github",
+          DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+          DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+          DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
+          DELTA_PEACOCK_SCM_COMMIT_STATUS: "false",
+          GITHUB_TOKEN: "test-token",
+        },
+        out: () => undefined,
+        err: (text) => {
+          stderr += text;
+        },
+        modelPort: model(FINDING_WITH_SUGGESTION),
+      });
+      expect(code).toBe(0);
+      expect(stderr).toContain("published");
+      expect(fake.statuses).toHaveLength(0);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("maps an unexpected status code to a plain tool error", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const { createGitHubPort } = await import("../src/scm/github.js");
+      const port = createGitHubPort({
+        repository: "acme/widgets",
+        pullRequest: 7,
+        token: "test-token",
+        baseUrl: fake.baseUrl,
+      });
+      await expect(port.updateComment("99999", "x")).rejects.toThrow(/404/);
+    } finally {
+      await fake.close();
+    }
+  });
+
   it("a passed gate posts a success status naming the threshold", async () => {
     const fake = await startFakeGitHub();
     try {

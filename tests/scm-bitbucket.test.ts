@@ -73,7 +73,66 @@ describe("bitbucket adapter errors", () => {
   });
 });
 
+describe("bitbucket source sha caching", () => {
+  it("fetches the pull request once for consecutive statuses", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const port = portAgainst(fake.baseUrl);
+      await port.postStatus("success", "first");
+      await port.postStatus("failure", "second");
+      expect(fake.statuses).toHaveLength(2);
+      expect(fake.statuses[0]?.sha).toBe(fake.statuses[1]?.sha);
+    } finally {
+      await fake.close();
+    }
+  });
+});
+
 describe("build for bitbucket", () => {
+  it("refuses to build a port for local mode", async () => {
+    const { buildScmPort } = await import("../src/scm/build.js");
+    const { loadConfig } = await import("../src/config/loader.js");
+    expect(() => buildScmPort(loadConfig({ root: makeRepo() }), {})).toThrow(ToolError);
+  });
+
+  it("rethrows the git failure when the injected port cannot serve a diff", async () => {
+    const repo = makeRepo();
+    write(
+      repo,
+      "guidelines/no-console.md",
+      "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUse the logger.\n",
+    );
+    commitAll(repo, "rules");
+    git(repo, "branch", "-m", "main", "detached-work");
+    let stderr = "";
+    const code = await runCli(["review"], {
+      cwd: repo,
+      env: {
+        DELTA_PEACOCK_SCM_PROVIDER: "github",
+        DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+        DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+      },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: { complete: () => Promise.resolve({ text: '{"findings": []}' }) },
+      scmPort: {
+        listInlineComments: () => Promise.resolve([]),
+        createInlineComment: () => Promise.resolve(),
+        updateComment: () => Promise.resolve(),
+        deleteComment: () => Promise.resolve(),
+        listSummaryComments: () => Promise.resolve([]),
+        createSummaryComment: () => Promise.resolve(),
+        updateSummaryComment: () => Promise.resolve(),
+        postStatus: () => Promise.resolve(),
+        // note: no fetchPullRequestDiff
+      },
+    });
+    expect(code).toBe(1);
+    expect(stderr).toContain("git");
+  });
+
   it("constructs without a base url for production use", async () => {
     const { buildScmPort } = await import("../src/scm/build.js");
     const { loadConfig } = await import("../src/config/loader.js");

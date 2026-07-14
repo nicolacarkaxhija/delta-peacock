@@ -142,6 +142,38 @@ describe("doctor", () => {
     }
   });
 
+  it("fails the scm check when an injected port cannot read", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "rules");
+    let stdout = "";
+    const code = await runCli(["doctor"], {
+      cwd: repo,
+      env: {
+        DELTA_PEACOCK_SCM_PROVIDER: "github",
+        DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+        DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+      },
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      scmPort: {
+        listInlineComments: () => Promise.resolve([]),
+        createInlineComment: () => Promise.resolve(),
+        updateComment: () => Promise.resolve(),
+        deleteComment: () => Promise.resolve(),
+        listSummaryComments: () => Promise.reject(new Error("network unreachable")),
+        createSummaryComment: () => Promise.resolve(),
+        updateSummaryComment: () => Promise.resolve(),
+        postStatus: () => Promise.resolve(),
+      },
+    });
+    expect(code).toBe(1);
+    expect(stdout).toContain("FAIL  scm");
+    expect(stdout).toContain("network unreachable");
+  });
+
   it("fails the scm check with the adapter's actionable message", async () => {
     const fake = await startFakeGitHub();
     try {
