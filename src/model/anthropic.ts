@@ -1,5 +1,5 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { generateText } from "ai";
+import { generateText, stepCountIs } from "ai";
 import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "./port.js";
 
 export interface AnthropicPortOptions {
@@ -39,6 +39,9 @@ export function createAnthropicPort(options: AnthropicPortOptions): ModelPort {
         model: provider(options.modelId),
         system: request.system,
         prompt: request.user,
+        ...(request.tools
+          ? { tools: request.tools, stopWhen: stepCountIs(request.maxToolRounds ?? 6) }
+          : {}),
       });
       return { text: result.text, usage: normalizeUsage(result.usage) };
     },

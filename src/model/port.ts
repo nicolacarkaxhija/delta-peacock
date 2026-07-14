@@ -1,6 +1,12 @@
+import type { ToolSet } from "ai";
+
 export interface ModelRequest {
   system: string;
   user: string;
+  /** On-demand context tools (agentic strategy); adapters run the loop. */
+  tools?: ToolSet;
+  /** Bound on tool rounds before the model must conclude. */
+  maxToolRounds?: number;
 }
 
 export interface ModelUsage {
