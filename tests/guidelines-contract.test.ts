@@ -103,6 +103,12 @@ describe("resolveGuidelines", () => {
     expect(resolved.guidelines).toHaveLength(1);
   });
 
+  it("propagates read failures for a pinned ref that does not exist", () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", RULE_V1);
+    expect(() => resolveGuidelines(repo, "no-such-ref", "guidelines", "main")).toThrow();
+  });
+
   it("refuses to fall back when an explicitly pinned ref has no guidelines", () => {
     const repo = makeRepo();
     write(repo, "guidelines/no-console.md", RULE_V1);

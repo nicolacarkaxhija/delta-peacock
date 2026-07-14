@@ -104,6 +104,71 @@ describe("bedrock adapter contract", () => {
   });
 });
 
+describe("tool passthrough on the other adapters", () => {
+  it("openai-compatible forwards tools", async () => {
+    const canned = {
+      id: "c",
+      object: "chat.completion",
+      created: 1,
+      model: "m",
+      choices: [{ index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+    const { calls, fetch } = capturingFetch(canned);
+    const { tool } = await import("ai");
+    const { z } = await import("zod");
+    const port = createOpenAiishPort({
+      apiKey: "k",
+      modelId: "m",
+      baseUrl: "https://x.test/v1",
+      fetch,
+    });
+    await port.complete({
+      system: "s",
+      user: "u",
+      tools: {
+        ping: tool({
+          description: "answers pong",
+          inputSchema: z.object({}),
+          execute: () => Promise.resolve("pong"),
+        }),
+      },
+      // no maxToolRounds: the adapter's default bound applies
+    });
+    expect(JSON.stringify(calls[0]?.body["tools"])).toContain("ping");
+  });
+
+  it("bedrock forwards tools in its tool config", async () => {
+    const canned = {
+      output: { message: { role: "assistant", content: [{ text: "ok" }] } },
+      stopReason: "end_turn",
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    };
+    const { calls, fetch } = capturingFetch(canned);
+    const { tool } = await import("ai");
+    const { z } = await import("zod");
+    const port = createBedrockPort({
+      region: "eu-central-1",
+      accessKeyId: "k",
+      secretAccessKey: "s",
+      modelId: "anthropic.claude-test",
+      fetch,
+    });
+    await port.complete({
+      system: "s",
+      user: "u",
+      tools: {
+        ping: tool({
+          description: "answers pong",
+          inputSchema: z.object({}),
+          execute: () => Promise.resolve("pong"),
+        }),
+      },
+    });
+    expect(JSON.stringify(calls[0]?.body)).toContain("ping");
+  });
+});
+
 describe("buildModelPort provider matrix", () => {
   function config(env: Record<string, string>) {
     return loadConfig({ root: makeRepo(), env: { DELTA_PEACOCK_MODEL_ID: "m", ...env } });

@@ -110,6 +110,7 @@ async function reconcileInlineComments(
   const seen = new Set<string>();
   for (const comment of existing) {
     const fingerprint = markerFingerprint(comment.body);
+    /* v8 ignore next -- the filter above guarantees a marker; the guard survives refactors */
     const finding = fingerprint === undefined ? undefined : desired.get(fingerprint);
     if (fingerprint === undefined || finding === undefined || seen.has(fingerprint)) {
       await scm.deleteComment(comment.id);

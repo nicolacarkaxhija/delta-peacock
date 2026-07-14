@@ -4,6 +4,8 @@ import type { ModelRequest } from "../model/port.js";
 export interface PromptOptions {
   /** When on, the model may add uncited observations and propose new guidelines. */
   generalPass: boolean;
+  /** Cross-file background injected by the configured context strategy. */
+  projectContext?: string;
 }
 
 function renderGuideline(guideline: Guideline): string {
@@ -38,6 +40,16 @@ export function buildReviewPrompt(
     'Set "confidence" honestly; uncertain findings with low confidence are filtered, not punished.',
     'If nothing violates a guideline respond {"findings": []}.',
     ...(options.generalPass ? [GENERAL_PASS] : []),
+    ...(options.projectContext !== undefined && options.projectContext !== ""
+      ? [
+          "",
+          "## Project context",
+          "",
+          "Read-only background about the rest of the repository; it is not part of the change under review.",
+          "",
+          options.projectContext,
+        ]
+      : []),
     "",
     "## Guidelines",
     "",

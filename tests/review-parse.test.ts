@@ -79,6 +79,15 @@ describe("parseReviewResponse", () => {
     });
   });
 
+  it("labels a titleless observation and carries one without a proposal", () => {
+    const { findings } = parseReviewResponse(
+      response([{ file: "a.js", line: 1, body: "hm" }]),
+      options({ generalPass: true }),
+    );
+    expect(findings[0]).toMatchObject({ kind: "observation", title: "Observation" });
+    expect(findings[0]?.kind === "observation" && findings[0].proposedGuideline).toBeUndefined();
+  });
+
   it("keeps a milder observation severity than the cap", () => {
     const uncited = { file: "a.js", line: 1, title: "nit", severity: "INFO" };
     const { findings } = parseReviewResponse(
