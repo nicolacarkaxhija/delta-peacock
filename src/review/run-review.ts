@@ -18,7 +18,9 @@ import {
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
+import type { ModelUsage } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
@@ -115,7 +117,6 @@ export async function runReview(
   for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
   const contextTools = contextProvider.tools?.(contextInput);
 
-  const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
   const request = {
     ...buildReviewPrompt(guidelines, redacted.text, {
       generalPass: config.review.generalPass,
@@ -125,20 +126,33 @@ export async function runReview(
       ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
       : {}),
   };
-  let reply;
-  try {
-    reply = await modelPort.complete(request);
-  } catch (error) {
-    if (error instanceof ToolError) throw error;
-    throw new ToolError(`model call failed: ${(error as Error).message}`);
-  }
-
-  const byId = new Map(guidelines.map((guideline) => [guideline.id, guideline]));
-  const parsed = parseReviewResponse(reply.text, {
-    guidelinesById: byId,
+  const parseOptions = {
+    guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),
     generalPass: config.review.generalPass,
     observationSeverityCap: config.review.observationSeverityCap,
-  });
+  };
+
+  let parsed;
+  let usage: ModelUsage | undefined;
+  let ensembleMembers: MemberOutcome[] | undefined;
+  if (config.ensemble.enabled) {
+    const ensemble = await runEnsemble(deps, config, request, parseOptions);
+    for (const notice of ensemble.notices) deps.err(`${notice}\n`);
+    parsed = ensemble.parsed;
+    usage = ensemble.usage;
+    ensembleMembers = ensemble.members;
+  } else {
+    const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
+    let reply;
+    try {
+      reply = await modelPort.complete(request);
+    } catch (error) {
+      if (error instanceof ToolError) throw error;
+      throw new ToolError(`model call failed: ${(error as Error).message}`);
+    }
+    parsed = parseReviewResponse(reply.text, parseOptions);
+    usage = reply.usage;
+  }
 
   const { kept, filtered, violations, observations, proposals } = partitionFindings(
     parsed.findings,
@@ -168,9 +182,10 @@ export async function runReview(
       adjustedLines: parsed.adjustedLines,
       redactions: redacted.counts,
       gate,
-      ...(reply.usage ? { usage: reply.usage } : {}),
-      ...(reply.usage && anyRateConfigured(config.cost)
-        ? { cost: computeCost(reply.usage, config.cost) }
+      ...(usage ? { usage } : {}),
+      ...(usage && anyRateConfigured(config.cost) ? { cost: computeCost(usage, config.cost) } : {}),
+      ...(ensembleMembers !== undefined
+        ? { ensemble: { mode: config.ensemble.mode, members: ensembleMembers } }
         : {}),
     });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
