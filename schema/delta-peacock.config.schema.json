@@ -224,6 +224,28 @@
           "default": 0,
           "type": "number",
           "minimum": 0
+        },
+        "maxPerReview": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0
+        },
+        "monthlyCap": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0
+        },
+        "spendSource": {
+          "default": "counter",
+          "type": "string",
+          "enum": [
+            "counter",
+            "aws-cost-explorer"
+          ]
+        },
+        "counterPath": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

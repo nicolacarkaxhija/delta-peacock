@@ -74,6 +74,14 @@ export const CostSchema = z.strictObject({
   rateOutputPer1M: z.number().min(0).default(0),
   rateCacheReadPer1M: z.number().min(0).default(0),
   rateCacheWritePer1M: z.number().min(0).default(0),
+  /** Pre-flight ceiling per review in USD; zero switches the check off. */
+  maxPerReview: z.number().min(0).default(0),
+  /** Cumulative monthly ceiling in USD; zero switches the check off. */
+  monthlyCap: z.number().min(0).default(0),
+  /** Where month-to-date spending is read from for the monthly cap. */
+  spendSource: z.enum(["counter", "aws-cost-explorer"]).default("counter"),
+  /** Store for the local spend counter; defaults to the user's home directory. */
+  counterPath: z.string().min(1).optional(),
 });
 
 export const ScmSchema = z.strictObject({

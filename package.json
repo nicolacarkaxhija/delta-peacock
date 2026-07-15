@@ -69,6 +69,7 @@
     "@ai-sdk/amazon-bedrock": "^5.0.14",
     "@ai-sdk/anthropic": "^4.0.10",
     "@ai-sdk/openai": "^4.0.9",
+    "@aws-sdk/client-cost-explorer": "^3.1082.0",
     "ai": "^7.0.18",
     "commander": "^15.0.0",
     "picomatch": "^4.0.5",
