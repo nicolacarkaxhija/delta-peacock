@@ -19,6 +19,12 @@ function requiredEnv(
   return value;
 }
 
+export interface ModelRef {
+  provider: "anthropic" | "bedrock" | "openrouter" | "openai-compatible";
+  id: string;
+  baseUrl?: string | undefined;
+}
+
 export function buildModelPort(
   config: Config,
   env: Readonly<Record<string, string | undefined>>,
@@ -29,7 +35,23 @@ export function buildModelPort(
       "model.id is required to review; set it in config or DELTA_PEACOCK_MODEL_ID",
     );
   }
-  switch (config.model.provider) {
+  return buildModelPortFor(
+    {
+      provider: config.model.provider,
+      id: modelId,
+      ...(config.model.baseUrl !== undefined ? { baseUrl: config.model.baseUrl } : {}),
+    },
+    env,
+  );
+}
+
+/** The same wiring for ensemble members and judges: always provider plus model. */
+export function buildModelPortFor(
+  ref: ModelRef,
+  env: Readonly<Record<string, string | undefined>>,
+): ModelPort {
+  const modelId = ref.id;
+  switch (ref.provider) {
     case "anthropic":
       return createAnthropicPort({
         apiKey: requiredEnv(env, "ANTHROPIC_API_KEY", "anthropic"),
@@ -39,11 +61,11 @@ export function buildModelPort(
       return createOpenAiishPort({
         apiKey: requiredEnv(env, "OPENROUTER_API_KEY", "openrouter"),
         modelId,
-        baseUrl: config.model.baseUrl ?? OPENROUTER_BASE_URL,
+        baseUrl: ref.baseUrl ?? OPENROUTER_BASE_URL,
       });
     case "openai-compatible": {
       // the schema's cross-field rule guarantees the base url is present
-      const baseUrl = config.model.baseUrl ?? "";
+      const baseUrl = ref.baseUrl ?? "";
       return createOpenAiishPort({
         // many local hosts accept any key; default keeps them zero-config
         apiKey: env["OPENAI_API_KEY"] ?? "unused",
@@ -60,7 +82,7 @@ export function buildModelPort(
           ? { sessionToken: env["AWS_SESSION_TOKEN"] }
           : {}),
         modelId,
-        ...(config.model.baseUrl !== undefined ? { baseUrl: config.model.baseUrl } : {}),
+        ...(ref.baseUrl !== undefined ? { baseUrl: ref.baseUrl } : {}),
       });
   }
 }

@@ -1,3 +1,4 @@
+import type { ModelRef } from "./model/build.js";
 import type { ModelPort } from "./model/port.js";
 import type { ScmPort } from "./scm/port.js";
 
@@ -11,4 +12,6 @@ export interface RuntimeDeps {
   modelPort?: ModelPort;
   /** SCM override; adapters are normally tested at the HTTP boundary instead. */
   scmPort?: ScmPort;
+  /** Per-member model ports for ensemble tests; falls back to real adapters. */
+  modelPortFor?: (member: ModelRef) => ModelPort;
 }
