@@ -256,6 +256,83 @@
         }
       },
       "additionalProperties": false
+    },
+    "ensemble": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "members": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "anthropic",
+                  "bedrock",
+                  "openrouter",
+                  "openai-compatible"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "baseUrl": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "provider",
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "mode": {
+          "default": "union",
+          "type": "string",
+          "enum": [
+            "union",
+            "judge"
+          ]
+        },
+        "judge": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "enum": [
+                "anthropic",
+                "bedrock",
+                "openrouter",
+                "openai-compatible"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "baseUrl": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "provider",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
