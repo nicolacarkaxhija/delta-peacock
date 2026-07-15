@@ -25,6 +25,13 @@ export interface ReviewReport {
     mode: "union" | "judge";
     members: { provider: string; id: string; ok: boolean; usage?: ModelUsage; error?: string }[];
   };
+  /** Present when the cost guard blocked the review before any model call. */
+  budget?: {
+    blocked: true;
+    estimated: number;
+    monthToDate?: number;
+    reasons: string[];
+  };
 }
 
 export function buildReport(input: {
@@ -38,6 +45,7 @@ export function buildReport(input: {
   usage?: ModelUsage;
   cost?: ComputedCost;
   ensemble?: ReviewReport["ensemble"];
+  budget?: ReviewReport["budget"];
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => ({
     ...finding,
@@ -55,5 +63,6 @@ export function buildReport(input: {
     ...(input.usage ? { usage: input.usage } : {}),
     ...(input.cost ? { cost: input.cost } : {}),
     ...(input.ensemble ? { ensemble: input.ensemble } : {}),
+    ...(input.budget ? { budget: input.budget } : {}),
   };
 }

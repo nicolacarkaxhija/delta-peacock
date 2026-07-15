@@ -14,4 +14,6 @@ export interface RuntimeDeps {
   scmPort?: ScmPort;
   /** Per-member model ports for ensemble tests; falls back to real adapters. */
   modelPortFor?: (member: ModelRef) => ModelPort;
+  /** Injectable time for monthly-cap rollover; defaults to the system clock. */
+  clock?: () => Date;
 }
