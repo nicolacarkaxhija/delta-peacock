@@ -20,6 +20,8 @@ import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import type { ModelUsage } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { checkBudget, guardActive } from "../cost/guard.js";
+import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import { runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
@@ -132,6 +134,39 @@ export async function runReview(
     observationSeverityCap: config.review.observationSeverityCap,
   };
 
+  const now = deps.clock?.() ?? new Date();
+  if (guardActive(config)) {
+    const decision = await checkBudget(config, request, now);
+    for (const notice of decision.notices) deps.err(`${notice}\n`);
+    if (!decision.allowed) {
+      for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
+      deps.out("review blocked by the cost guard before any model call\n");
+      if (config.output.report !== undefined) {
+        const blockedReport = buildReport({
+          findings: [],
+          filtered: [],
+          proposals: [],
+          droppedUncited: 0,
+          adjustedLines: 0,
+          redactions: redacted.counts,
+          gate: evaluateGate([], config.gate.failOn),
+          budget: {
+            blocked: true,
+            estimated: decision.estimated,
+            ...(decision.monthToDate !== undefined ? { monthToDate: decision.monthToDate } : {}),
+            reasons: decision.reasons,
+          },
+        });
+        writeFileSync(
+          path.resolve(deps.cwd, config.output.report),
+          `${JSON.stringify(blockedReport, null, 2)}\n`,
+        );
+      }
+      // advisory posture absorbs the block; a gating posture must fail loudly
+      return config.gate.failOn === "none" ? 0 : 1;
+    }
+  }
+
   let parsed;
   let usage: ModelUsage | undefined;
   let ensembleMembers: MemberOutcome[] | undefined;
@@ -199,6 +234,11 @@ export async function runReview(
     gate,
     commitStatus: config.scm.commitStatus,
   });
+
+  if (usage && anyRateConfigured(config.cost)) {
+    const spent = computeCost(usage, config.cost).total;
+    recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+  }
 
   return gate.failed ? 2 : 0;
 }
