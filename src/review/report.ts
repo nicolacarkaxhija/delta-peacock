@@ -20,6 +20,11 @@ export interface ReviewReport {
   usage?: ModelUsage;
   /** Present when any cost rate is configured. */
   cost?: ComputedCost;
+  /** Present when the ensemble reviewed; usage is attributed per member. */
+  ensemble?: {
+    mode: "union" | "judge";
+    members: { provider: string; id: string; ok: boolean; usage?: ModelUsage; error?: string }[];
+  };
 }
 
 export function buildReport(input: {
@@ -32,6 +37,7 @@ export function buildReport(input: {
   gate: GateDecision;
   usage?: ModelUsage;
   cost?: ComputedCost;
+  ensemble?: ReviewReport["ensemble"];
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => ({
     ...finding,
@@ -48,5 +54,6 @@ export function buildReport(input: {
     gate: input.gate,
     ...(input.usage ? { usage: input.usage } : {}),
     ...(input.cost ? { cost: input.cost } : {}),
+    ...(input.ensemble ? { ensemble: input.ensemble } : {}),
   };
 }

@@ -91,6 +91,7 @@ export function buildProgram(deps: CliDeps): Command {
           err: deps.err,
           ...(deps.modelPort ? { modelPort: deps.modelPort } : {}),
           ...(deps.scmPort ? { scmPort: deps.scmPort } : {}),
+          ...(deps.modelPortFor ? { modelPortFor: deps.modelPortFor } : {}),
         },
         flags,
       );
