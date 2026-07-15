@@ -43,6 +43,10 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "cost.rateOutputPer1M",
   DELTA_PEACOCK_COST_RATE_CACHE_READ_PER_1M: "cost.rateCacheReadPer1M",
   DELTA_PEACOCK_COST_RATE_CACHE_WRITE_PER_1M: "cost.rateCacheWritePer1M",
+  DELTA_PEACOCK_COST_MAX_PER_REVIEW: "cost.maxPerReview",
+  DELTA_PEACOCK_COST_MONTHLY_CAP: "cost.monthlyCap",
+  DELTA_PEACOCK_COST_SPEND_SOURCE: "cost.spendSource",
+  DELTA_PEACOCK_COST_COUNTER_PATH: "cost.counterPath",
 };
 
 /** String sources (env, flags) coerce into these shapes before validation. */
@@ -58,6 +62,8 @@ const NUMBER_PATHS = new Set([
   "cost.rateOutputPer1M",
   "cost.rateCacheReadPer1M",
   "cost.rateCacheWritePer1M",
+  "cost.maxPerReview",
+  "cost.monthlyCap",
 ]);
 const BOOLEAN_PATHS = new Set([
   "review.fetchTarget",
