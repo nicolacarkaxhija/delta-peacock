@@ -41,6 +41,24 @@ export const OutputSchema = z.strictObject({
   report: z.string().min(1).optional(),
 });
 
+const MODEL_PROVIDERS = ["anthropic", "bedrock", "openrouter", "openai-compatible"] as const;
+
+/** One reviewing model: always a provider plus model pair, never a bare id. */
+export const ModelRefSchema = z.strictObject({
+  provider: z.enum(MODEL_PROVIDERS),
+  id: z.string().min(1),
+  baseUrl: z.url().optional(),
+});
+
+export const EnsembleSchema = z.strictObject({
+  enabled: z.boolean().default(false),
+  /** Reviewing members; each runs the same request in parallel. */
+  members: z.array(ModelRefSchema).default([]),
+  /** union merges everything; judge adds one reconciliation call. */
+  mode: z.enum(["union", "judge"]).default("union"),
+  judge: ModelRefSchema.optional(),
+});
+
 export const ContextSchema = z.strictObject({
   /** Cross-file awareness strategy; repo_map costs zero extra model calls. */
   provider: z.enum(["none", "repo_map", "agentic", "rag"]).default("repo_map"),
@@ -88,6 +106,7 @@ export const ConfigSchema = z
     scm: ScmSchema.prefault({}),
     cost: CostSchema.prefault({}),
     context: ContextSchema.prefault({}),
+    ensemble: EnsembleSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {
@@ -95,6 +114,24 @@ export const ConfigSchema = z
         code: "custom",
         path: ["model", "baseUrl"],
         message: "model.baseUrl is required when model.provider is openai-compatible",
+      });
+    }
+    if (config.ensemble.enabled && config.ensemble.members.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ensemble", "members"],
+        message: "ensemble.members needs at least one provider and model pair when enabled",
+      });
+    }
+    if (
+      config.ensemble.enabled &&
+      config.ensemble.mode === "judge" &&
+      config.ensemble.judge === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ensemble", "judge"],
+        message: "ensemble.judge is required when ensemble.mode is judge",
       });
     }
     if (config.scm.provider !== "local") {

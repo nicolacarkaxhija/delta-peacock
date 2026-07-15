@@ -8,8 +8,12 @@ const jsonSchema = {
   ...z.toJSONSchema(ConfigSchema, { io: "input" }),
 };
 
+const mappedSubtrees = new Set(Object.values(ENV_VARS));
+
 function leafPaths(node: unknown, trail: string[] = []): string[] {
   if (typeof node !== "object" || node === null) return [];
+  // a whole subtree reachable through one env var (JSON-coerced) is a leaf
+  if (trail.length > 0 && mappedSubtrees.has(trail.join("."))) return [trail.join(".")];
   const record = node as { properties?: Record<string, unknown> };
   if (!record.properties) return [trail.join(".")];
   return Object.entries(record.properties).flatMap(([key, child]) =>
