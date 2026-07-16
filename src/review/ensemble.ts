@@ -111,7 +111,9 @@ export async function runEnsemble(
   }
 
   if (parsedPerMember.length === 0) {
-    throw new ToolError("every ensemble member failed; nothing to review with");
+    throw new ToolError(
+      ["every ensemble member failed; nothing to review with", ...notices].join("\n"),
+    );
   }
 
   const union: ParsedReview = {
