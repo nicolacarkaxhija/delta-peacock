@@ -1,5 +1,3 @@
-import { monthKey } from "./counter.js";
-
 interface CostExplorerResponse {
   ResultsByTime?: { Total?: { UnblendedCost?: { Amount?: string } } }[];
 }
@@ -15,7 +13,7 @@ function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Lazily builds the AWS client; tests inject a send function instead. */
+/* v8 ignore start -- talks to real AWS; the live smoke exercises it, tests inject send */
 async function defaultSend(): Promise<CostExplorerSend> {
   const { CostExplorerClient, GetCostAndUsageCommand } =
     await import("@aws-sdk/client-cost-explorer");
@@ -23,6 +21,7 @@ async function defaultSend(): Promise<CostExplorerSend> {
   return async (input) =>
     (await client.send(new GetCostAndUsageCommand(input))) as CostExplorerResponse;
 }
+/* v8 ignore stop */
 
 /**
  * Month-to-date Amazon Bedrock spend from AWS Cost Explorer. Any failure
@@ -45,5 +44,3 @@ export async function costExplorerMonthToDate(now: Date, send?: CostExplorerSend
   }
   return total;
 }
-
-export { monthKey };
