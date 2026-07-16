@@ -72,7 +72,11 @@ export async function runEnsemble(
   const memberRefs = config.ensemble.members;
   const notices: string[] = [];
   const settled = await Promise.allSettled(
-    memberRefs.map((member) => portFor(deps, member).complete(request)),
+    // building the port can throw synchronously (missing credentials); the
+    // wrapper turns that into a per-member failure like any runtime one
+    memberRefs.map((member) =>
+      Promise.resolve().then(() => portFor(deps, member).complete(request)),
+    ),
   );
 
   const members: MemberOutcome[] = [];

@@ -1,0 +1,5 @@
+{
+  "findings": [
+    { "file": "src/pricing.js", "line": 1, "guidelineId": "no-breaking-signature-change" }
+  ]
+}

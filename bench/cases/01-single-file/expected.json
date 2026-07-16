@@ -1,0 +1,3 @@
+{
+  "findings": [{ "file": "src/app.js", "line": 2, "guidelineId": "no-console" }]
+}

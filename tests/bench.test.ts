@@ -43,6 +43,21 @@ describe("scoring", () => {
     expect(result.f1).toBeCloseTo(1);
   });
 
+  it("scores zero recall against an empty expectation set", () => {
+    const result = scoreFindings([{ file: "a.js", line: 1, guidelineId: "g" }], []);
+    expect(result.recall).toBe(0);
+    expect(result.falsePositives).toBe(1);
+  });
+
+  it("keeps empty variants in the overlap matrix", () => {
+    const matrix = overlapMatrix({
+      something: [{ file: "a.js", line: 1, guidelineId: "g" }],
+      nothing: [],
+    });
+    expect(matrix["nothing"]?.["something"]).toBe(0);
+    expect(matrix["something"]?.["nothing"]).toBe(0);
+  });
+
   it("builds an overlap matrix without ground truth", () => {
     const matrix = overlapMatrix({
       base: [
@@ -80,6 +95,30 @@ describe("harness", () => {
 
   it("throws a tool error for an empty or missing cases directory", () => {
     expect(() => loadCases("definitely-missing")).toThrow("not found");
+  });
+
+  it("skips stray files and caseless directories, and reports an empty result", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-"));
+    writeFileSync(path.join(dir, "notes.txt"), "not a case");
+    mkdirSync(path.join(dir, "no-diff-here"));
+    expect(() => loadCases(dir)).toThrow("no cases found");
+  });
+
+  it("renders unscored cases with dashes and no aggregate", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const { formatTable } = await import("../src/bench/harness.js");
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-"));
+    mkdirSync(path.join(dir, "unscored"));
+    writeFileSync(path.join(dir, "unscored", "diff.patch"), "diff --git a/x b/x\n+x\n");
+    const outcome = await runBench(loadCases(dir), () => Promise.resolve([]));
+    const table = formatTable(outcome);
+    expect(table).toContain("| unscored | 0 | - | - | - |");
+    expect(table).not.toContain("aggregate");
   });
 });
 
@@ -137,5 +176,52 @@ describe("bench command discriminates context strategies", () => {
     expect(code).toBe(0);
     const crossFileRow = stdout.split("\n").find((line) => line.includes("02-cross-file"));
     expect(crossFileRow).toContain("100%");
+  });
+
+  it("carries general-pass observations as guideline-less findings", async () => {
+    const repo = makeRepo();
+    let stdout = "";
+    const observing: ModelPort = {
+      complete: () =>
+        Promise.resolve({
+          text: JSON.stringify({
+            findings: [{ file: "src/app.js", line: 2, title: "obs", body: "b", severity: "MINOR" }],
+          }),
+        }),
+    };
+    const code = await runCli(["bench", "--cases", CASES_DIR, "--context", "none"], {
+      cwd: repo,
+      env: { DELTA_PEACOCK_REVIEW_GENERAL_PASS: "true" },
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: observing,
+    });
+    expect(code).toBe(0);
+    expect(stdout).toContain("| 01-single-file | 1 |");
+  });
+
+  it("writes the outcome json when asked", async () => {
+    const repo = makeRepo();
+    const { readFileSync } = await import("node:fs");
+    const path = await import("node:path");
+    const code = await runCli(
+      ["bench", "--cases", CASES_DIR, "--context", "none", "--report", "bench.json"],
+      {
+        cwd: repo,
+        env: {},
+        out: () => undefined,
+        err: () => undefined,
+        modelPort: contextSensitiveModel,
+      },
+    );
+    expect(code).toBe(0);
+    const outcome = JSON.parse(readFileSync(path.join(repo, "bench.json"), "utf8")) as {
+      cases: unknown[];
+      aggregate?: unknown;
+    };
+    expect(outcome.cases).toHaveLength(2);
+    expect(outcome.aggregate).toBeDefined();
   });
 });

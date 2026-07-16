@@ -173,6 +173,28 @@ describe("union mode", () => {
   });
 });
 
+describe("without injected ports", () => {
+  it("builds real member adapters and surfaces their credential demands", async () => {
+    const repo = makeScenario();
+    let stderr = "";
+    const code = await runCli(["review"], {
+      cwd: repo,
+      env: {
+        DELTA_PEACOCK_ENSEMBLE_ENABLED: "true",
+        DELTA_PEACOCK_ENSEMBLE_MEMBERS: MEMBERS,
+      },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+    });
+    expect(code).toBe(1);
+    expect(stderr).toContain("every ensemble member failed");
+    expect(stderr).toContain("ANTHROPIC_API_KEY");
+    expect(stderr).toContain("OPENROUTER_API_KEY");
+  });
+});
+
 describe("judge mode", () => {
   const JUDGE_ENV = {
     DELTA_PEACOCK_ENSEMBLE_MODE: "judge",

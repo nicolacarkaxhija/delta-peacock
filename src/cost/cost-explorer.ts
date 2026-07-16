@@ -30,6 +30,7 @@ async function defaultSend(): Promise<CostExplorerSend> {
 export async function costExplorerMonthToDate(now: Date, send?: CostExplorerSend): Promise<number> {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  /* v8 ignore next -- the real client path needs AWS; the live smoke covers it */
   const dispatch = send ?? (await defaultSend());
   const response = await dispatch({
     TimePeriod: { Start: isoDate(start), End: isoDate(end) },
