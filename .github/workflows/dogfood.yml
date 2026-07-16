@@ -1,0 +1,51 @@
+name: dogfood
+
+# The reviewer reviews its own pull requests: the documented exemption to the
+# no-live-spend rule (ADR 0006). Advisory, cheap model, capped at cents by the
+# tool's own cost guard, and never blocking.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  review-ourselves:
+    # forks have no secrets; bots produce mechanical diffs not worth spend
+    if: github.event.pull_request.head.repo.fork == false && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: review this pull request with delta-peacock itself
+        run: node dist/cli.js review --report dogfood-report.json
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DELTA_PEACOCK_MODEL_PROVIDER: anthropic
+          DELTA_PEACOCK_MODEL_ID: claude-haiku-4-5-20251001
+          DELTA_PEACOCK_SCM_PROVIDER: github
+          DELTA_PEACOCK_SCM_REPOSITORY: ${{ github.repository }}
+          DELTA_PEACOCK_SCM_PULL_REQUEST: ${{ github.event.pull_request.number }}
+          DELTA_PEACOCK_REVIEW_TARGET: ${{ github.event.pull_request.base.ref }}
+          # the cost guard is armed for real: haiku rates, cents-level ceiling
+          DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "1"
+          DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "5"
+          DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.10"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dogfood-report
+          path: dogfood-report.json
+          if-no-files-found: ignore
