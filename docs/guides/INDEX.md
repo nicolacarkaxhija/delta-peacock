@@ -1,3 +1,7 @@
 # Guides
 
-User-facing how-tos. Empty until the tool has behavior worth guiding; getting-started and CI recipes land with the release ticket.
+User-facing how-tos, one topic each.
+
+- [Getting started](getting-started.md) — read for the first working review, from init to gating
+- [CI recipes](ci-recipes.md) — read when wiring the reviewer into GitHub Actions, Bitbucket Pipelines or Jenkins
+- [Release checklist](release-checklist.md) — read before cutting a release; includes the live-smoke dispatch
