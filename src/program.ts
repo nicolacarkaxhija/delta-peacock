@@ -117,6 +117,31 @@ export function buildProgram(deps: CliDeps): Command {
       runInit(deps, { force: options.force === true });
     });
 
+  program
+    .command("bench")
+    .description("score the reviewer against benchmark cases")
+    .requiredOption(
+      "--cases <dir>",
+      "directory of case folders (diff.patch, guidelines, expected.json)",
+    )
+    .option("--report <path>", "write the outcome as JSON")
+    .option("--context <provider>", "context strategy to benchmark: none, repo_map, agentic, rag")
+    .action(async (options: { cases: string; report?: string; context?: string }) => {
+      const { runBenchCommand } = await import("./commands/bench.js");
+      const flags: Record<string, string> = {};
+      if (options.context !== undefined) flags["context.provider"] = options.context;
+      const code = await runBenchCommand(
+        deps,
+        {
+          cases: options.cases,
+          ...(options.report !== undefined ? { report: options.report } : {}),
+        },
+        flags,
+      );
+      /* v8 ignore next -- the bench command reports through its outcome, not exit codes */
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
   const guidelines = program.command("guidelines").description("guideline corpus utilities");
   guidelines
     .command("lint")
