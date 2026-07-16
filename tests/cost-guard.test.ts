@@ -216,6 +216,62 @@ describe("cost explorer source", () => {
     expect(JSON.stringify(inputs[0])).toContain("Amazon Bedrock");
   });
 
+  it("uses the cost explorer figure when the api answers", async () => {
+    const repo = makeScenario();
+    const config = loadConfig({
+      root: repo,
+      env: {
+        DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+        DELTA_PEACOCK_COST_MONTHLY_CAP: "10",
+        DELTA_PEACOCK_COST_SPEND_SOURCE: "aws-cost-explorer",
+      },
+    });
+    const decision = await checkBudget(config, { system: "s", user: "u" }, new Date(), () =>
+      Promise.resolve({ ResultsByTime: [{ Total: { UnblendedCost: { Amount: "12.34" } } }] }),
+    );
+    expect(decision.allowed).toBe(false);
+    expect(decision.monthToDate).toBeCloseTo(12.34);
+  });
+
+  it("ignores non-numeric entries in the counter file", () => {
+    const counter = counterFile();
+    writeFileSync(counter, JSON.stringify({ "2026-07": "not a number", "2026-06": 1.5 }));
+    expect(readMonthSpend(counter, "2026-07")).toBe(0);
+    expect(readMonthSpend(counter, "2026-06")).toBeCloseTo(1.5);
+  });
+
+  it("counts union ensembles without a judge call", async () => {
+    const repo = makeScenario();
+    const decision = await checkBudget(
+      loadConfig({
+        root: repo,
+        env: {
+          DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+          DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+          DELTA_PEACOCK_ENSEMBLE_ENABLED: "true",
+          DELTA_PEACOCK_ENSEMBLE_MEMBERS: JSON.stringify([
+            { provider: "anthropic", id: "a" },
+            { provider: "anthropic", id: "b" },
+          ]),
+        },
+      }),
+      { system: "s", user: "u" },
+      new Date(),
+    );
+    const single = await checkBudget(
+      loadConfig({
+        root: repo,
+        env: {
+          DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+          DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+        },
+      }),
+      { system: "s", user: "u" },
+      new Date(),
+    );
+    expect(decision.estimated).toBeCloseTo(single.estimated * 2);
+  });
+
   it("falls back to the counter with a warning when the api fails", async () => {
     const repo = makeScenario();
     const counter = counterFile();

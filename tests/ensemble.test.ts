@@ -149,6 +149,18 @@ describe("union mode", () => {
     expect(report.ensemble?.members.find((member) => member.id === "member-b")?.ok).toBe(false);
   });
 
+  it("treats an unparseable member answer as a member failure", async () => {
+    const repo = makeScenario();
+    const script = {
+      "member-a": { text: JSON.stringify({ findings: [findingAt(1, "Console call")] }) },
+      "member-b": { text: "I only speak prose." },
+    };
+    const { code, stdout, stderr } = await reviewEnsemble(repo, {}, portsFor(script));
+    expect(code).toBe(0);
+    expect(stdout).toContain("1 finding(s)");
+    expect(stderr).toContain("member-b answered unusably");
+  });
+
   it("stops with a tool error when every member fails", async () => {
     const repo = makeScenario();
     const script = {
