@@ -37,6 +37,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_ENSEMBLE_MODE: "ensemble.mode",
   DELTA_PEACOCK_ENSEMBLE_JUDGE: "ensemble.judge",
   DELTA_PEACOCK_CONTEXT_PROVIDER: "context.provider",
+  DELTA_PEACOCK_CONTEXT_PROVIDERS: "context.providers",
   DELTA_PEACOCK_CONTEXT_MAX_TOKENS: "context.maxTokens",
   DELTA_PEACOCK_CONTEXT_MAX_TOOL_ROUNDS: "context.maxToolRounds",
   DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "cost.rateInputPer1M",
@@ -50,7 +51,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
 };
 
 /** String sources (env, flags) coerce into these shapes before validation. */
-const ARRAY_PATHS = new Set(["review.include", "review.exclude"]);
+const ARRAY_PATHS = new Set(["review.include", "review.exclude", "context.providers"]);
 const NUMBER_PATHS = new Set([
   "review.maxDiffBytes",
   "review.confidenceFloor",

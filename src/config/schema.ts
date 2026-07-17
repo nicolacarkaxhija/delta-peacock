@@ -62,6 +62,11 @@ export const EnsembleSchema = z.strictObject({
 export const ContextSchema = z.strictObject({
   /** Cross-file awareness strategy; repo_map costs zero extra model calls. */
   provider: z.enum(["none", "repo_map", "agentic", "rag"]).default("repo_map"),
+  /**
+   * Layered strategies, applied in order (earlier wins the token budget).
+   * Non-empty wins over provider; repo_map plus agentic is the strong combo.
+   */
+  providers: z.array(z.enum(["repo_map", "agentic", "rag"])).default([]),
   /** Ceiling for injected context, measured in approximate tokens. */
   maxTokens: z.number().int().positive().default(4000),
   /** Bound on agentic tool rounds before the model must conclude. */
@@ -122,6 +127,13 @@ export const ConfigSchema = z
         code: "custom",
         path: ["model", "baseUrl"],
         message: "model.baseUrl is required when model.provider is openai-compatible",
+      });
+    }
+    if (new Set(config.context.providers).size !== config.context.providers.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["context", "providers"],
+        message: "context.providers lists a strategy twice",
       });
     }
     if (config.ensemble.enabled && config.ensemble.members.length === 0) {
