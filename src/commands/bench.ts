@@ -55,6 +55,19 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
   };
 }
 
+/** A variant like repo_map+agentic layers strategies through context.providers. */
+export function contextFlag(variant: string): Record<string, string> {
+  if (variant.includes("+")) {
+    return {
+      "context.providers": variant
+        .split("+")
+        .map((name) => name.trim())
+        .join(","),
+    };
+  }
+  return { "context.provider": variant };
+}
+
 function formatMatrix(matrix: Record<string, Record<string, number>>): string {
   const names = Object.keys(matrix);
   const lines = [
@@ -82,7 +95,7 @@ export async function runBenchCommand(
     for (const variant of options.contexts) {
       const outcome = await runBench(
         cases,
-        reviewFnFrom(deps, { ...flags, "context.provider": variant }),
+        reviewFnFrom(deps, { ...flags, ...contextFlag(variant) }),
       );
       deps.out(`\ncontext = ${variant}\n`);
       deps.out(formatTable(outcome));
