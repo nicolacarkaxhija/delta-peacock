@@ -1,0 +1,14 @@
+# Extends the default rules; the allowlist covers files that deliberately
+# hold fake, documented, non-functional token shapes as test fixtures.
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  '''tests/redact\.test\.ts''',
+  '''tests/model-providers\.test\.ts''',
+]
+regexes = [
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''FAKE-TEST-KEY''',
+]
