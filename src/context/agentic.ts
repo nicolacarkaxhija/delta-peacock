@@ -115,7 +115,9 @@ export function createAgenticProvider(): ContextProvider {
           execute: ({ path: relPath, startLine, endLine }) => {
             try {
               const full = path.resolve(cwd, relPath);
-              if (!full.startsWith(path.resolve(cwd)))
+              // path.relative catches prefix tricks like ../repo-secrets
+              const relation = path.relative(path.resolve(cwd), full);
+              if (relation.startsWith("..") || path.isAbsolute(relation))
                 return Promise.resolve("path is outside the repository");
               const lines = readFileSync(full, "utf8").split("\n");
               const slice = lines.slice(startLine - 1, Math.min(endLine, startLine + 200));

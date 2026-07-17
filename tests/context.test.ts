@@ -241,7 +241,7 @@ describe("provider selection", () => {
 });
 
 describe("rag provider (experimental)", () => {
-  it("keys the cache as no-tree outside a git repository", async () => {
+  it("retrieves without touching the cache outside a git repository", async () => {
     const { mkdtempSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const dir = mkdtempSync(path.join(tmpdir(), "peacock-notgit-"));
@@ -252,10 +252,8 @@ describe("rag provider (experimental)", () => {
       changedFiles: [],
     });
     expect(text).toContain("helper");
-    const cache = JSON.parse(
-      readFileSync(path.join(dir, ".delta-peacock-cache/rag-index.json"), "utf8"),
-    ) as { treeKey: string };
-    expect(cache.treeKey).toBe("no-tree");
+    // without a resolvable tree there is no honest cache key, so no cache
+    expect(existsSync(path.join(dir, ".delta-peacock-cache/rag-index.json"))).toBe(false);
   });
 
   it("retrieves related chunks and caches the index by tree", () => {
