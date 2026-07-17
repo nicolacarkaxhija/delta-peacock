@@ -170,6 +170,7 @@ export async function runReview(
   let parsed;
   let usage: ModelUsage | undefined;
   let ensembleMembers: MemberOutcome[] | undefined;
+  let toolCalls: number | undefined;
   if (config.ensemble.enabled) {
     const ensemble = await runEnsemble(deps, config, request, parseOptions);
     for (const notice of ensemble.notices) deps.err(`${notice}\n`);
@@ -187,6 +188,10 @@ export async function runReview(
     }
     parsed = parseReviewResponse(reply.text, parseOptions);
     usage = reply.usage;
+    if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
+      deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
+      toolCalls = reply.toolCalls;
+    }
   }
 
   const { kept, filtered, violations, observations, proposals } = partitionFindings(
@@ -222,6 +227,7 @@ export async function runReview(
       ...(ensembleMembers !== undefined
         ? { ensemble: { mode: config.ensemble.mode, members: ensembleMembers } }
         : {}),
+      ...(toolCalls !== undefined ? { toolCalls } : {}),
     });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
   }

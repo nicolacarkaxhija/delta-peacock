@@ -32,6 +32,8 @@ export interface ReviewReport {
     monthToDate?: number;
     reasons: string[];
   };
+  /** How many agentic context tools the model invoked. */
+  toolCalls?: number;
 }
 
 export function buildReport(input: {
@@ -46,6 +48,7 @@ export function buildReport(input: {
   cost?: ComputedCost;
   ensemble?: ReviewReport["ensemble"];
   budget?: ReviewReport["budget"];
+  toolCalls?: number;
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => ({
     ...finding,
@@ -64,5 +67,6 @@ export function buildReport(input: {
     ...(input.cost ? { cost: input.cost } : {}),
     ...(input.ensemble ? { ensemble: input.ensemble } : {}),
     ...(input.budget ? { budget: input.budget } : {}),
+    ...(input.toolCalls !== undefined ? { toolCalls: input.toolCalls } : {}),
   };
 }
