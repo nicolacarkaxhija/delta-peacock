@@ -129,9 +129,9 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--contexts <list>", "comma-separated strategies to compare with an overlap matrix")
     .action(
       async (options: { cases: string; report?: string; context?: string; contexts?: string }) => {
-        const { runBenchCommand } = await import("./commands/bench.js");
+        const { runBenchCommand, contextFlag } = await import("./commands/bench.js");
         const flags: Record<string, string> = {};
-        if (options.context !== undefined) flags["context.provider"] = options.context;
+        if (options.context !== undefined) Object.assign(flags, contextFlag(options.context));
         const code = await runBenchCommand(
           deps,
           {
