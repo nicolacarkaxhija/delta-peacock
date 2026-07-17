@@ -272,6 +272,13 @@ describe("cost explorer source", () => {
     expect(decision.estimated).toBeCloseTo(single.estimated * 2);
   });
 
+  it("treats missing totals in the response as zero", async () => {
+    const total = await costExplorerMonthToDate(new Date(Date.UTC(2026, 6, 15)), () =>
+      Promise.resolve({ ResultsByTime: [{}, { Total: { UnblendedCost: {} } }] }),
+    );
+    expect(total).toBe(0);
+  });
+
   it("falls back to the counter with a warning when the api fails", async () => {
     const repo = makeScenario();
     const counter = counterFile();

@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import process from "node:process";
 
 export function defaultCounterPath(): string {
   return path.join(homedir(), ".delta-peacock", "spend.json");
@@ -28,9 +29,41 @@ export function readMonthSpend(counterPath: string, month: string): number {
   return readAll(counterPath)[month] ?? 0;
 }
 
+function withLock(counterPath: string, update: () => void): void {
+  const lockPath = `${counterPath}.lock`;
+  let locked = false;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      writeFileSync(lockPath, String(process.pid), { flag: "wx" });
+      locked = true;
+      break;
+    } catch {
+      const waitUntil = Date.now() + 15;
+      while (Date.now() < waitUntil) {
+        // short spin; reviews record spend once, contention is rare and brief
+      }
+    }
+  }
+  try {
+    update();
+  } finally {
+    /* v8 ignore next 5 -- unlock failure only leaves a stale lock the next writer overwrites */
+    if (locked) {
+      try {
+        rmSync(lockPath, { force: true });
+      } catch {
+        // nothing sensible to do
+      }
+    }
+  }
+}
+
 export function recordSpend(counterPath: string, month: string, amount: number): void {
-  const all = readAll(counterPath);
-  all[month] = (all[month] ?? 0) + amount;
   mkdirSync(path.dirname(counterPath), { recursive: true });
-  writeFileSync(counterPath, `${JSON.stringify(all, null, 2)}\n`);
+  // read-modify-write under a best-effort lock so parallel runs never drop spend
+  withLock(counterPath, () => {
+    const all = readAll(counterPath);
+    all[month] = (all[month] ?? 0) + amount;
+    writeFileSync(counterPath, `${JSON.stringify(all, null, 2)}\n`);
+  });
 }
