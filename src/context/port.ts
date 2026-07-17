@@ -25,6 +25,36 @@ export const NONE_PROVIDER: ContextProvider = {
   systemContext: () => "",
 };
 
+/**
+ * Layers several strategies into one provider. Context sections concatenate
+ * in the given order (earlier providers win the shared token budget), tool
+ * sets merge, and notices accumulate. The strong combination is repo_map for
+ * a cheap always-on map plus agentic for on-demand digging.
+ */
+export function composeProviders(providers: readonly ContextProvider[]): ContextProvider {
+  const withTools = providers.filter((provider) => provider.tools !== undefined);
+  return {
+    name: providers.map((provider) => provider.name).join("+"),
+    systemContext(input: ContextInput): string {
+      return providers
+        .map((provider) => provider.systemContext(input))
+        .filter((section) => section !== "")
+        .join("\n\n");
+    },
+    ...(withTools.length > 0
+      ? {
+          tools: (input: ContextInput) =>
+            Object.fromEntries(
+              withTools.flatMap((provider) => Object.entries(provider.tools?.(input) ?? {})),
+            ),
+        }
+      : {}),
+    notices() {
+      return providers.flatMap((provider) => provider.notices?.() ?? []);
+    },
+  };
+}
+
 /** Rough sizing used everywhere context meets a token budget. */
 export function approximateTokens(text: string): number {
   return Math.ceil(text.length / 4);
