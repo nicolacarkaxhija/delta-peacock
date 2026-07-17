@@ -218,6 +218,27 @@ describe("init", () => {
     );
   });
 
+  it("writes platform snippets for bitbucket pipelines and jenkins", async () => {
+    const bb = await run(["init"], makeRepo(), { BITBUCKET_BUILD_NUMBER: "12" });
+    expect(bb.stdout).toContain("delta-peacock-pipelines-snippet.yml");
+    const jenkins = await run(["init"], makeRepo(), { JENKINS_URL: "http://jenkins.local" });
+    expect(jenkins.stdout).toContain("delta-peacock-jenkinsfile-snippet.groovy");
+  });
+
+  it("treats a missing key for an openai-compatible host as a warning only", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "rules");
+    const { code, stdout } = await run(["doctor"], repo, {
+      DELTA_PEACOCK_MODEL_PROVIDER: "openai-compatible",
+      DELTA_PEACOCK_MODEL_ID: "local-model",
+      DELTA_PEACOCK_MODEL_BASE_URL: "http://localhost:11434/v1",
+    });
+    expect(code).toBe(0);
+    expect(stdout).toContain("warn  model");
+    expect(stdout).toContain("fine for local hosts");
+  });
+
   it("never overwrites existing files without --force", async () => {
     const repo = makeRepo();
     write(repo, "delta-peacock.config.yaml", "gate:\n  failOn: MAJOR\n");

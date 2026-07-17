@@ -71,9 +71,45 @@ interface PlannedFile {
   content: string;
 }
 
+const BITBUCKET_SNIPPET = `# Merge into bitbucket-pipelines.yml under pipelines.pull-requests:
+- step:
+    name: delta-peacock review
+    image: node:24
+    clone:
+      depth: full
+    script:
+      - export DELTA_PEACOCK_SCM_PROVIDER=bitbucket
+      - export DELTA_PEACOCK_SCM_REPOSITORY="$BITBUCKET_WORKSPACE/$BITBUCKET_REPO_SLUG"
+      - export DELTA_PEACOCK_SCM_PULL_REQUEST="$BITBUCKET_PR_ID"
+      - export DELTA_PEACOCK_REVIEW_TARGET="$BITBUCKET_PR_DESTINATION_BRANCH"
+      - npx delta-peacock review
+# set ANTHROPIC_API_KEY, BITBUCKET_TOKEN and DELTA_PEACOCK_MODEL_ID as repository variables
+`;
+
+const JENKINS_SNIPPET = `// Merge into your Jenkinsfile inside a change-request stage:
+stage('delta-peacock review') {
+  when { changeRequest() }
+  steps {
+    sh '''
+      export DELTA_PEACOCK_SCM_PROVIDER=bitbucket
+      export DELTA_PEACOCK_SCM_PULL_REQUEST="$CHANGE_ID"
+      export DELTA_PEACOCK_REVIEW_TARGET="$CHANGE_TARGET"
+      npx delta-peacock review
+    '''
+  }
+}
+// provide ANTHROPIC_API_KEY, the SCM token and DELTA_PEACOCK_MODEL_ID via credentials
+`;
+
 function ciSnippet(env: RuntimeDeps["env"]): PlannedFile {
   if (env["GITHUB_ACTIONS"] !== undefined) {
     return { relPath: ".github/workflows/delta-peacock.yml", content: GITHUB_SNIPPET };
+  }
+  if (env["BITBUCKET_BUILD_NUMBER"] !== undefined) {
+    return { relPath: "delta-peacock-pipelines-snippet.yml", content: BITBUCKET_SNIPPET };
+  }
+  if (env["JENKINS_URL"] !== undefined) {
+    return { relPath: "delta-peacock-jenkinsfile-snippet.groovy", content: JENKINS_SNIPPET };
   }
   return { relPath: "delta-peacock-ci-snippet.txt", content: GENERIC_SNIPPET };
 }
