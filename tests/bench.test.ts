@@ -202,6 +202,21 @@ describe("bench command discriminates context strategies", () => {
     expect(stdout).toContain("| 01-single-file | 1 |");
   });
 
+  it("a single-entry contexts list behaves like a plain run", async () => {
+    let stdout = "";
+    const code = await runCli(["bench", "--cases", CASES_DIR, "--contexts", "none"], {
+      cwd: makeRepo(),
+      env: {},
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: contextSensitiveModel,
+    });
+    expect(code).toBe(0);
+    expect(stdout).not.toContain("overlap matrix");
+  });
+
   it("writes the outcome json when asked", async () => {
     const repo = makeRepo();
     const { readFileSync } = await import("node:fs");

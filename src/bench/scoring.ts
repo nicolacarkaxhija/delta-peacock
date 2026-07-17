@@ -60,20 +60,20 @@ export function findingKey(finding: ProducedFinding): string {
 export function overlapMatrix(
   byVariant: Readonly<Record<string, readonly ProducedFinding[]>>,
 ): Record<string, Record<string, number>> {
-  const names = Object.keys(byVariant);
-  const keySets = new Map(
-    names.map((name) => [name, new Set((byVariant[name] ?? []).map(findingKey))] as const),
+  const keySets = Object.entries(byVariant).map(
+    ([name, findings]) => [name, new Set(findings.map(findingKey))] as const,
   );
   const matrix: Record<string, Record<string, number>> = {};
-  for (const a of names) {
-    matrix[a] = {};
-    for (const b of names) {
+  for (const [a, setA] of keySets) {
+    const row: Record<string, number> = {};
+    for (const [b, setB] of keySets) {
       let overlap = 0;
-      for (const key of keySets.get(a) ?? []) {
-        if (keySets.get(b)?.has(key) === true) overlap += 1;
+      for (const key of setA) {
+        if (setB.has(key)) overlap += 1;
       }
-      matrix[a][b] = overlap;
+      row[b] = overlap;
     }
+    matrix[a] = row;
   }
   return matrix;
 }

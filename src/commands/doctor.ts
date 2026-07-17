@@ -82,6 +82,14 @@ function checkModel(config: Config, env: RuntimeDeps["env"]): CheckResult {
   };
   const wanted = credentials[config.model.provider];
   if (wanted !== undefined && (env[wanted] === undefined || env[wanted] === "")) {
+    // local openai-compatible hosts accept any key, so absence is only a hint
+    if (config.model.provider === "openai-compatible") {
+      return check(
+        "model",
+        "warn",
+        "OPENAI_API_KEY is not set; fine for local hosts, hosted ones will reject calls",
+      );
+    }
     return check(
       "model",
       "fail",

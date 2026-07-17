@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadCases, runBench, type BenchCase, type ReviewFn } from "../bench/harness.js";
 import { formatTable } from "../bench/harness.js";
-import type { ProducedFinding } from "../bench/scoring.js";
+import { overlapMatrix, type ProducedFinding } from "../bench/scoring.js";
 import { loadConfig } from "../config/loader.js";
 import { buildContextProvider } from "../context/build.js";
 import { capToTokenBudget } from "../context/port.js";
@@ -55,12 +55,56 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
   };
 }
 
+function formatMatrix(matrix: Record<string, Record<string, number>>): string {
+  const names = Object.keys(matrix);
+  const lines = [
+    "overlap matrix (shared findings per variant pair):",
+    `| | ${names.join(" | ")} |`,
+    `| --- |${names.map(() => " --- |").join("")}`,
+  ];
+  for (const row of names) {
+    lines.push(`| ${row} | ${names.map((col) => String(matrix[row]?.[col] ?? 0)).join(" | ")} |`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 export async function runBenchCommand(
   deps: RuntimeDeps,
-  options: { cases: string; report?: string },
+  options: { cases: string; report?: string; contexts?: string[] },
   flags: Readonly<Record<string, string>>,
 ): Promise<number> {
   const cases = loadCases(path.resolve(deps.cwd, options.cases));
+
+  if (options.contexts !== undefined && options.contexts.length > 1) {
+    // variant comparison: per-variant tables plus the no-ground-truth matrix
+    const producedByVariant: Record<string, ProducedFinding[]> = {};
+    const outcomes: Record<string, unknown> = {};
+    for (const variant of options.contexts) {
+      const outcome = await runBench(
+        cases,
+        reviewFnFrom(deps, { ...flags, "context.provider": variant }),
+      );
+      deps.out(`\ncontext = ${variant}\n`);
+      deps.out(formatTable(outcome));
+      outcomes[variant] = outcome;
+      producedByVariant[variant] = outcome.cases.flatMap((caseOutcome) =>
+        caseOutcome.produced.map((finding) => ({
+          ...finding,
+          file: `${caseOutcome.name}/${finding.file}`,
+        })),
+      );
+    }
+    const matrix = overlapMatrix(producedByVariant);
+    deps.out(`\n${formatMatrix(matrix)}`);
+    if (options.report !== undefined) {
+      writeFileSync(
+        path.resolve(deps.cwd, options.report),
+        `${JSON.stringify({ variants: outcomes, overlap: matrix }, null, 2)}\n`,
+      );
+    }
+    return 0;
+  }
+
   const outcome = await runBench(cases, reviewFnFrom(deps, flags));
   deps.out(formatTable(outcome));
   if (options.report !== undefined) {
