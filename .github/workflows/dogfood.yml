@@ -14,7 +14,7 @@ permissions:
 jobs:
   review-ourselves:
     # forks have no secrets; bots produce mechanical diffs not worth spend
-    if: github.event.pull_request.head.repo.fork == false && github.actor != 'dependabot[bot]'
+    if: github.event.pull_request.head.repo.fork == false && !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
