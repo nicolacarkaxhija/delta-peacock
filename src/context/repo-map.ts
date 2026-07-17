@@ -30,7 +30,13 @@ function sourceFilesUnder(root: string): string[] {
   const files: string[] = [];
   const walk = (dir: string): void => {
     if (files.length >= MAX_FILES) return;
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // an unreadable directory must not kill the default provider
+    }
+    for (const entry of entries) {
       if (files.length >= MAX_FILES) return;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
