@@ -19,6 +19,8 @@ export interface ModelUsage {
 export interface ModelReply {
   text: string;
   usage?: ModelUsage;
+  /** How many context-tool invocations the model made while answering. */
+  toolCalls?: number;
 }
 
 /** The primary test seam: everything on our side of it runs real in tests. */
