@@ -8,7 +8,8 @@ export interface PromptOptions {
   projectContext?: string;
 }
 
-function renderGuideline(guideline: Guideline): string {
+/** Shared by every command that shows the corpus, so the block stays byte-identical. */
+export function renderGuideline(guideline: Guideline): string {
   return `### ${guideline.id} (${guideline.severity}) ${guideline.title}\n${guideline.body}`;
 }
 
