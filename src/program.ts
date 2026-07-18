@@ -100,6 +100,21 @@ export function buildProgram(deps: CliDeps): Command {
     });
 
   program
+    .command("describe")
+    .description("generate the marker-fenced section of the pull request description")
+    .option("--target <ref>", "branch the changes merge into")
+    .option("--title", "also set the pull request title")
+    .option("--dry-run", "print the section instead of writing it")
+    .action(async (options: { target?: string; title?: boolean; dryRun?: boolean }) => {
+      const { runDescribe } = await import("./commands/describe.js");
+      const flags: Record<string, string> = {};
+      if (options.target !== undefined) flags["review.target"] = options.target;
+      if (options.dryRun === true) flags["scm.dryRun"] = "true";
+      const code = await runDescribe(deps, flags, { title: options.title === true });
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
+  program
     .command("doctor")
     .description("validate the setup without reviewing anything")
     .action(async () => {
