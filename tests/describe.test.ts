@@ -355,6 +355,26 @@ describe("describe command", () => {
     expect(stderr).toContain("cannot edit descriptions");
   });
 
+  it("builds the real model port when none is injected, still behind the guard", async () => {
+    let stdout = "";
+    const code = await runCli(["describe"], {
+      cwd: repoWithChange(),
+      env: {
+        ANTHROPIC_API_KEY: "fake-key-never-used",
+        DELTA_PEACOCK_MODEL_ID: "claude-test-model",
+        DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "1000000",
+        DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "1000000",
+        DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001",
+      },
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+    });
+    expect(code).toBe(1); // blocked before any network call
+    expect(stdout).toContain("blocked by the cost guard");
+  });
+
   it("a reply without a summary is a tool error", async () => {
     let stderr = "";
     const code = await runCli(["describe"], {

@@ -29,9 +29,12 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     const changedFiles = changedFilesFromDiff(benchCase.diff);
     let projectContext = "";
     if (existsSync(filesRoot)) {
-      const provider = buildContextProvider(config);
+      const provider = buildContextProvider(config, {
+        env: deps.env,
+        ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
+      });
       projectContext = capToTokenBudget(
-        provider.systemContext({ cwd: filesRoot, diff: benchCase.diff, changedFiles }),
+        await provider.systemContext({ cwd: filesRoot, diff: benchCase.diff, changedFiles }),
         config.context.maxTokens,
       );
     }

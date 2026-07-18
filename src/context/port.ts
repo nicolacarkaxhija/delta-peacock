@@ -12,8 +12,12 @@ export interface ContextInput {
  */
 export interface ContextProvider {
   name: string;
-  /** Text for the prompt's project-context block; empty means nothing to inject. */
-  systemContext(input: ContextInput): string;
+  /**
+   * Text for the prompt's project-context block; empty means nothing to
+   * inject. Async only when the strategy calls out (embeddings retrieval);
+   * callers always await, which is free for the sync majority.
+   */
+  systemContext(input: ContextInput): string | Promise<string>;
   /** On-demand tools for the agentic strategy; undefined means none. */
   tools?(input: ContextInput): ToolSet;
   /** Notices worth surfacing (cache rebuilds, degradations). */
@@ -35,11 +39,14 @@ export function composeProviders(providers: readonly ContextProvider[]): Context
   const withTools = providers.filter((provider) => provider.tools !== undefined);
   return {
     name: providers.map((provider) => provider.name).join("+"),
-    systemContext(input: ContextInput): string {
-      return providers
-        .map((provider) => provider.systemContext(input))
-        .filter((section) => section !== "")
-        .join("\n\n");
+    systemContext(input: ContextInput): string | Promise<string> {
+      const parts = providers.map((provider) => provider.systemContext(input));
+      const join = (sections: string[]): string =>
+        sections.filter((section) => section !== "").join("\n\n");
+      // stay synchronous unless a member actually went async
+      return parts.some((part) => typeof part !== "string")
+        ? Promise.all(parts.map((part) => Promise.resolve(part))).then(join)
+        : join(parts as string[]);
     },
     ...(withTools.length > 0
       ? {

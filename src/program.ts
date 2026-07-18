@@ -83,19 +83,7 @@ export function buildProgram(deps: CliDeps): Command {
     .action(async (options: ReviewCommandOptions & ReviewCommandBooleans) => {
       const flags = reviewFlags(options);
       if (options.dryRun === true) flags["scm.dryRun"] = "true";
-      const code = await runReview(
-        {
-          cwd: deps.cwd,
-          env: deps.env,
-          out: deps.out,
-          err: deps.err,
-          ...(deps.modelPort ? { modelPort: deps.modelPort } : {}),
-          ...(deps.scmPort ? { scmPort: deps.scmPort } : {}),
-          ...(deps.modelPortFor ? { modelPortFor: deps.modelPortFor } : {}),
-          ...(deps.clock ? { clock: deps.clock } : {}),
-        },
-        flags,
-      );
+      const code = await runReview(deps, flags);
       if (code !== 0) throw new ExitCodeError(code);
     });
 
