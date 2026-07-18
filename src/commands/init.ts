@@ -60,10 +60,26 @@ const GENERIC_SNIPPET = `# Run delta-peacock in any CI job with a full clone:
 #   DELTA_PEACOCK_MODEL_ID       the model to review with
 #
 # To post results on a pull request, add:
-#   DELTA_PEACOCK_SCM_PROVIDER     github | bitbucket
+#   DELTA_PEACOCK_SCM_PROVIDER     github | gitlab | bitbucket
 #   DELTA_PEACOCK_SCM_REPOSITORY   owner/repo
 #   DELTA_PEACOCK_SCM_PULL_REQUEST the PR number
-#   GITHUB_TOKEN or BITBUCKET_TOKEN
+#   GITHUB_TOKEN, GITLAB_TOKEN or BITBUCKET_TOKEN
+`;
+
+const GITLAB_SNIPPET = `# Merge into .gitlab-ci.yml; runs on merge request pipelines.
+delta-peacock-review:
+  image: node:24
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - export DELTA_PEACOCK_SCM_PROVIDER=gitlab
+    - export DELTA_PEACOCK_SCM_REPOSITORY="$CI_PROJECT_PATH"
+    - export DELTA_PEACOCK_SCM_PULL_REQUEST="$CI_MERGE_REQUEST_IID"
+    - export DELTA_PEACOCK_REVIEW_TARGET="$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - npx delta-peacock review
+# set ANTHROPIC_API_KEY, GITLAB_TOKEN and DELTA_PEACOCK_MODEL_ID as CI/CD variables
 `;
 
 interface PlannedFile {
@@ -104,6 +120,9 @@ stage('delta-peacock review') {
 function ciSnippet(env: RuntimeDeps["env"]): PlannedFile {
   if (env["GITHUB_ACTIONS"] !== undefined) {
     return { relPath: ".github/workflows/delta-peacock.yml", content: GITHUB_SNIPPET };
+  }
+  if (env["GITLAB_CI"] !== undefined) {
+    return { relPath: "delta-peacock-gitlab-ci-snippet.yml", content: GITLAB_SNIPPET };
   }
   if (env["BITBUCKET_BUILD_NUMBER"] !== undefined) {
     return { relPath: "delta-peacock-pipelines-snippet.yml", content: BITBUCKET_SNIPPET };

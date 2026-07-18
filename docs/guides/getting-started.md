@@ -16,11 +16,11 @@ Set the SCM once your CI runs it (see the [CI recipes](ci-recipes.md)):
 
 ```yaml
 scm:
-  provider: github # or bitbucket
+  provider: github # or gitlab, bitbucket
   repository: owner/repo
 ```
 
-The PR number and tokens come from the environment (`DELTA_PEACOCK_SCM_PULL_REQUEST`, `GITHUB_TOKEN` or `BITBUCKET_TOKEN`). Comments are idempotent: re-runs update or resolve, never duplicate. `--dry-run` guarantees nothing is posted even with everything configured.
+The PR number and tokens come from the environment (`DELTA_PEACOCK_SCM_PULL_REQUEST`, `GITHUB_TOKEN`, `GITLAB_TOKEN` or `BITBUCKET_TOKEN`). Comments are idempotent: re-runs update or resolve, never duplicate. `--dry-run` guarantees nothing is posted even with everything configured.
 
 ## Gating
 
