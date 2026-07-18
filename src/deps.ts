@@ -1,3 +1,4 @@
+import type { EmbeddingPort } from "./context/embedding.js";
 import type { ModelRef } from "./model/build.js";
 import type { ModelPort } from "./model/port.js";
 import type { ScmPort } from "./scm/port.js";
@@ -18,4 +19,6 @@ export interface RuntimeDeps {
   clock?: () => Date;
   /** Line source for interactive commands; null means end of input. Tests inject it. */
   readLine?: () => Promise<string | null>;
+  /** Embedding seam for the rag embeddings backend; real adapters otherwise. */
+  embeddingPort?: EmbeddingPort;
 }

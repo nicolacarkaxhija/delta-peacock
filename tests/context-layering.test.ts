@@ -64,7 +64,7 @@ describe("configuration of layered strategies", () => {
 });
 
 describe("composed provider behavior", () => {
-  it("concatenates context sections in priority order", () => {
+  it("concatenates context sections in priority order", async () => {
     const { repo, diff } = makeCrossFileRepo();
     const config = loadConfig({
       root: repo,
@@ -72,7 +72,7 @@ describe("composed provider behavior", () => {
     });
     const provider = buildContextProvider(config);
     expect(provider.name).toBe("repo_map+rag");
-    const text = provider.systemContext({ cwd: repo, diff, changedFiles: ["src/app.js"] });
+    const text = await provider.systemContext({ cwd: repo, diff, changedFiles: ["src/app.js"] });
     const mapAt = text.indexOf("Signature map of related files");
     const ragAt = text.indexOf("Retrieved repository excerpts");
     expect(mapAt).toBeGreaterThanOrEqual(0);
@@ -144,6 +144,7 @@ describe("bench over layered variants", () => {
       },
       err: () => undefined,
       modelPort: contextSensitive,
+      embeddingPort: { embed: (texts) => Promise.resolve({ vectors: texts.map(() => [1]) }) },
     });
     expect(code).toBe(0);
     expect(stdout).toContain("context = repo_map+rag");

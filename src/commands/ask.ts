@@ -122,10 +122,14 @@ export async function runAsk(
       ? corpus.filter((guideline) => appliesTo(guideline, changedFiles))
       : corpus;
 
-  const contextProvider = buildContextProvider(config);
+  const contextProvider = buildContextProvider(config, {
+    env: deps.env,
+    ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
+    ...(deps.clock ? { clock: deps.clock } : {}),
+  });
   const contextInput = { cwd: deps.cwd, diff: redacted.text, changedFiles };
   const projectContext = capToTokenBudget(
-    contextProvider.systemContext(contextInput),
+    await contextProvider.systemContext(contextInput),
     config.context.maxTokens,
   );
   for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);

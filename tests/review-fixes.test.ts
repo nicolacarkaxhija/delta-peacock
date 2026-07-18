@@ -67,7 +67,7 @@ describe("rag cache trust", () => {
     commitAll(repo, "lib");
     const provider = createRagProvider();
     // build once to learn the honest tree key, then poison with bad chunks
-    provider.systemContext({ cwd: repo, diff: "+real(x)\n", changedFiles: [] });
+    await provider.systemContext({ cwd: repo, diff: "+real(x)\n", changedFiles: [] });
     const cachePath = path.join(repo, ".delta-peacock-cache", "rag-index.json");
     const honest = JSON.parse(readFileSync(cachePath, "utf8")) as { treeKey: string };
     writeFileSync(

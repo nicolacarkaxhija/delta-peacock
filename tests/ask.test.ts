@@ -304,6 +304,9 @@ describe("ask edge paths", () => {
         complete: () =>
           Promise.resolve({ text: "answer", usage: { inputTokens: 10, outputTokens: 5 } }),
       },
+      // exercise the optional seams end to end
+      clock: () => new Date("2026-07-10T12:00:00Z"),
+      embeddingPort: { embed: (texts) => Promise.resolve({ vectors: texts.map(() => [1]) }) },
     });
     expect(code).toBe(0);
     expect(existsSync(counter)).toBe(true);
