@@ -2,6 +2,7 @@ import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
 import { createBitbucketPort } from "./bitbucket.js";
 import { createGitHubPort } from "./github.js";
+import { createGitLabPort } from "./gitlab.js";
 import type { ScmPort } from "./port.js";
 
 /** Callers guarantee the provider is not local; the schema guarantees the fields. */
@@ -35,7 +36,19 @@ export function buildScmPort(
       ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
     });
   }
+  if (config.scm.provider === "gitlab") {
+    const token = env["GITLAB_TOKEN"];
+    if (token === undefined || token === "") {
+      throw new ToolError("GITLAB_TOKEN is not set; the gitlab provider needs it");
+    }
+    return createGitLabPort({
+      repository,
+      pullRequest,
+      token,
+      ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
+    });
+  }
   throw new ToolError(
-    `scm provider "${config.scm.provider}" is not wired up; github, bitbucket and local are available`,
+    `scm provider "${config.scm.provider}" is not wired up; github, gitlab, bitbucket and local are available`,
   );
 }
