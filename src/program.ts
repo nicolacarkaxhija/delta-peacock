@@ -115,6 +115,30 @@ export function buildProgram(deps: CliDeps): Command {
     });
 
   program
+    .command("ask")
+    .description("answer a question about the current changeset in the terminal")
+    .argument("[question]", "what to ask; omit it with --interactive for a session")
+    .option("--interactive", "keep asking; .exit or end of input ends the session")
+    .option("--target <ref>", "branch the changes merge into")
+    .option("--dry-run", "prepare the question but never call the model")
+    .action(
+      async (
+        question: string | undefined,
+        options: { interactive?: boolean; target?: string; dryRun?: boolean },
+      ) => {
+        const { runAsk } = await import("./commands/ask.js");
+        const flags: Record<string, string> = {};
+        if (options.target !== undefined) flags["review.target"] = options.target;
+        if (options.dryRun === true) flags["scm.dryRun"] = "true";
+        const code = await runAsk(deps, flags, {
+          ...(question !== undefined ? { question } : {}),
+          interactive: options.interactive === true,
+        });
+        if (code !== 0) throw new ExitCodeError(code);
+      },
+    );
+
+  program
     .command("doctor")
     .description("validate the setup without reviewing anything")
     .action(async () => {

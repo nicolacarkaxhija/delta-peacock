@@ -16,4 +16,6 @@ export interface RuntimeDeps {
   modelPortFor?: (member: ModelRef) => ModelPort;
   /** Injectable time for monthly-cap rollover; defaults to the system clock. */
   clock?: () => Date;
+  /** Line source for interactive commands; null means end of input. Tests inject it. */
+  readLine?: () => Promise<string | null>;
 }
