@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runGit } from "../git/git.js";
+import { cosine, type EmbeddingPort } from "./embedding.js";
 import type { ContextInput, ContextProvider } from "./port.js";
 
 const CACHE_DIR = ".delta-peacock-cache";
 const CACHE_FILE = "rag-index.json";
+const EMBED_CACHE_FILE = "rag-embeddings.json";
 const CHUNK_LINES = 40;
 const CHUNK_OVERLAP = 10;
 const TOP_CHUNKS = 8;
@@ -112,6 +114,141 @@ function scoreChunk(chunk: Chunk, queryTerms: readonly string[], idf: Map<string
     if (tf !== undefined) score += tf * (idf.get(term) ?? 0);
   }
   return score;
+}
+
+export interface EmbeddedChunk {
+  file: string;
+  startLine: number;
+  text: string;
+  vector: number[];
+}
+
+interface EmbedIndex {
+  version: 1;
+  treeKey: string;
+  /** Vectors from one backend and model never rank another's query. */
+  embeddingKey: string;
+  chunks: EmbeddedChunk[];
+}
+
+export function isEmbeddedChunk(value: unknown): value is EmbeddedChunk {
+  if (typeof value !== "object" || value === null) return false;
+  const chunk = value as Record<string, unknown>;
+  return (
+    typeof chunk["file"] === "string" &&
+    typeof chunk["startLine"] === "number" &&
+    typeof chunk["text"] === "string" &&
+    Array.isArray(chunk["vector"]) &&
+    chunk["vector"].every((entry) => typeof entry === "number")
+  );
+}
+
+export interface RagEmbeddingsOptions {
+  port: EmbeddingPort;
+  /** Distinguishes cache entries: provider plus model id. */
+  embeddingKey: string;
+}
+
+/**
+ * Embeddings retrieval: repository chunks and the diff meet in vector space.
+ * The on-disk cache stores vectors keyed by tree, backend and model, so a
+ * model switch can never rank against stale vectors.
+ */
+export function createRagEmbeddingsProvider(options: RagEmbeddingsOptions): ContextProvider {
+  const notices: string[] = [];
+  return {
+    name: "rag",
+    notices: () => notices,
+    async systemContext(input: ContextInput): Promise<string> {
+      const cachePath = path.join(input.cwd, CACHE_DIR, EMBED_CACHE_FILE);
+      const treeKey = treeKeyOf(input.cwd);
+      const cacheUsable = treeKey !== "no-tree";
+      let index: EmbedIndex | undefined;
+      if (cacheUsable && existsSync(cachePath)) {
+        try {
+          const parsed = JSON.parse(readFileSync(cachePath, "utf8")) as {
+            version?: number;
+            treeKey?: string;
+            embeddingKey?: string;
+            chunks?: unknown[];
+          };
+          if (
+            parsed.version === 1 &&
+            parsed.treeKey === treeKey &&
+            parsed.embeddingKey === options.embeddingKey &&
+            Array.isArray(parsed.chunks) &&
+            parsed.chunks.every(isEmbeddedChunk)
+          ) {
+            index = {
+              version: 1,
+              treeKey,
+              embeddingKey: options.embeddingKey,
+              chunks: parsed.chunks,
+            };
+          }
+        } catch {
+          notices.push("rag embeddings cache was unreadable; rebuilding it");
+        }
+      }
+      if (index === undefined) {
+        const chunks = buildChunks(input.cwd);
+        let vectors: number[][];
+        try {
+          vectors = (await options.port.embed(chunks.map((chunk) => chunk.text))).vectors;
+        } catch (error) {
+          notices.push(
+            `embeddings unavailable (${(error as Error).message}); continuing without retrieval`,
+          );
+          return "";
+        }
+        index = {
+          version: 1,
+          treeKey,
+          embeddingKey: options.embeddingKey,
+          chunks: chunks.map((chunk, at) => ({
+            file: chunk.file,
+            startLine: chunk.startLine,
+            text: chunk.text,
+            vector: vectors[at] ?? [],
+          })),
+        };
+        if (cacheUsable) {
+          try {
+            mkdirSync(path.dirname(cachePath), { recursive: true });
+            writeFileSync(cachePath, JSON.stringify(index));
+          } catch /* v8 ignore next 3 -- disk-full or permission failure, not simulable portably */ {
+            notices.push("could not write the rag embeddings cache; continuing without it");
+          }
+        }
+      }
+
+      const changed = new Set(input.changedFiles);
+      const candidates = index.chunks.filter((chunk) => !changed.has(chunk.file));
+      if (candidates.length === 0) return "";
+
+      let queryVector: number[];
+      try {
+        queryVector = (await options.port.embed([input.diff])).vectors[0] ?? [];
+      } catch (error) {
+        notices.push(
+          `embeddings unavailable (${(error as Error).message}); continuing without retrieval`,
+        );
+        return "";
+      }
+      const ranked = candidates
+        .map((chunk) => ({ chunk, score: cosine(queryVector, chunk.vector) }))
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, TOP_CHUNKS);
+      if (ranked.length === 0) return "";
+
+      const lines = ["Retrieved repository excerpts (embedding retrieval, read-only background):"];
+      for (const { chunk } of ranked) {
+        lines.push(`--- ${chunk.file}:${String(chunk.startLine)} ---`, chunk.text);
+      }
+      return lines.join("\n");
+    },
+  };
 }
 
 /**

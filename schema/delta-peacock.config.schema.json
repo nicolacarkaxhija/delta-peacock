@@ -226,6 +226,11 @@
           "type": "number",
           "minimum": 0
         },
+        "rateEmbedPer1M": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0
+        },
         "maxPerReview": {
           "default": 0,
           "type": "number",
@@ -288,6 +293,37 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 20
+        },
+        "rag": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "backend": {
+              "default": "tfidf",
+              "type": "string",
+              "enum": [
+                "tfidf",
+                "embeddings"
+              ]
+            },
+            "provider": {
+              "default": "openai-compatible",
+              "type": "string",
+              "enum": [
+                "openai-compatible",
+                "bedrock"
+              ]
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "baseUrl": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
