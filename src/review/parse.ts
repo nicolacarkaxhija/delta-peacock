@@ -54,7 +54,8 @@ function jsonCandidates(text: string): string[] {
   return candidates;
 }
 
-function parseJson(text: string): unknown {
+/** Tolerant JSON extraction shared by every command that reads a model reply. */
+export function parseJson(text: string): unknown {
   let lastError = "model response held no JSON object";
   for (const candidate of jsonCandidates(text)) {
     try {
