@@ -90,8 +90,8 @@ export const CostSchema = z.strictObject({
 });
 
 export const ScmSchema = z.strictObject({
-  provider: z.enum(["github", "bitbucket", "local"]).default("local"),
-  /** owner/repo on GitHub, workspace/repo on Bitbucket. */
+  provider: z.enum(["github", "gitlab", "bitbucket", "local"]).default("local"),
+  /** owner/repo on GitHub, group/project on GitLab, workspace/repo on Bitbucket. */
   repository: z.string().min(1).optional(),
   pullRequest: z.number().int().positive().optional(),
   /** Post a commit status reflecting the gate. */
