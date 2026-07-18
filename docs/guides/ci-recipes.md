@@ -31,6 +31,26 @@ jobs:
           DELTA_PEACOCK_REVIEW_TARGET: ${{ github.event.pull_request.base.ref }}
 ```
 
+## GitLab CI
+
+```yaml
+delta-peacock-review:
+  image: node:24
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - export DELTA_PEACOCK_SCM_PROVIDER=gitlab
+    - export DELTA_PEACOCK_SCM_REPOSITORY="$CI_PROJECT_PATH"
+    - export DELTA_PEACOCK_SCM_PULL_REQUEST="$CI_MERGE_REQUEST_IID"
+    - export DELTA_PEACOCK_REVIEW_TARGET="$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - npx delta-peacock review
+  # set as CI/CD variables: ANTHROPIC_API_KEY, GITLAB_TOKEN, DELTA_PEACOCK_MODEL_ID
+```
+
+The token needs the `api` scope; a project access token works. Merge request pipelines must be enabled for `CI_MERGE_REQUEST_IID` to exist.
+
 ## Bitbucket Pipelines
 
 ```yaml
