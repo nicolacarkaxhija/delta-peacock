@@ -59,6 +59,17 @@ export const EnsembleSchema = z.strictObject({
   judge: ModelRefSchema.optional(),
 });
 
+/** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */
+export const RagSchema = z.strictObject({
+  backend: z.enum(["tfidf", "embeddings"]).default("tfidf"),
+  /** Where embedding vectors come from when the backend is embeddings. */
+  provider: z.enum(["openai-compatible", "bedrock"]).default("openai-compatible"),
+  /** Embedding model id; required when the backend is embeddings. */
+  model: z.string().min(1).optional(),
+  /** Embeddings endpoint for openai-compatible hosts (OpenAI, Ollama, vLLM). */
+  baseUrl: z.url().optional(),
+});
+
 export const ContextSchema = z.strictObject({
   /** Cross-file awareness strategy; repo_map costs zero extra model calls. */
   provider: z.enum(["none", "repo_map", "agentic", "rag"]).default("repo_map"),
@@ -71,6 +82,7 @@ export const ContextSchema = z.strictObject({
   maxTokens: z.number().int().positive().default(4000),
   /** Bound on agentic tool rounds before the model must conclude. */
   maxToolRounds: z.number().int().min(1).max(20).default(6),
+  rag: RagSchema.prefault({}),
 });
 
 /** USD per million tokens; zero leaves the review unpriced. */
@@ -79,6 +91,8 @@ export const CostSchema = z.strictObject({
   rateOutputPer1M: z.number().min(0).default(0),
   rateCacheReadPer1M: z.number().min(0).default(0),
   rateCacheWritePer1M: z.number().min(0).default(0),
+  /** USD per million embedded tokens; prices the rag embeddings backend. */
+  rateEmbedPer1M: z.number().min(0).default(0),
   /** Pre-flight ceiling per review in USD; zero switches the check off. */
   maxPerReview: z.number().min(0).default(0),
   /** Cumulative monthly ceiling in USD; zero switches the check off. */
@@ -128,6 +142,26 @@ export const ConfigSchema = z
         path: ["model", "baseUrl"],
         message: "model.baseUrl is required when model.provider is openai-compatible",
       });
+    }
+    if (config.context.rag.backend === "embeddings") {
+      if (config.context.rag.model === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["context", "rag", "model"],
+          message: "context.rag.model is required when context.rag.backend is embeddings",
+        });
+      }
+      if (
+        config.context.rag.provider === "openai-compatible" &&
+        config.context.rag.baseUrl === undefined
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["context", "rag", "baseUrl"],
+          message:
+            "context.rag.baseUrl is required when the embeddings provider is openai-compatible",
+        });
+      }
     }
     if (new Set(config.context.providers).size !== config.context.providers.length) {
       ctx.addIssue({

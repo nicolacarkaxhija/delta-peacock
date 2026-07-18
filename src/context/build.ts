@@ -1,16 +1,18 @@
 import type { Config } from "../config/schema.js";
 import { createAgenticProvider } from "./agentic.js";
+import { buildEmbeddingPort, type EmbeddingPort } from "./embedding.js";
 import { composeProviders, NONE_PROVIDER, type ContextProvider } from "./port.js";
-import { createRagProvider } from "./rag.js";
+import { createRagEmbeddingsProvider, createRagProvider } from "./rag.js";
 import { createRepoMapProvider } from "./repo-map.js";
 
 type StrategyName = "repo_map" | "agentic" | "rag";
 
-const FACTORIES: Record<StrategyName, () => ContextProvider> = {
-  repo_map: createRepoMapProvider,
-  agentic: createAgenticProvider,
-  rag: createRagProvider,
-};
+export interface ContextBuildDeps {
+  env?: Readonly<Record<string, string | undefined>>;
+  /** Test seam for the embeddings backend; real adapters otherwise. */
+  embeddingPort?: EmbeddingPort;
+  clock?: () => Date;
+}
 
 /** The strategies a config activates: providers (layered) wins over provider. */
 export function activeStrategies(config: Config): StrategyName[] {
@@ -19,10 +21,27 @@ export function activeStrategies(config: Config): StrategyName[] {
   return [config.context.provider];
 }
 
-export function buildContextProvider(config: Config): ContextProvider {
+function buildRag(config: Config, deps: ContextBuildDeps): ContextProvider {
+  if (config.context.rag.backend !== "embeddings") return createRagProvider();
+  const port =
+    deps.embeddingPort ??
+    buildEmbeddingPort(config, deps.env ?? {}, deps.clock ?? (() => new Date()));
+  return createRagEmbeddingsProvider({
+    port,
+    // model is schema-guaranteed for the embeddings backend
+    embeddingKey: `${config.context.rag.provider}/${String(config.context.rag.model)}`,
+  });
+}
+
+export function buildContextProvider(config: Config, deps: ContextBuildDeps = {}): ContextProvider {
   const strategies = activeStrategies(config);
   if (strategies.length === 0) return NONE_PROVIDER;
-  const providers = strategies.map((name) => FACTORIES[name]());
+  const factories: Record<StrategyName, () => ContextProvider> = {
+    repo_map: createRepoMapProvider,
+    agentic: createAgenticProvider,
+    rag: () => buildRag(config, deps),
+  };
+  const providers = strategies.map((name) => factories[name]());
   const first = providers[0];
   if (providers.length === 1 && first !== undefined) return first;
   return composeProviders(providers);
