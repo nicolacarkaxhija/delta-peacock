@@ -13,6 +13,7 @@ export interface FakeBitbucket {
   writes: { method: string; url: string }[];
   /** Served by the PR diff endpoint. */
   diffText: string;
+  prText: { title: string; body: string };
   close(): Promise<void>;
 }
 
@@ -40,6 +41,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
     comments: [] as FakeBitbucketComment[],
     statuses: [] as FakeBitbucket["statuses"],
     writes: [] as { method: string; url: string }[],
+    prText: { title: "original title", body: "author prose" },
   };
   const holder = { diffText: "" };
 
@@ -75,7 +77,16 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
       const statusRoute = /^\/repositories\/[^/]+\/[^/]+\/commit\/([^/]+)\/statuses\/build$/;
 
       if (method === "GET" && prMeta.test(path)) {
-        send(response, 200, { source: { commit: { hash: "srcsha7890123" } } });
+        send(response, 200, {
+          source: { commit: { hash: "srcsha7890123" } },
+          title: state.prText.title,
+          description: state.prText.body,
+        });
+      } else if (method === "PUT" && prMeta.test(path)) {
+        const body = await readBody(request);
+        if (typeof body["description"] === "string") state.prText.body = body["description"];
+        if (typeof body["title"] === "string") state.prText.title = body["title"];
+        send(response, 200, state.prText);
       } else if (method === "GET" && prDiff.test(path)) {
         send(response, 200, holder.diffText, true);
       } else if (method === "GET" && commentsRoute.test(path)) {
@@ -140,6 +151,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
     comments: state.comments,
     statuses: state.statuses,
     writes: state.writes,
+    prText: state.prText,
     get diffText() {
       return holder.diffText;
     },

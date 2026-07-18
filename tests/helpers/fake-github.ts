@@ -19,6 +19,7 @@ export interface FakeGitHub {
   statuses: { state: string; description: string; context: string; sha: string }[];
   /** Every non-GET request the server ever saw; dry-run asserts this stays empty. */
   writes: WriteRecord[];
+  prText: { title: string; body: string };
   close(): Promise<void>;
 }
 
@@ -49,6 +50,7 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
     issueComments: [] as FakeComment[],
     statuses: [] as FakeGitHub["statuses"],
     writes: [] as WriteRecord[],
+    prText: { title: "original title", body: "author prose" },
   };
 
   const server: Server = createServer((request, response) => {
@@ -84,8 +86,17 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
           response.writeHead(200, { "content-type": "application/vnd.github.diff" });
           response.end("diff --git a/api.js b/api.js\n+from the github api diff\n");
         } else {
-          send(response, 200, { head: { sha: "headsha1234567" } });
+          send(response, 200, {
+            head: { sha: "headsha1234567" },
+            title: state.prText.title,
+            body: state.prText.body,
+          });
         }
+      } else if (method === "PATCH" && pullMeta.test(path)) {
+        const body = await readBody(request);
+        if (typeof body["body"] === "string") state.prText.body = body["body"];
+        if (typeof body["title"] === "string") state.prText.title = body["title"];
+        send(response, 200, state.prText);
       } else if (method === "GET" && reviewComments.test(path)) {
         send(response, 200, paginated(state.reviewComments, url));
       } else if (method === "POST" && reviewComments.test(path)) {
@@ -156,6 +167,7 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
     issueComments: state.issueComments,
     statuses: state.statuses,
     writes: state.writes,
+    prText: state.prText,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
