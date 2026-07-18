@@ -1,5 +1,11 @@
 import { ToolError } from "../errors.js";
-import type { NewInlineComment, ScmComment, ScmPort, StatusState } from "./port.js";
+import type {
+  NewInlineComment,
+  PullRequestText,
+  ScmComment,
+  ScmPort,
+  StatusState,
+} from "./port.js";
 
 export interface GitLabPortOptions {
   /** group/project; nested subgroups are fine (group/subgroup/project). */
@@ -132,6 +138,19 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
         state: STATUS_STATES[state],
         name: "delta-peacock",
         description,
+      });
+    },
+    async getPullRequestText(): Promise<PullRequestText> {
+      const current = (await (await request("GET", mr)).json()) as {
+        title: string;
+        description: string | null;
+      };
+      return { title: current.title, body: current.description ?? "" };
+    },
+    async updatePullRequestText(text: { title?: string; body: string }): Promise<void> {
+      await request("PUT", mr, {
+        description: text.body,
+        ...(text.title !== undefined ? { title: text.title } : {}),
       });
     },
     async fetchPullRequestDiff(): Promise<string> {

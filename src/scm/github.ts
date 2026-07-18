@@ -1,5 +1,11 @@
 import { ToolError } from "../errors.js";
-import type { NewInlineComment, ScmComment, ScmPort, StatusState } from "./port.js";
+import type {
+  NewInlineComment,
+  PullRequestText,
+  ScmComment,
+  ScmPort,
+  StatusState,
+} from "./port.js";
 
 export interface GitHubPortOptions {
   /** owner/repo */
@@ -123,6 +129,19 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
         state,
         description,
         context: "delta-peacock",
+      });
+    },
+    async getPullRequestText(): Promise<PullRequestText> {
+      const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {
+        title: string;
+        body: string | null;
+      };
+      return { title: meta.title, body: meta.body ?? "" };
+    },
+    async updatePullRequestText(text: { title?: string; body: string }): Promise<void> {
+      await request("PATCH", `/repos/${repo}/pulls/${pr}`, {
+        body: text.body,
+        ...(text.title !== undefined ? { title: text.title } : {}),
       });
     },
     async fetchPullRequestDiff(): Promise<string> {

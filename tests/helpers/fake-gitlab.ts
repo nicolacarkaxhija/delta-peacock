@@ -24,6 +24,7 @@ export interface FakeGitLab {
   writes: { method: string; url: string }[];
   /** URL-encoded project ids the server was addressed with. */
   projects: string[];
+  prText: { title: string; body: string };
   /** How many times MR metadata was fetched; adapters must cache it. */
   metaFetches: number;
   diffText: string;
@@ -52,6 +53,7 @@ export async function startFakeGitLab(): Promise<FakeGitLab> {
     statuses: [] as FakeGitLab["statuses"],
     writes: [] as FakeGitLab["writes"],
     projects: [] as string[],
+    prText: { title: "original title", body: "author prose" },
     metaFetches: 0,
     diffText: "diff --git a/api.js b/api.js\n+from the gitlab api diff\n",
   };
@@ -98,12 +100,19 @@ export async function startFakeGitLab(): Promise<FakeGitLab> {
         state.metaFetches += 1;
         send(response, 200, {
           sha: "headsha1234567",
+          title: state.prText.title,
+          description: state.prText.body,
           diff_refs: {
             base_sha: "basesha1234567",
             head_sha: "headsha1234567",
             start_sha: "startsha123456",
           },
         });
+      } else if (method === "PUT" && mrMeta.test(path)) {
+        const body = await readBody(request);
+        if (typeof body["description"] === "string") state.prText.body = body["description"];
+        if (typeof body["title"] === "string") state.prText.title = body["title"];
+        send(response, 200, state.prText);
       } else if (method === "GET" && rawDiffs.test(path)) {
         response.writeHead(200, { "content-type": "text/plain" });
         response.end(state.diffText);
@@ -166,6 +175,7 @@ export async function startFakeGitLab(): Promise<FakeGitLab> {
     statuses: state.statuses,
     writes: state.writes,
     projects: state.projects,
+    prText: state.prText,
     get metaFetches() {
       return state.metaFetches;
     },

@@ -13,6 +13,11 @@ export interface NewInlineComment {
 
 export type StatusState = "success" | "failure" | "pending";
 
+export interface PullRequestText {
+  title: string;
+  body: string;
+}
+
 /**
  * What a review needs from a source-code-management host. Adapters speak
  * real HTTP; tests point them at a request-asserting fake server.
@@ -31,4 +36,8 @@ export interface ScmPort {
   postStatus(state: StatusState, description: string): Promise<void>;
   /** The PR diff as the host computes it; the fallback when no usable clone exists. */
   fetchPullRequestDiff?(): Promise<string>;
+  /** The PR title and description, for commands that manage a section of them. */
+  getPullRequestText?(): Promise<PullRequestText>;
+  /** Update the description, and the title only when one is given. */
+  updatePullRequestText?(text: { title?: string; body: string }): Promise<void>;
 }

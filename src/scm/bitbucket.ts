@@ -1,5 +1,11 @@
 import { ToolError } from "../errors.js";
-import type { NewInlineComment, ScmComment, ScmPort, StatusState } from "./port.js";
+import type {
+  NewInlineComment,
+  PullRequestText,
+  ScmComment,
+  ScmPort,
+  StatusState,
+} from "./port.js";
 
 export interface BitbucketPortOptions {
   /** workspace/repo */
@@ -84,6 +90,13 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     ...(typeof comment.inline?.to === "number" ? { line: comment.inline.to } : {}),
   });
 
+  async function getText(): Promise<PullRequestText> {
+    const meta = (await (
+      await request("GET", `${base}/repositories/${repo}/pullrequests/${pr}`)
+    ).json()) as { title: string; description: string | null };
+    return { title: meta.title, body: meta.description ?? "" };
+  }
+
   async function resolveSourceSha(): Promise<string> {
     if (sourceSha === undefined) {
       const meta = (await (
@@ -131,6 +144,17 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
         state: STATUS_STATES[state],
         key: "delta-peacock",
         description,
+      });
+    },
+    async getPullRequestText(): Promise<PullRequestText> {
+      return getText();
+    },
+    async updatePullRequestText(text: { title?: string; body: string }): Promise<void> {
+      // Bitbucket's update endpoint requires a title, so keep the current one
+      const title = text.title ?? (await getText()).title;
+      await request("PUT", `${base}/repositories/${repo}/pullrequests/${pr}`, {
+        description: text.body,
+        title,
       });
     },
     async fetchPullRequestDiff(): Promise<string> {
