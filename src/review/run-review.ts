@@ -12,6 +12,7 @@ import {
   acquireDiff,
   changedFilesFromDiff,
   filterDiffByPath,
+  newLineTexts,
   resolveTargetRef,
   type AcquiredDiff,
 } from "../git/diff.js";
@@ -237,7 +238,9 @@ export async function runReview(
 
   if (config.output.report !== undefined) {
     const reportPath = path.resolve(deps.cwd, config.output.report);
+    const anchorTexts = newLineTexts(redacted.text);
     const report = buildReport({
+      lineTextOf: (finding) => anchorTexts.get(finding.file)?.get(finding.line),
       findings: kept,
       filtered,
       proposals,

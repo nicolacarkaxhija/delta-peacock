@@ -127,6 +127,33 @@ export interface AcquiredDiff {
   skipped?: "too-large";
 }
 
+/** New-file line numbers to their text, per file: what the review anchored on. */
+export function newLineTexts(diff: string): Map<string, Map<number, string>> {
+  const result = new Map<string, Map<number, string>>();
+  for (const chunk of diff.split(/^(?=diff --git )/m)) {
+    const filePath = headerPath(chunk);
+    if (filePath === undefined) continue;
+    const lines = new Map<number, string>();
+    let newLine = 0;
+    for (const line of chunk.split("\n")) {
+      const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+      if (hunk) {
+        newLine = Number(hunk[1]);
+        continue;
+      }
+      if (newLine === 0) continue; // still in the chunk header
+      if (line.startsWith("+")) {
+        lines.set(newLine, line.slice(1));
+        newLine += 1;
+      } else if (!line.startsWith("-") && !line.startsWith("\\")) {
+        newLine += 1; // context advances the new numbering, deletions do not
+      }
+    }
+    result.set(filePath, lines);
+  }
+  return result;
+}
+
 /** The b-side paths of every file chunk in a unified diff. */
 export function changedFilesFromDiff(diff: string): string[] {
   return diff
