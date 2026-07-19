@@ -32,6 +32,8 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_SCM_COMMIT_STATUS: "scm.commitStatus",
   DELTA_PEACOCK_SCM_BASE_URL: "scm.baseUrl",
   DELTA_PEACOCK_SCM_DRY_RUN: "scm.dryRun",
+  DELTA_PEACOCK_CALIBRATION_ENABLED: "calibration.enabled",
+  DELTA_PEACOCK_CALIBRATION_MODEL: "calibration.model",
   DELTA_PEACOCK_ENSEMBLE_ENABLED: "ensemble.enabled",
   DELTA_PEACOCK_ENSEMBLE_MEMBERS: "ensemble.members",
   DELTA_PEACOCK_ENSEMBLE_MODE: "ensemble.mode",
@@ -78,8 +80,14 @@ const BOOLEAN_PATHS = new Set([
   "scm.commitStatus",
   "scm.dryRun",
   "ensemble.enabled",
+  "calibration.enabled",
 ]);
-const JSON_PATHS = new Set(["redaction.patterns", "ensemble.members", "ensemble.judge"]);
+const JSON_PATHS = new Set([
+  "redaction.patterns",
+  "ensemble.members",
+  "ensemble.judge",
+  "calibration.model",
+]);
 
 function coerceStringValue(dotPath: string, raw: string): unknown {
   if (JSON_PATHS.has(dotPath)) {

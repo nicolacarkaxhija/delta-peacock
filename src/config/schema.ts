@@ -59,6 +59,14 @@ export const EnsembleSchema = z.strictObject({
   judge: ModelRefSchema.optional(),
 });
 
+/** The optional noise-control pass between parsing and publishing. */
+export const CalibrationSchema = z.strictObject({
+  /** Off by default: enabling adds exactly one priced model call per review. */
+  enabled: z.boolean().default(false),
+  /** A cheap model for the pass; the review model serves when unset. */
+  model: ModelRefSchema.optional(),
+});
+
 /** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */
 export const RagSchema = z.strictObject({
   backend: z.enum(["tfidf", "embeddings"]).default("tfidf"),
@@ -134,6 +142,7 @@ export const ConfigSchema = z
     cost: CostSchema.prefault({}),
     context: ContextSchema.prefault({}),
     ensemble: EnsembleSchema.prefault({}),
+    calibration: CalibrationSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {

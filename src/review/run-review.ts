@@ -22,6 +22,9 @@ import type { ModelUsage } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { checkBudget, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
+import { addUsage } from "../model/usage.js";
+import { buildModelPortFor } from "../model/build.js";
+import { calibrate, type SuppressedFinding } from "./calibrate.js";
 import { runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
@@ -198,10 +201,26 @@ export async function runReview(
     }
   }
 
-  const { kept, filtered, violations, observations, proposals } = partitionFindings(
-    parsed.findings,
-    config,
-  );
+  const partitioned = partitionFindings(parsed.findings, config);
+  const filtered = partitioned.filtered;
+  let kept = partitioned.kept;
+  let suppressed: SuppressedFinding[] = [];
+  if (config.calibration.enabled) {
+    const ref = config.calibration.model;
+    const calibrationPort = ref
+      ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.env))
+      : (deps.modelPort ?? buildModelPort(config, deps.env));
+    const outcome = await calibrate(calibrationPort, kept, redacted.text);
+    for (const notice of outcome.notices) deps.err(`${notice}\n`);
+    kept = outcome.findings;
+    suppressed = outcome.suppressed;
+    if (outcome.usage) usage = usage ? addUsage(usage, outcome.usage) : outcome.usage;
+    if (suppressed.length > 0) {
+      deps.err(`calibration suppressed ${String(suppressed.length)} finding(s)\n`);
+    }
+  }
+  const { violations, observations, proposals } = lanesOf(kept, config);
+  // the gate judges what calibration let through, never what it removed
   const gate = evaluateGate(kept, config.gate.failOn);
 
   deps.out(
@@ -232,6 +251,7 @@ export async function runReview(
         ? { ensemble: { mode: config.ensemble.mode, members: ensembleMembers } }
         : {}),
       ...(toolCalls !== undefined ? { toolCalls } : {}),
+      ...(config.calibration.enabled ? { calibration: { suppressed } } : {}),
     });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
   }
@@ -255,12 +275,16 @@ export async function runReview(
 
 function partitionFindings(findings: readonly Finding[], config: Config) {
   const floor = config.review.confidenceFloor;
-  const kept = findings.filter((finding) => (finding.confidence ?? 1) >= floor);
-  const filtered = findings.filter((finding) => (finding.confidence ?? 1) < floor);
+  return {
+    kept: findings.filter((finding) => (finding.confidence ?? 1) >= floor),
+    filtered: findings.filter((finding) => (finding.confidence ?? 1) < floor),
+  };
+}
+
+/** Lanes are computed after calibration, so demotions land in the right one. */
+function lanesOf(kept: readonly Finding[], config: Config) {
   const observations = kept.filter((finding) => finding.kind === "observation");
   return {
-    kept,
-    filtered,
     violations: kept.filter((finding) => finding.kind === "violation"),
     observations,
     proposals: observations

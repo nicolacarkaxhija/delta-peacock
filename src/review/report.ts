@@ -1,4 +1,5 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
+import type { SuppressedFinding } from "./calibrate.js";
 import type { GateDecision } from "../domain/gate.js";
 import type { ModelUsage } from "../model/port.js";
 import type { ComputedCost } from "../model/usage.js";
@@ -34,6 +35,8 @@ export interface ReviewReport {
   };
   /** How many agentic context tools the model invoked. */
   toolCalls?: number;
+  /** Present when calibration ran; every suppression carries its reason. */
+  calibration?: { suppressed: SuppressedFinding[] };
 }
 
 export function buildReport(input: {
@@ -49,6 +52,7 @@ export function buildReport(input: {
   ensemble?: ReviewReport["ensemble"];
   budget?: ReviewReport["budget"];
   toolCalls?: number;
+  calibration?: ReviewReport["calibration"];
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => ({
     ...finding,
@@ -68,5 +72,6 @@ export function buildReport(input: {
     ...(input.ensemble ? { ensemble: input.ensemble } : {}),
     ...(input.budget ? { budget: input.budget } : {}),
     ...(input.toolCalls !== undefined ? { toolCalls: input.toolCalls } : {}),
+    ...(input.calibration ? { calibration: input.calibration } : {}),
   };
 }

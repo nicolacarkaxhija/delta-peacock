@@ -22,8 +22,9 @@ export function guardActive(config: Config): boolean {
 }
 
 export function modelCallCount(config: Config): number {
-  if (!config.ensemble.enabled) return 1;
-  return config.ensemble.members.length + (config.ensemble.mode === "judge" ? 1 : 0);
+  const calibration = config.calibration.enabled ? 1 : 0;
+  if (!config.ensemble.enabled) return 1 + calibration;
+  return config.ensemble.members.length + (config.ensemble.mode === "judge" ? 1 : 0) + calibration;
 }
 
 export async function checkBudget(
