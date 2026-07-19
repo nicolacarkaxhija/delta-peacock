@@ -91,4 +91,8 @@ stage('delta-peacock review') {
 }
 ```
 
+## Code scanning artifacts
+
+`DELTA_PEACOCK_OUTPUT_SARIF_PATH=findings.sarif` writes a SARIF 2.1.0 artifact; upload it on GitHub with `github/codeql-action/upload-sarif@v3` and findings land in the Security tab. `DELTA_PEACOCK_OUTPUT_CODE_QUALITY_PATH=code-quality.json` writes GitLab's Code Quality artifact; declare it under `artifacts:reports:codequality` and the MR widget diffs it between pipelines. Both are plain files: they work in dry run, local mode, and commentless setups.
+
 Clone fully (no shallow clone) so the merge base resolves; when it cannot, the reviewer falls back to the SCM's own PR diff with a notice, and incremental features degrade. Pass `DELTA_PEACOCK_REVIEW_LAST_REVIEWED_COMMIT` (the last green commit) to review only new changes on re-pushes.

@@ -131,6 +131,14 @@
         "report": {
           "type": "string",
           "minLength": 1
+        },
+        "sarifPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "codeQualityPath": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

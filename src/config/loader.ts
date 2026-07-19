@@ -25,6 +25,8 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_MAX_PROPOSED_GUIDELINES: "review.maxProposedGuidelines",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
+  DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",
+  DELTA_PEACOCK_OUTPUT_CODE_QUALITY_PATH: "output.codeQualityPath",
   DELTA_PEACOCK_REDACTION_PATTERNS: "redaction.patterns",
   DELTA_PEACOCK_SCM_PROVIDER: "scm.provider",
   DELTA_PEACOCK_SCM_REPOSITORY: "scm.repository",

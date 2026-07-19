@@ -25,6 +25,7 @@ import { checkBudget, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
+import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { calibrate, type SuppressedFinding } from "./calibrate.js";
 import { runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
@@ -236,8 +237,11 @@ export async function runReview(
     }),
   );
 
-  if (config.output.report !== undefined) {
-    const reportPath = path.resolve(deps.cwd, config.output.report);
+  const wantsArtifacts =
+    config.output.report !== undefined ||
+    config.output.sarifPath !== undefined ||
+    config.output.codeQualityPath !== undefined;
+  if (wantsArtifacts) {
     const anchorTexts = newLineTexts(redacted.text);
     const report = buildReport({
       lineTextOf: (finding) => anchorTexts.get(finding.file)?.get(finding.line),
@@ -256,7 +260,21 @@ export async function runReview(
       ...(toolCalls !== undefined ? { toolCalls } : {}),
       ...(config.calibration.enabled ? { calibration: { suppressed } } : {}),
     });
-    writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+    if (config.output.report !== undefined) {
+      writeFileSync(
+        path.resolve(deps.cwd, config.output.report),
+        `${JSON.stringify(report, null, 2)}\n`,
+      );
+    }
+    if (config.output.sarifPath !== undefined) {
+      writeFileSync(path.resolve(deps.cwd, config.output.sarifPath), renderSarif(report.findings));
+    }
+    if (config.output.codeQualityPath !== undefined) {
+      writeFileSync(
+        path.resolve(deps.cwd, config.output.codeQualityPath),
+        renderCodeQuality(report.findings),
+      );
+    }
   }
 
   await publishIfConfigured(deps, config, {
