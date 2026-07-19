@@ -101,6 +101,11 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "baselinePath": {
+          "default": "delta-peacock.baseline.json",
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

@@ -41,6 +41,7 @@ const REVIEW_FLAG_PATHS: Readonly<Record<keyof ReviewCommandOptions, string>> = 
 
 interface ReviewCommandBooleans {
   dryRun?: boolean;
+  writeBaseline?: boolean;
 }
 
 function reviewFlags(options: ReviewCommandOptions): Record<string, string> {
@@ -80,12 +81,48 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--max-diff-bytes <n>", "skip reviews larger than this many bytes")
     .option("--last-reviewed-commit <sha>", "review only changes since this commit")
     .option("--dry-run", "suppress every outbound write, whatever is configured")
+    .option("--write-baseline", "accept every current finding into the baseline file")
     .action(async (options: ReviewCommandOptions & ReviewCommandBooleans) => {
       const flags = reviewFlags(options);
       if (options.dryRun === true) flags["scm.dryRun"] = "true";
-      const code = await runReview(deps, flags);
+      const code = await runReview(deps, flags, {
+        writeBaseline: options.writeBaseline === true,
+      });
       if (code !== 0) throw new ExitCodeError(code);
     });
+
+  program
+    .command("audit")
+    .description("review the whole tree against the guidelines; posts nothing")
+    .option("--guidelines-dir <dir>", "directory holding guideline markdown files")
+    .option("--fail-on <severity>", "gate threshold: BLOCKER, CRITICAL, MAJOR, MINOR, INFO or none")
+    .option("--report <path>", "write the JSON report to this path")
+    .option("--include <globs>", "comma-separated path globs to audit")
+    .option("--exclude <globs>", "comma-separated path globs to leave out")
+    .option("--write-baseline", "accept every current finding into the baseline file")
+    .action(
+      async (options: {
+        guidelinesDir?: string;
+        failOn?: string;
+        report?: string;
+        include?: string;
+        exclude?: string;
+        writeBaseline?: boolean;
+      }) => {
+        const { runAudit } = await import("./commands/audit.js");
+        const flags: Record<string, string> = {};
+        if (options.guidelinesDir !== undefined)
+          flags["review.guidelinesDir"] = options.guidelinesDir;
+        if (options.failOn !== undefined) flags["gate.failOn"] = options.failOn;
+        if (options.report !== undefined) flags["output.report"] = options.report;
+        if (options.include !== undefined) flags["review.include"] = options.include;
+        if (options.exclude !== undefined) flags["review.exclude"] = options.exclude;
+        const code = await runAudit(deps, flags, {
+          writeBaseline: options.writeBaseline === true,
+        });
+        if (code !== 0) throw new ExitCodeError(code);
+      },
+    );
 
   program
     .command("describe")

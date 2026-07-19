@@ -31,6 +31,8 @@ export const ReviewSchema = z.strictObject({
   observationSeverityCap: z.enum(SEVERITIES).default("MINOR"),
   /** How many proposed guidelines a single review may surface. */
   maxProposedGuidelines: z.number().int().min(0).default(3),
+  /** Accepted legacy findings; entries inform but never gate. */
+  baselinePath: z.string().min(1).default("delta-peacock.baseline.json"),
 });
 
 export const GateSchema = z.strictObject({
