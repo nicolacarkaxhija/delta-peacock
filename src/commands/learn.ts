@@ -86,25 +86,28 @@ function parseDrafts(text: string, notices: string[]): Draft[] {
     const record = entry as Record<string, unknown>;
     const id = record["id"];
     const severity = record["severity"];
-    const usable =
-      typeof id === "string" &&
-      DRAFT_ID.test(id) &&
-      typeof severity === "string" &&
-      (SEVERITIES as readonly string[]).includes(severity) &&
-      typeof record["title"] === "string" &&
-      typeof record["body"] === "string" &&
-      typeof record["rationale"] === "string";
-    if (!usable) {
+    const title = record["title"];
+    const body = record["body"];
+    const rationale = record["rationale"];
+    if (
+      typeof id !== "string" ||
+      !DRAFT_ID.test(id) ||
+      typeof severity !== "string" ||
+      !(SEVERITIES as readonly string[]).includes(severity) ||
+      typeof title !== "string" ||
+      typeof body !== "string" ||
+      typeof rationale !== "string"
+    ) {
       notices.push(`skipped an unusable draft: ${JSON.stringify(record["id"] ?? "(no id)")}`);
       continue;
     }
     const languages = record["languages"];
     drafts.push({
-      id: id,
+      id,
       severity: severity as Severity,
-      title: record["title"],
-      body: record["body"],
-      rationale: record["rationale"],
+      title,
+      body,
+      rationale,
       ...(Array.isArray(languages) && languages.every((l) => typeof l === "string")
         ? { languages: languages }
         : {}),
