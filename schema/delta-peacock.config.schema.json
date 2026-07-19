@@ -199,6 +199,14 @@
           "default": true,
           "type": "boolean"
         },
+        "comments": {
+          "default": true,
+          "type": "boolean"
+        },
+        "codeInsights": {
+          "default": false,
+          "type": "boolean"
+        },
         "baseUrl": {
           "type": "string",
           "format": "uri"

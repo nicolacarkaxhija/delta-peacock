@@ -1,7 +1,7 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
 import { SEVERITIES } from "../domain/severity.js";
-import type { ScmPort, StatusState } from "./port.js";
+import type { InsightReport, ScmPort, StatusState } from "./port.js";
 
 const MARKER_PREFIX = "<!-- delta-peacock:";
 const SUMMARY_MARKER = "<!-- delta-peacock:summary -->";
@@ -94,6 +94,42 @@ export interface PublishOutcome {
   updated: number;
   deleted: number;
   unchanged: number;
+  notices: string[];
+}
+
+/** Bitbucket's four annotation severities absorb the five review severities. */
+const INSIGHT_SEVERITIES: Record<
+  "BLOCKER" | "CRITICAL" | "MAJOR" | "MINOR" | "INFO",
+  "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+> = {
+  BLOCKER: "CRITICAL",
+  CRITICAL: "HIGH",
+  MAJOR: "MEDIUM",
+  MINOR: "LOW",
+  INFO: "LOW",
+};
+
+export function buildInsightReport(input: SummaryInput): InsightReport {
+  const bySeverity = new Map<string, number>();
+  for (const finding of input.findings) {
+    bySeverity.set(finding.severity, (bySeverity.get(finding.severity) ?? 0) + 1);
+  }
+  return {
+    result: input.gate.failed ? "FAILED" : "PASSED",
+    details: gateSummaryLine(input.gate),
+    counts: SEVERITIES.flatMap((severity) => {
+      const value = bySeverity.get(severity);
+      return value === undefined ? [] : [{ label: severity, value }];
+    }),
+    annotations: fingerprintEntries(input.findings).map(({ fingerprint, finding }) => ({
+      externalId: fingerprint,
+      title: finding.title,
+      summary: finding.body.slice(0, 450),
+      severity: INSIGHT_SEVERITIES[finding.severity],
+      path: finding.file,
+      line: finding.line,
+    })),
+  };
 }
 
 async function reconcileInlineComments(
@@ -164,14 +200,30 @@ function statusDescription(input: SummaryInput): string {
  */
 export async function publishReview(
   scm: ScmPort,
-  input: SummaryInput & { commitStatus: boolean },
+  input: SummaryInput & { commitStatus: boolean; comments?: boolean; codeInsights?: boolean },
 ): Promise<PublishOutcome> {
-  const outcome: PublishOutcome = { created: 0, updated: 0, deleted: 0, unchanged: 0 };
-  await reconcileInlineComments(scm, input.findings, outcome);
-  await upsertSummary(scm, renderSummaryBody(input));
+  const outcome: PublishOutcome = { created: 0, updated: 0, deleted: 0, unchanged: 0, notices: [] };
+  if (input.comments !== false) {
+    await reconcileInlineComments(scm, input.findings, outcome);
+    await upsertSummary(scm, renderSummaryBody(input));
+  }
   if (input.commitStatus) {
     const state: StatusState = input.gate.failed ? "failure" : "success";
     await scm.postStatus(state, statusDescription(input));
+  }
+  if (input.codeInsights === true) {
+    if (scm.publishInsights === undefined) {
+      outcome.notices.push("this provider has no code insights; skipping them");
+    } else {
+      try {
+        await scm.publishInsights(buildInsightReport(input));
+      } catch (error) {
+        // a workspace with insights disabled must not lose its review
+        outcome.notices.push(
+          `code insights rejected (${(error as Error).message.split("\n")[0] ?? ""}); continuing without them`,
+        );
+      }
+    }
   }
   return outcome;
 }

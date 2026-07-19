@@ -284,6 +284,8 @@ export async function runReview(
     filtered: filtered.length,
     gate,
     commitStatus: config.scm.commitStatus,
+    comments: config.scm.comments,
+    codeInsights: config.scm.codeInsights,
   });
 
   if (usage && anyRateConfigured(config.cost)) {
@@ -370,6 +372,7 @@ async function publishIfConfigured(
   }
   const scm = deps.scmPort ?? buildScmPort(config, deps.env);
   const outcome = await publishReview(scm, input);
+  for (const notice of outcome.notices) deps.err(`${notice}\n`);
   deps.err(
     `published: ${String(outcome.created)} created, ${String(outcome.updated)} updated, ${String(outcome.deleted)} resolved, ${String(outcome.unchanged)} unchanged\n`,
   );
