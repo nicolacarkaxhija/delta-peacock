@@ -26,6 +26,7 @@ import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
+import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate, type SuppressedFinding } from "./calibrate.js";
 import { runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
@@ -38,9 +39,15 @@ import { buildReport } from "./report.js";
 
 export type ReviewDeps = RuntimeDeps;
 
+export interface ReviewOptions {
+  /** Accept every current finding into the baseline, then pass the gate. */
+  writeBaseline?: boolean;
+}
+
 export async function runReview(
   deps: ReviewDeps,
   flags: Readonly<Record<string, string>>,
+  options: ReviewOptions = {},
 ): Promise<number> {
   const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
 
@@ -221,6 +228,25 @@ export async function runReview(
       deps.err(`calibration suppressed ${String(suppressed.length)} finding(s)\n`);
     }
   }
+  if (options.writeBaseline === true) {
+    const accepted = writeBaseline(deps.cwd, config.review.baselinePath, kept);
+    deps.out(
+      `baseline written: ${String(accepted)} finding(s) accepted into ${config.review.baselinePath}\n`,
+    );
+  }
+  // a broken baseline fails loudly, or it would silently un-accept everything
+  const baseline = loadBaseline(deps.cwd, config.review.baselinePath);
+  let baselined: Finding[] = [];
+  if (baseline.size > 0) {
+    const split = splitByBaseline(kept, baseline);
+    kept = split.fresh;
+    baselined = split.baselined;
+    if (baselined.length > 0) {
+      deps.err(
+        `${String(baselined.length)} baselined finding(s) inform the report but never gate\n`,
+      );
+    }
+  }
   const { violations, observations, proposals } = lanesOf(kept, config);
   // the gate judges what calibration let through, never what it removed
   const gate = evaluateGate(kept, config.gate.failOn);
@@ -246,6 +272,7 @@ export async function runReview(
     const report = buildReport({
       lineTextOf: (finding) => anchorTexts.get(finding.file)?.get(finding.line),
       findings: kept,
+      baselined,
       filtered,
       proposals,
       droppedUncited: parsed.droppedUncited,

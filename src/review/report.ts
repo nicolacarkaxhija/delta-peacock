@@ -8,6 +8,8 @@ export type ReportedFinding = Finding & {
   fingerprint: string;
   /** The flagged line's text at review time; the fix command's safety anchor. */
   lineText?: string;
+  /** Accepted as pre-existing; informs the reader, never the gate. */
+  baselined?: true;
 };
 
 export interface ReviewReport {
@@ -57,6 +59,8 @@ export function buildReport(input: {
   budget?: ReviewReport["budget"];
   toolCalls?: number;
   calibration?: ReviewReport["calibration"];
+  /** Findings the baseline accepted; they join findings flagged, never gate. */
+  baselined?: readonly Finding[];
   /** Looks up the flagged line's text; absent entries simply carry none. */
   lineTextOf?: (finding: Finding) => string | undefined;
 }): ReviewReport {
@@ -70,7 +74,13 @@ export function buildReport(input: {
   };
   return {
     version: 1,
-    findings: input.findings.map(withFingerprint),
+    findings: [
+      ...input.findings.map(withFingerprint),
+      ...(input.baselined ?? []).map((finding) => ({
+        ...withFingerprint(finding),
+        baselined: true as const,
+      })),
+    ],
     filtered: input.filtered.map(withFingerprint),
     proposedGuidelines: [...input.proposals],
     droppedUncitedFindings: input.droppedUncited,
