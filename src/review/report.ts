@@ -4,7 +4,11 @@ import type { GateDecision } from "../domain/gate.js";
 import type { ModelUsage } from "../model/port.js";
 import type { ComputedCost } from "../model/usage.js";
 
-export type ReportedFinding = Finding & { fingerprint: string };
+export type ReportedFinding = Finding & {
+  fingerprint: string;
+  /** The flagged line's text at review time; the fix command's safety anchor. */
+  lineText?: string;
+};
 
 export interface ReviewReport {
   version: 1;
@@ -53,11 +57,17 @@ export function buildReport(input: {
   budget?: ReviewReport["budget"];
   toolCalls?: number;
   calibration?: ReviewReport["calibration"];
+  /** Looks up the flagged line's text; absent entries simply carry none. */
+  lineTextOf?: (finding: Finding) => string | undefined;
 }): ReviewReport {
-  const withFingerprint = (finding: Finding): ReportedFinding => ({
-    ...finding,
-    fingerprint: fingerprintOf(finding),
-  });
+  const withFingerprint = (finding: Finding): ReportedFinding => {
+    const lineText = input.lineTextOf?.(finding);
+    return {
+      ...finding,
+      fingerprint: fingerprintOf(finding),
+      ...(lineText !== undefined ? { lineText } : {}),
+    };
+  };
   return {
     version: 1,
     findings: input.findings.map(withFingerprint),
