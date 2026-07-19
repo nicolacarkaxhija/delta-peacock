@@ -18,6 +18,14 @@ export interface PullRequestText {
   body: string;
 }
 
+/** A top-level comment plus the team's reaction to it; the learn command's raw material. */
+export interface CommentSignal {
+  body: string;
+  path?: string;
+  reactions: { up: number; down: number };
+  replies: string[];
+}
+
 /**
  * What a review needs from a source-code-management host. Adapters speak
  * real HTTP; tests point them at a request-asserting fake server.
@@ -36,6 +44,8 @@ export interface ScmPort {
   postStatus(state: StatusState, description: string): Promise<void>;
   /** The PR diff as the host computes it; the fallback when no usable clone exists. */
   fetchPullRequestDiff?(): Promise<string>;
+  /** Inline comments with reactions and replies attached; degrades per host. */
+  listCommentSignals?(): Promise<CommentSignal[]>;
   /** The PR title and description, for commands that manage a section of them. */
   getPullRequestText?(): Promise<PullRequestText>;
   /** Update the description, and the title only when one is given. */

@@ -1,5 +1,6 @@
 import { ToolError } from "../errors.js";
 import type {
+  CommentSignal,
   NewInlineComment,
   PullRequestText,
   ScmComment,
@@ -23,6 +24,8 @@ interface GitHubComment {
   body: string;
   path?: string;
   line?: number | null;
+  in_reply_to_id?: number;
+  reactions?: { "+1"?: number; "-1"?: number };
 }
 
 export function createGitHubPort(options: GitHubPortOptions): ScmPort {
@@ -130,6 +133,27 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
         description,
         context: "delta-peacock",
       });
+    },
+    async listCommentSignals(): Promise<CommentSignal[]> {
+      const all = await paginate(`/repos/${repo}/pulls/${pr}/comments`);
+      const repliesTo = new Map<number, string[]>();
+      for (const comment of all) {
+        if (comment.in_reply_to_id === undefined) continue;
+        const list = repliesTo.get(comment.in_reply_to_id) ?? [];
+        list.push(comment.body);
+        repliesTo.set(comment.in_reply_to_id, list);
+      }
+      return all
+        .filter((comment) => comment.in_reply_to_id === undefined)
+        .map((comment) => ({
+          body: comment.body,
+          ...(comment.path !== undefined ? { path: comment.path } : {}),
+          reactions: {
+            up: comment.reactions?.["+1"] ?? 0,
+            down: comment.reactions?.["-1"] ?? 0,
+          },
+          replies: repliesTo.get(comment.id) ?? [],
+        }));
     },
     async getPullRequestText(): Promise<PullRequestText> {
       const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {

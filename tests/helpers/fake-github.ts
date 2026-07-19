@@ -5,6 +5,8 @@ export interface FakeComment {
   body: string;
   path?: string;
   line?: number;
+  in_reply_to_id?: number;
+  reactions?: { "+1"?: number; "-1"?: number };
 }
 
 export interface WriteRecord {
