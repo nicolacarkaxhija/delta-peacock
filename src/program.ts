@@ -147,6 +147,23 @@ export function buildProgram(deps: CliDeps): Command {
     });
 
   program
+    .command("learn")
+    .description("harvest reactions to past review comments into guideline drafts")
+    .option("--drafts-dir <dir>", "where drafts land; defaults to guidelines-drafts")
+    .option("--report <path>", "write the evidence and outcomes as JSON")
+    .option("--dry-run", "collect the evidence but never call the model")
+    .action(async (options: { draftsDir?: string; report?: string; dryRun?: boolean }) => {
+      const { runLearn } = await import("./commands/learn.js");
+      const flags: Record<string, string> = {};
+      if (options.dryRun === true) flags["scm.dryRun"] = "true";
+      const code = await runLearn(deps, flags, {
+        ...(options.draftsDir !== undefined ? { draftsDir: options.draftsDir } : {}),
+        ...(options.report !== undefined ? { report: options.report } : {}),
+      });
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
+  program
     .command("doctor")
     .description("validate the setup without reviewing anything")
     .action(async () => {

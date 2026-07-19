@@ -1,5 +1,6 @@
 import { ToolError } from "../errors.js";
 import type {
+  CommentSignal,
   NewInlineComment,
   PullRequestText,
   ScmComment,
@@ -22,6 +23,7 @@ interface BitbucketComment {
   id: number;
   content: { raw: string };
   inline?: { path: string; to?: number | null };
+  parent?: { id: number };
   deleted?: boolean;
 }
 
@@ -145,6 +147,25 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
         key: "delta-peacock",
         description,
       });
+    },
+    async listCommentSignals(): Promise<CommentSignal[]> {
+      // Bitbucket exposes no comment reactions; replies are the whole signal
+      const all = await listComments();
+      const repliesTo = new Map<number, string[]>();
+      for (const comment of all) {
+        if (comment.parent === undefined) continue;
+        const list = repliesTo.get(comment.parent.id) ?? [];
+        list.push(comment.content.raw);
+        repliesTo.set(comment.parent.id, list);
+      }
+      return all
+        .filter((comment) => comment.parent === undefined)
+        .map((comment) => ({
+          body: comment.content.raw,
+          ...(comment.inline !== undefined ? { path: comment.inline.path } : {}),
+          reactions: { up: 0, down: 0 },
+          replies: repliesTo.get(comment.id) ?? [],
+        }));
     },
     async getPullRequestText(): Promise<PullRequestText> {
       return getText();

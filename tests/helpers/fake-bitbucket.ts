@@ -4,6 +4,7 @@ export interface FakeBitbucketComment {
   id: number;
   content: { raw: string };
   inline?: { path: string; to: number };
+  parent?: { id: number };
 }
 
 export interface FakeBitbucket {
