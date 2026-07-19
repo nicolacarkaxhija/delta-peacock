@@ -127,6 +127,26 @@ export function buildProgram(deps: CliDeps): Command {
     );
 
   program
+    .command("fix")
+    .description("apply the suggestions from a review report to the working tree")
+    .option("--report <path>", "review report to read; defaults to output.report")
+    .option("--patch-file <path>", "write a unified diff instead of touching files")
+    .option("--force", "edit files that have uncommitted changes")
+    .action(async (options: { report?: string; patchFile?: string; force?: boolean }) => {
+      const { runFix } = await import("./commands/fix.js");
+      const code = runFix(
+        deps,
+        {},
+        {
+          ...(options.report !== undefined ? { report: options.report } : {}),
+          ...(options.patchFile !== undefined ? { patchFile: options.patchFile } : {}),
+          force: options.force === true,
+        },
+      );
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
+  program
     .command("doctor")
     .description("validate the setup without reviewing anything")
     .action(async () => {
