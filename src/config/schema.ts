@@ -39,6 +39,10 @@ export const GateSchema = z.strictObject({
 
 export const OutputSchema = z.strictObject({
   report: z.string().min(1).optional(),
+  /** SARIF 2.1.0 artifact for code scanning UIs. */
+  sarifPath: z.string().min(1).optional(),
+  /** GitLab Code Quality artifact for the MR widget. */
+  codeQualityPath: z.string().min(1).optional(),
 });
 
 const MODEL_PROVIDERS = ["anthropic", "bedrock", "openrouter", "openai-compatible"] as const;
