@@ -1,6 +1,7 @@
 import { ToolError } from "../errors.js";
 import type {
   CommentSignal,
+  InsightReport,
   NewInlineComment,
   PullRequestText,
   ScmComment,
@@ -147,6 +148,37 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
         key: "delta-peacock",
         description,
       });
+    },
+    async publishInsights(report: InsightReport): Promise<void> {
+      const sha = await resolveSourceSha();
+      const reportUrl = `${base}/repositories/${repo}/commit/${sha}/reports/delta-peacock`;
+      await request("PUT", reportUrl, {
+        title: "delta-peacock review",
+        details: report.details,
+        report_type: "BUG",
+        result: report.result,
+        data: report.counts.map((count) => ({
+          title: count.label,
+          type: "NUMBER",
+          value: count.value,
+        })),
+      });
+      // the bulk endpoint upserts by external_id, one hundred at a time
+      for (let start = 0; start < report.annotations.length; start += 100) {
+        await request(
+          "POST",
+          `${reportUrl}/annotations`,
+          report.annotations.slice(start, start + 100).map((annotation) => ({
+            external_id: annotation.externalId,
+            title: annotation.title,
+            annotation_type: "CODE_SMELL",
+            summary: annotation.summary,
+            severity: annotation.severity,
+            path: annotation.path,
+            line: annotation.line,
+          })),
+        );
+      }
     },
     async listCommentSignals(): Promise<CommentSignal[]> {
       // Bitbucket exposes no comment reactions; replies are the whole signal

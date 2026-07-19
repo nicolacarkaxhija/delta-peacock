@@ -7,6 +7,16 @@ export interface FakeBitbucketComment {
   parent?: { id: number };
 }
 
+export interface FakeInsightAnnotation {
+  external_id: string;
+  title: string;
+  annotation_type: string;
+  summary: string;
+  severity: string;
+  path: string;
+  line: number;
+}
+
 export interface FakeBitbucket {
   baseUrl: string;
   comments: FakeBitbucketComment[];
@@ -15,6 +25,10 @@ export interface FakeBitbucket {
   /** Served by the PR diff endpoint. */
   diffText: string;
   prText: { title: string; body: string };
+  insightReport: Record<string, unknown> | undefined;
+  insightAnnotations: FakeInsightAnnotation[];
+  /** Simulates a workspace with Code Insights switched off (404s). */
+  insightsDisabled: boolean;
   close(): Promise<void>;
 }
 
@@ -43,8 +57,13 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
     statuses: [] as FakeBitbucket["statuses"],
     writes: [] as { method: string; url: string }[],
     prText: { title: "original title", body: "author prose" },
+    insightAnnotations: [] as FakeInsightAnnotation[],
   };
-  const holder = { diffText: "" };
+  const holder = {
+    diffText: "",
+    insightsDisabled: false,
+    insightReport: undefined as Record<string, unknown> | undefined,
+  };
 
   const server: Server = createServer((request, response) => {
     void (async () => {
@@ -76,6 +95,9 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
       const commentsRoute = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/comments$/;
       const commentRoute = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/comments\/(\d+)$/;
       const statusRoute = /^\/repositories\/[^/]+\/[^/]+\/commit\/([^/]+)\/statuses\/build$/;
+      const reportRoute = /^\/repositories\/[^/]+\/[^/]+\/commit\/[^/]+\/reports\/([^/]+)$/;
+      const annotationsRoute =
+        /^\/repositories\/[^/]+\/[^/]+\/commit\/[^/]+\/reports\/[^/]+\/annotations$/;
 
       if (method === "GET" && prMeta.test(path)) {
         send(response, 200, {
@@ -124,6 +146,27 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
           if (target) target.content = body["content"] as { raw: string };
           send(response, 200, target);
         }
+      } else if (method === "PUT" && reportRoute.test(path)) {
+        if (holder.insightsDisabled) {
+          send(response, 404, { error: { message: "Code Insights is not enabled" } });
+        } else {
+          holder.insightReport = await readBody(request);
+          send(response, 200, holder.insightReport);
+        }
+      } else if (method === "POST" && annotationsRoute.test(path)) {
+        if (holder.insightsDisabled) {
+          send(response, 404, { error: { message: "Code Insights is not enabled" } });
+        } else {
+          const body = (await readBody(request)) as unknown as FakeInsightAnnotation[];
+          for (const annotation of body) {
+            const at = state.insightAnnotations.findIndex(
+              (existing) => existing.external_id === annotation.external_id,
+            );
+            if (at === -1) state.insightAnnotations.push(annotation);
+            else state.insightAnnotations[at] = annotation;
+          }
+          send(response, 200, body);
+        }
       } else if (method === "POST" && statusRoute.test(path)) {
         const body = await readBody(request);
         state.statuses.push({
@@ -153,6 +196,16 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
     statuses: state.statuses,
     writes: state.writes,
     prText: state.prText,
+    insightAnnotations: state.insightAnnotations,
+    get insightReport() {
+      return holder.insightReport;
+    },
+    get insightsDisabled() {
+      return holder.insightsDisabled;
+    },
+    set insightsDisabled(value: boolean) {
+      holder.insightsDisabled = value;
+    },
     get diffText() {
       return holder.diffText;
     },

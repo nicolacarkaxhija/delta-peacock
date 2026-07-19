@@ -18,6 +18,24 @@ export interface PullRequestText {
   body: string;
 }
 
+export interface InsightAnnotation {
+  /** Stable identity (the finding fingerprint); hosts upsert by it. */
+  externalId: string;
+  title: string;
+  summary: string;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  path: string;
+  line: number;
+}
+
+/** A native report card plus inline annotations (Bitbucket Code Insights). */
+export interface InsightReport {
+  result: "PASSED" | "FAILED";
+  details: string;
+  counts: { label: string; value: number }[];
+  annotations: InsightAnnotation[];
+}
+
 /** A top-level comment plus the team's reaction to it; the learn command's raw material. */
 export interface CommentSignal {
   body: string;
@@ -46,6 +64,8 @@ export interface ScmPort {
   fetchPullRequestDiff?(): Promise<string>;
   /** Inline comments with reactions and replies attached; degrades per host. */
   listCommentSignals?(): Promise<CommentSignal[]>;
+  /** Publish a native report card with annotations; only some hosts have one. */
+  publishInsights?(report: InsightReport): Promise<void>;
   /** The PR title and description, for commands that manage a section of them. */
   getPullRequestText?(): Promise<PullRequestText>;
   /** Update the description, and the title only when one is given. */

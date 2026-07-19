@@ -122,6 +122,10 @@ export const ScmSchema = z.strictObject({
   pullRequest: z.number().int().positive().optional(),
   /** Post a commit status reflecting the gate. */
   commitStatus: z.boolean().default(true),
+  /** Post inline and summary comments; off means commentless publication. */
+  comments: z.boolean().default(true),
+  /** Publish a native report card with annotations (Bitbucket Code Insights). */
+  codeInsights: z.boolean().default(false),
   /** API base override for enterprise hosts and tests. */
   baseUrl: z.url().optional(),
   /** The hard guarantee: no write of any kind leaves the process. */
