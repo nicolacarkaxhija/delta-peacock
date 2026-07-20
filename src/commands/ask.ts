@@ -14,6 +14,7 @@ import type { ModelRequest } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { renderGuideline } from "../review/prompt.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
+import { stdinReader } from "./line-reader.js";
 
 interface Turn {
   question: string;
@@ -203,26 +204,3 @@ export async function runAsk(
 
   return 0;
 }
-
-/* v8 ignore start -- thin stdin adapter, exercised only by a human terminal */
-async function stdinReader(): Promise<() => Promise<string | null>> {
-  const { createInterface } = await import("node:readline");
-  const rl = createInterface({ input: process.stdin });
-  const lines: string[] = [];
-  let done = false;
-  rl.on("line", (line) => lines.push(line));
-  rl.on("close", () => {
-    done = true;
-  });
-  return () =>
-    new Promise((resolve) => {
-      const poll = (): void => {
-        const next = lines.shift();
-        if (next !== undefined) resolve(next);
-        else if (done) resolve(null);
-        else setTimeout(poll, 20);
-      };
-      poll();
-    });
-}
-/* v8 ignore stop */
