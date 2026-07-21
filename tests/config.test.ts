@@ -141,6 +141,18 @@ describe("config loading", () => {
     expect(config.review.fetchTarget).toBe(false);
   });
 
+  it("resolves review.packs from the environment as a list", () => {
+    const config = loadConfig({
+      root: makeRoot(),
+      env: { DELTA_PEACOCK_REVIEW_PACKS: "vendor/pack-a, https://example.com/pack-b.git#v1" },
+    });
+    expect(config.review.packs).toEqual(["vendor/pack-a", "https://example.com/pack-b.git#v1"]);
+  });
+
+  it("defaults review.packs to an empty list", () => {
+    expect(loadConfig({ root: makeRoot() }).review.packs).toEqual([]);
+  });
+
   it("passes unparseable json env values through to validation", () => {
     const problems = problemsOf(() =>
       loadConfig({ root: makeRoot(), env: { DELTA_PEACOCK_REDACTION_PATTERNS: "not json" } }),

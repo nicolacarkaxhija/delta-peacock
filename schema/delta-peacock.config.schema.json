@@ -47,6 +47,14 @@
           "type": "string",
           "minLength": 1
         },
+        "packs": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "fetchTarget": {
           "default": true,
           "type": "boolean"
