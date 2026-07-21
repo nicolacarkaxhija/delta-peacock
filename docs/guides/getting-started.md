@@ -4,7 +4,7 @@ delta-peacock reviews pull requests against your team's own guidelines: markdown
 
 ## First review in five steps
 
-1. Install: `npx delta-peacock init` inside your repository. This writes a starter config, one example guideline, and a CI snippet, without touching anything that exists.
+1. Install: `npx delta-peacock init` inside your repository. This writes a starter config, one example guideline, and a CI snippet, without touching anything that exists. Prefer questions over YAML? `npx delta-peacock init --walkthrough` asks about the SCM host, model provider, gating, context strategy, cost caps and guidelines location, explains the trade-off behind each, and writes the same files from your answers. Pressing enter at every question accepts the safe defaults and reproduces plain `init` exactly.
 2. Set the model: put `id` under `model` in `delta-peacock.config.yaml` (or export `DELTA_PEACOCK_MODEL_ID`), and export the provider credential, for anthropic that is `ANTHROPIC_API_KEY`.
 3. Check the setup: `npx delta-peacock doctor` validates config, git state, guidelines, model and SCM reachability with actionable messages.
 4. Write guidelines under `guidelines/`: one markdown file per guideline with `id` and `severity` frontmatter. `npx delta-peacock guidelines lint` keeps the corpus honest.
