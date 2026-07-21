@@ -270,5 +270,26 @@ export function buildProgram(deps: CliDeps): Command {
       if (code !== 0) throw new ExitCodeError(code);
     });
 
+  const pack = guidelines.command("pack").description("guideline pack utilities");
+  pack
+    .command("init")
+    .description("wrap an existing guidelines directory into a shareable pack")
+    .requiredOption("--name <name>", "pack name written to the manifest")
+    .option("--dir <dir>", "guidelines directory to wrap; defaults to review.guidelinesDir")
+    .option("--out <dir>", "where the pack lands; defaults to packs/<name>")
+    .option("--force", "overwrite an existing output directory")
+    .action(async (options: { name: string; dir?: string; out?: string; force?: boolean }) => {
+      const { runGuidelinesPackInit } = await import("./guidelines/pack-init.js");
+      const flags: Record<string, string> = {};
+      if (options.dir !== undefined) flags["review.guidelinesDir"] = options.dir;
+      const code = runGuidelinesPackInit(deps, flags, {
+        name: options.name,
+        ...(options.out !== undefined ? { out: options.out } : {}),
+        force: options.force === true,
+      });
+      /* v8 ignore next -- pack init reports failures as thrown tool errors, not codes */
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
   return program;
 }
