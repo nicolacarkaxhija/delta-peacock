@@ -6,6 +6,7 @@ import { SEVERITIES, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { runGit } from "../git/git.js";
 import { assertSafeRef } from "../git/diff.js";
+import { resolvePack } from "./packs.js";
 
 export interface GuidelineFile {
   /** Path shown in problems and sources; repo-relative where possible. */
@@ -131,7 +132,7 @@ export function loadGuidelinesFromFiles(files: readonly GuidelineFile[]): Loaded
   return { guidelines, problems, disabled };
 }
 
-function markdownFilesUnder(dir: string): string[] {
+export function markdownFilesUnder(dir: string): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -184,7 +185,7 @@ export interface ResolvedGuidelines extends LoadedGuidelines {
  * (ADR 0002), so a pull request cannot weaken its own rules. The working
  * tree serves the bootstrap case and the explicit source mode.
  */
-export function resolveGuidelines(
+function resolveLocalGuidelines(
   cwd: string,
   guidelinesRef: string,
   guidelinesDir: string,
@@ -221,4 +222,84 @@ export function resolveGuidelines(
   }
   const files = readWorkingTreeGuidelines(path.resolve(cwd, guidelinesDir));
   return { ...loadGuidelinesFromFiles(files), origin: "working tree", notices };
+}
+
+/**
+ * Local guidelines resolve as before; configured packs load underneath them.
+ * Precedence is deliberate: packs merge in listed order with later packs
+ * winning id collisions, and the local corpus always wins last. Every
+ * override emits a notice naming the guideline and the pack that lost, so a
+ * pack can never displace a rule silently.
+ */
+export function resolveGuidelines(
+  cwd: string,
+  guidelinesRef: string,
+  guidelinesDir: string,
+  targetRef: string,
+  packs: readonly string[] = [],
+): ResolvedGuidelines {
+  if (packs.length === 0) {
+    return resolveLocalGuidelines(cwd, guidelinesRef, guidelinesDir, targetRef);
+  }
+  let local: ResolvedGuidelines;
+  try {
+    local = resolveLocalGuidelines(cwd, guidelinesRef, guidelinesDir, targetRef);
+  } catch (error) {
+    // a packs-only setup has no local corpus at all; every other failure
+    // (unreachable ref, empty pin) keeps its tamper-resistant loudness
+    if (
+      !(error instanceof ToolError) ||
+      !error.message.includes("guidelines directory not found")
+    ) {
+      throw error;
+    }
+    local = {
+      guidelines: [],
+      problems: [],
+      disabled: 0,
+      origin: "packs only",
+      notices: [`${error.message}; reviewing with pack guidelines only`],
+    };
+  }
+
+  const notices = [...local.notices];
+  const problems: string[] = [];
+  let disabled = 0;
+  const fromPacks = new Map<string, Guideline & { pack: string }>();
+  for (const spec of packs) {
+    const pack = resolvePack(cwd, spec);
+    const loaded = loadGuidelinesFromFiles(pack.files);
+    problems.push(...loaded.problems);
+    disabled += loaded.disabled;
+    for (const guideline of loaded.guidelines) {
+      const previous = fromPacks.get(guideline.id);
+      if (previous !== undefined) {
+        notices.push(
+          `guideline "${guideline.id}" from pack ${previous.pack} is overridden by pack ${pack.manifest.name}`,
+        );
+      }
+      fromPacks.set(guideline.id, { ...guideline, pack: pack.manifest.name });
+    }
+  }
+
+  const localIds = new Set(local.guidelines.map((guideline) => guideline.id));
+  const guidelines: Guideline[] = [];
+  for (const [id, guideline] of fromPacks) {
+    if (localIds.has(id)) {
+      notices.push(
+        `guideline "${id}" from pack ${guideline.pack} is overridden by the local corpus`,
+      );
+      continue;
+    }
+    guidelines.push(guideline);
+  }
+  guidelines.push(...local.guidelines);
+
+  return {
+    guidelines,
+    problems: [...problems, ...local.problems],
+    disabled: disabled + local.disabled,
+    origin: local.origin,
+    notices,
+  };
 }
