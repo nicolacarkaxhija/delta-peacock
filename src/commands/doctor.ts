@@ -45,6 +45,7 @@ function checkGuidelines(deps: RuntimeDeps, config: Config): CheckResult {
       config.review.guidelinesRef,
       config.review.guidelinesDir,
       config.review.target,
+      config.review.packs,
     );
     if (resolved.problems.length > 0) {
       return check(

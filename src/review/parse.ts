@@ -93,6 +93,7 @@ function toFinding(raw: RawShape, line: number, options: ParseOptions): Finding 
     const violation: Violation = {
       kind: "violation",
       guidelineId: guideline.id,
+      ...(guideline.pack !== undefined ? { pack: guideline.pack } : {}),
       severity: guideline.severity,
       file: raw.file,
       line,

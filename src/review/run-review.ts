@@ -63,6 +63,7 @@ export async function runReview(
     config.review.guidelinesRef,
     config.review.guidelinesDir,
     resolvedTarget.ref,
+    config.review.packs,
   );
   for (const notice of loaded.notices) deps.err(`${notice}\n`);
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);

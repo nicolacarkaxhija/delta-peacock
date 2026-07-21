@@ -4,6 +4,8 @@ import type { Severity } from "./severity.js";
 export interface Violation {
   kind: "violation";
   guidelineId: string;
+  /** Name of the pack the cited guideline came from; absent for local rules. */
+  pack?: string;
   /** Inherited from the cited guideline; the model never assigns it. */
   severity: Severity;
   file: string;

@@ -11,4 +11,6 @@ export interface Guideline {
   /** Path globs the guideline is scoped to; empty means everywhere. */
   paths: readonly string[];
   tags: readonly string[];
+  /** Name of the guideline pack this rule came from; absent for local rules. */
+  pack?: string;
 }
