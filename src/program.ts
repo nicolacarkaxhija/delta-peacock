@@ -213,7 +213,14 @@ export function buildProgram(deps: CliDeps): Command {
     .command("init")
     .description("scaffold config, an example guideline and a CI snippet")
     .option("--force", "overwrite files that already exist")
-    .action(async (options: { force?: boolean }) => {
+    .option("--walkthrough", "choose the configuration through guided questions")
+    .action(async (options: { force?: boolean; walkthrough?: boolean }) => {
+      if (options.walkthrough === true) {
+        const { runInitWalkthrough } = await import("./commands/walkthrough.js");
+        const code = await runInitWalkthrough(deps, { force: options.force === true });
+        if (code !== 0) throw new ExitCodeError(code);
+        return;
+      }
       const { runInit } = await import("./commands/init.js");
       runInit(deps, { force: options.force === true });
     });
