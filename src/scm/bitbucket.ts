@@ -199,6 +199,12 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
           replies: repliesTo.get(comment.id) ?? [],
         }));
     },
+    async getPullRequestAuthor(): Promise<string> {
+      const meta = (await (
+        await request("GET", `${base}/repositories/${repo}/pullrequests/${pr}`)
+      ).json()) as { author?: { nickname?: string } };
+      return meta.author?.nickname ?? "";
+    },
     async getPullRequestText(): Promise<PullRequestText> {
       return getText();
     },

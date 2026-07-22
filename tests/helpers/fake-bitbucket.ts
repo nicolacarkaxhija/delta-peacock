@@ -104,6 +104,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
           source: { commit: { hash: "srcsha7890123" } },
           title: state.prText.title,
           description: state.prText.body,
+          author: { nickname: "bbuser" },
         });
       } else if (method === "PUT" && prMeta.test(path)) {
         const body = await readBody(request);
