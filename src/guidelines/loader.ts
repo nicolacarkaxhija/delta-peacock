@@ -23,7 +23,7 @@ export interface LoadedGuidelines {
 }
 
 /** Linear-time frontmatter split; guideline files are untrusted input. */
-function splitFrontmatter(raw: string): { frontmatter: string; body: string } | undefined {
+export function splitFrontmatter(raw: string): { frontmatter: string; body: string } | undefined {
   const lines = raw.split("\n");
   if (String(lines[0]).trimEnd() !== "---") return undefined;
   const closing = lines.findIndex((line, index) => index > 0 && line.trimEnd() === "---");
