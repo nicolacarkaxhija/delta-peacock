@@ -21,6 +21,8 @@ export interface ModelReply {
   usage?: ModelUsage;
   /** How many context-tool invocations the model made while answering. */
   toolCalls?: number;
+  /** Served from the response cache; no model was called. */
+  cached?: boolean;
 }
 
 /** The primary test seam: everything on our side of it runs real in tests. */

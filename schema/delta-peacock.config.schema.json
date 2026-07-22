@@ -471,6 +471,26 @@
         }
       },
       "additionalProperties": false
+    },
+    "cache": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "ttlHours": {
+          "default": 24,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
