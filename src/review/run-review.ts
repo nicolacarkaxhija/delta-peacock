@@ -159,6 +159,7 @@ export async function runReview(
   const request = {
     ...buildReviewPrompt(guidelines, redacted.text, {
       generalPass: config.review.generalPass,
+      language: config.review.language,
       ...(projectContext !== "" ? { projectContext } : {}),
     }),
     ...(contextTools !== undefined
