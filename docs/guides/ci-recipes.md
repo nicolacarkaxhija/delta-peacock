@@ -97,4 +97,12 @@ stage('delta-peacock review') {
 
 On Bitbucket the native equivalent is Code Insights: `DELTA_PEACOCK_SCM_CODE_INSIGHTS=true` publishes a report card with the gate result plus inline annotations upserted by finding fingerprint. Pair it with `DELTA_PEACOCK_SCM_COMMENTS=false` for a commentless review that still gates and annotates. Workspaces with insights disabled degrade to a notice, never a failed review.
 
+## Pre-commit hook
+
+`npx delta-peacock review --staged` reviews the index against HEAD: what you are about to commit, nothing more. It refuses any SCM configuration and the incremental anchor, and reads guidelines from the working tree (there is no target ref at commit time). A husky hook is one line:
+
+```
+npx delta-peacock review --staged --fail-on MAJOR
+```
+
 Clone fully (no shallow clone) so the merge base resolves; when it cannot, the reviewer falls back to the SCM's own PR diff with a notice, and incremental features degrade. Pass `DELTA_PEACOCK_REVIEW_LAST_REVIEWED_COMMIT` (the last green commit) to review only new changes on re-pushes.

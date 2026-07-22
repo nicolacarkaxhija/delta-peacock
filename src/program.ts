@@ -42,6 +42,7 @@ const REVIEW_FLAG_PATHS: Readonly<Record<keyof ReviewCommandOptions, string>> = 
 interface ReviewCommandBooleans {
   dryRun?: boolean;
   writeBaseline?: boolean;
+  staged?: boolean;
 }
 
 function reviewFlags(options: ReviewCommandOptions): Record<string, string> {
@@ -82,11 +83,13 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--last-reviewed-commit <sha>", "review only changes since this commit")
     .option("--dry-run", "suppress every outbound write, whatever is configured")
     .option("--write-baseline", "accept every current finding into the baseline file")
+    .option("--staged", "review the index against HEAD, for pre-commit hooks")
     .action(async (options: ReviewCommandOptions & ReviewCommandBooleans) => {
       const flags = reviewFlags(options);
       if (options.dryRun === true) flags["scm.dryRun"] = "true";
       const code = await runReview(deps, flags, {
         writeBaseline: options.writeBaseline === true,
+        staged: options.staged === true,
       });
       if (code !== 0) throw new ExitCodeError(code);
     });
