@@ -174,6 +174,7 @@ export async function runAudit(
   const findings: Finding[] = [];
   let usage: ModelUsage | undefined;
   let droppedUncited = 0;
+  let droppedOutOfScope = 0;
   let adjustedLines = 0;
   const redactionCounts: Record<string, number> = {};
   for (const entry of requests) {
@@ -191,6 +192,7 @@ export async function runAudit(
       observationSeverityCap: config.review.observationSeverityCap,
     });
     droppedUncited += parsed.droppedUncited;
+    droppedOutOfScope += parsed.droppedOutOfScope;
     adjustedLines += parsed.adjustedLines;
     for (const [name, count] of Object.entries(entry.redacted.counts)) {
       redactionCounts[name] = (redactionCounts[name] ?? 0) + count;
@@ -234,6 +236,7 @@ export async function runAudit(
       observations,
       proposals: [],
       droppedUncited,
+      droppedOutOfScope,
       adjustedLines,
       filtered: filtered.length,
       gate,
@@ -253,6 +256,7 @@ export async function runAudit(
       filtered,
       proposals: [],
       droppedUncited,
+      droppedOutOfScope,
       adjustedLines,
       redactions: redactionCounts,
       gate,

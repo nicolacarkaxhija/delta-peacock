@@ -3,6 +3,7 @@ import type { Finding, Observation, Violation } from "../domain/finding.js";
 import type { Guideline } from "../domain/guideline.js";
 import { SEVERITIES, severityRank, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
+import { appliesTo } from "../guidelines/languages.js";
 
 const RawFinding = z.object({
   guidelineId: z.string().optional(),
@@ -38,6 +39,8 @@ export interface ParsedReview {
   findings: Finding[];
   /** Findings the model reported without citing a known guideline, dropped. */
   droppedUncited: number;
+  /** Violations citing a guideline whose declared scope excludes the file, dropped. */
+  droppedOutOfScope: number;
   /** Findings whose line number was missing or invalid and got pinned to 1. */
   adjustedLines: number;
 }
@@ -82,13 +85,21 @@ function normalizeLine(raw: unknown): { line: number; adjusted: boolean } {
   return { line: 1, adjusted: true };
 }
 
-/** Undefined means the finding is uncited and the general pass is off: dropped. */
-function toFinding(raw: RawShape, line: number, options: ParseOptions): Finding | undefined {
+/** Undefined means uncited with the general pass off; out-of-scope is its own lane. */
+function toFinding(
+  raw: RawShape,
+  line: number,
+  options: ParseOptions,
+): Finding | undefined | "out-of-scope" {
   const confidence = raw.confidence !== undefined ? { confidence: raw.confidence } : {};
   const suggestion =
     raw.suggestion !== undefined && raw.suggestion !== "" ? { suggestion: raw.suggestion } : {};
   const guideline =
     raw.guidelineId === undefined ? undefined : options.guidelinesById.get(raw.guidelineId);
+  if (guideline !== undefined && !appliesTo(guideline, [raw.file])) {
+    // the guideline itself says it does not govern this file; deterministic drop
+    return "out-of-scope";
+  }
   if (guideline !== undefined) {
     const violation: Violation = {
       kind: "violation",
@@ -130,16 +141,21 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
   }
   const findings: Finding[] = [];
   let droppedUncited = 0;
+  let droppedOutOfScope = 0;
   let adjustedLines = 0;
   for (const raw of result.data.findings) {
     const { line, adjusted } = normalizeLine(raw.line);
     if (adjusted) adjustedLines += 1;
     const finding = toFinding(raw, line, options);
+    if (finding === "out-of-scope") {
+      droppedOutOfScope += 1;
+      continue;
+    }
     if (finding === undefined) {
       droppedUncited += 1;
       continue;
     }
     findings.push(finding);
   }
-  return { findings, droppedUncited, adjustedLines };
+  return { findings, droppedUncited, droppedOutOfScope, adjustedLines };
 }

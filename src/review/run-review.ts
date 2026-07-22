@@ -26,6 +26,7 @@ import { checkBudget, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
+import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate, type SuppressedFinding } from "./calibrate.js";
@@ -207,6 +208,7 @@ export async function runReview(
   let usage: ModelUsage | undefined;
   let ensembleMembers: MemberOutcome[] | undefined;
   let toolCalls: number | undefined;
+  let cachedResponse = false;
   if (config.ensemble.enabled) {
     const ensemble = await runEnsemble(deps, config, request, parseOptions);
     for (const notice of ensemble.notices) deps.err(`${notice}\n`);
@@ -214,7 +216,16 @@ export async function runReview(
     usage = ensemble.usage;
     ensembleMembers = ensemble.members;
   } else {
-    const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
+    const modelPort = withResponseCache(
+      deps.modelPort ?? buildModelPort(config, deps.env),
+      config,
+      deps.cwd,
+      () => deps.clock?.() ?? new Date(),
+      (notice) => {
+        deps.err(`${notice}
+`);
+      },
+    );
     let reply;
     try {
       reply = await modelPort.complete(request);
@@ -228,6 +239,7 @@ export async function runReview(
       deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
       toolCalls = reply.toolCalls;
     }
+    if (reply.cached === true) cachedResponse = true;
   }
 
   const partitioned = partitionFindings(parsed.findings, config);
@@ -277,6 +289,7 @@ export async function runReview(
       observations,
       proposals,
       droppedUncited: parsed.droppedUncited,
+      droppedOutOfScope: parsed.droppedOutOfScope,
       adjustedLines: parsed.adjustedLines,
       filtered: filtered.length,
       gate,
@@ -296,6 +309,7 @@ export async function runReview(
       filtered,
       proposals,
       droppedUncited: parsed.droppedUncited,
+      droppedOutOfScope: parsed.droppedOutOfScope,
       adjustedLines: parsed.adjustedLines,
       redactions: redacted.counts,
       gate,
@@ -305,6 +319,7 @@ export async function runReview(
         ? { ensemble: { mode: config.ensemble.mode, members: ensembleMembers } }
         : {}),
       ...(toolCalls !== undefined ? { toolCalls } : {}),
+      ...(cachedResponse ? { cachedResponse: true as const } : {}),
       ...(config.calibration.enabled ? { calibration: { suppressed } } : {}),
     });
     if (config.output.report !== undefined) {
