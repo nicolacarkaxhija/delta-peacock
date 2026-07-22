@@ -67,6 +67,15 @@ export const EnsembleSchema = z.strictObject({
   judge: ModelRefSchema.optional(),
 });
 
+/** On-disk response reuse for re-triggered runs on unchanged changesets. */
+export const CacheSchema = z.strictObject({
+  enabled: z.boolean().default(false),
+  /** Entries older than this never serve; re-runs refresh them. */
+  ttlHours: z.number().positive().default(24),
+  /** Store for cached replies; defaults inside .delta-peacock-cache. */
+  path: z.string().min(1).optional(),
+});
+
 /** The optional noise-control pass between parsing and publishing. */
 export const CalibrationSchema = z.strictObject({
   /** Off by default: enabling adds exactly one priced model call per review. */
@@ -155,6 +164,7 @@ export const ConfigSchema = z
     context: ContextSchema.prefault({}),
     ensemble: EnsembleSchema.prefault({}),
     calibration: CalibrationSchema.prefault({}),
+    cache: CacheSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {

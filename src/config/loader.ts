@@ -38,6 +38,9 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_SCM_CODE_INSIGHTS: "scm.codeInsights",
   DELTA_PEACOCK_SCM_BASE_URL: "scm.baseUrl",
   DELTA_PEACOCK_SCM_DRY_RUN: "scm.dryRun",
+  DELTA_PEACOCK_CACHE_ENABLED: "cache.enabled",
+  DELTA_PEACOCK_CACHE_TTL_HOURS: "cache.ttlHours",
+  DELTA_PEACOCK_CACHE_PATH: "cache.path",
   DELTA_PEACOCK_CALIBRATION_ENABLED: "calibration.enabled",
   DELTA_PEACOCK_CALIBRATION_MODEL: "calibration.model",
   DELTA_PEACOCK_ENSEMBLE_ENABLED: "ensemble.enabled",
@@ -84,6 +87,7 @@ const NUMBER_PATHS = new Set([
   "cost.rateEmbedPer1M",
   "cost.maxPerReview",
   "cost.monthlyCap",
+  "cache.ttlHours",
 ]);
 const BOOLEAN_PATHS = new Set([
   "review.fetchTarget",
@@ -94,6 +98,7 @@ const BOOLEAN_PATHS = new Set([
   "scm.dryRun",
   "ensemble.enabled",
   "calibration.enabled",
+  "cache.enabled",
 ]);
 const JSON_PATHS = new Set([
   "redaction.patterns",
