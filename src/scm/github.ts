@@ -155,6 +155,12 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
           replies: repliesTo.get(comment.id) ?? [],
         }));
     },
+    async getPullRequestAuthor(): Promise<string> {
+      const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {
+        user?: { login?: string };
+      };
+      return meta.user?.login ?? "";
+    },
     async getPullRequestText(): Promise<PullRequestText> {
       const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {
         title: string;

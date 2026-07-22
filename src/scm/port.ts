@@ -66,6 +66,8 @@ export interface ScmPort {
   listCommentSignals?(): Promise<CommentSignal[]>;
   /** Publish a native report card with annotations; only some hosts have one. */
   publishInsights?(report: InsightReport): Promise<void>;
+  /** The PR author handle, for contributor stats; empty when the host hides it. */
+  getPullRequestAuthor?(): Promise<string>;
   /** The PR title and description, for commands that manage a section of them. */
   getPullRequestText?(): Promise<PullRequestText>;
   /** Update the description, and the title only when one is given. */

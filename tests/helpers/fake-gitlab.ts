@@ -102,6 +102,7 @@ export async function startFakeGitLab(): Promise<FakeGitLab> {
           sha: "headsha1234567",
           title: state.prText.title,
           description: state.prText.body,
+          author: { username: "gluser" },
           diff_refs: {
             base_sha: "basesha1234567",
             head_sha: "headsha1234567",

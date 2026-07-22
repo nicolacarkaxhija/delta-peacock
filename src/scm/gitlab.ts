@@ -140,6 +140,12 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
         description,
       });
     },
+    async getPullRequestAuthor(): Promise<string> {
+      const current = (await (await request("GET", mr)).json()) as {
+        author?: { username?: string };
+      };
+      return current.author?.username ?? "";
+    },
     async getPullRequestText(): Promise<PullRequestText> {
       const current = (await (await request("GET", mr)).json()) as {
         title: string;
