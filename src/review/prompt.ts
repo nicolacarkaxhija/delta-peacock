@@ -41,6 +41,12 @@ export function buildReviewPrompt(
     'Set "confidence" honestly; uncertain findings with low confidence are filtered, not punished.',
     'If nothing violates a guideline respond {"findings": []}.',
     ...(options.generalPass ? [GENERAL_PASS] : []),
+    // the stable prefix ends with the guidelines; volatile context comes after,
+    // so provider-side prompt caching keeps hitting while the corpus stands still
+    "",
+    "## Guidelines",
+    "",
+    ...guidelines.map(renderGuideline),
     ...(options.projectContext !== undefined && options.projectContext !== ""
       ? [
           "",
@@ -51,10 +57,6 @@ export function buildReviewPrompt(
           options.projectContext,
         ]
       : []),
-    "",
-    "## Guidelines",
-    "",
-    ...guidelines.map(renderGuideline),
   ].join("\n");
 
   const user = [

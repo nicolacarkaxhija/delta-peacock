@@ -20,6 +20,8 @@ export interface ReviewReport {
   filtered: ReportedFinding[];
   proposedGuidelines: ProposedGuideline[];
   droppedUncitedFindings: number;
+  /** Violations whose cited guideline declares a scope excluding the file. */
+  droppedOutOfScopeFindings: number;
   adjustedLines: number;
   /** Replacement counts per redaction pattern that fired. */
   redactions: Record<string, number>;
@@ -43,6 +45,8 @@ export interface ReviewReport {
   toolCalls?: number;
   /** Present when calibration ran; every suppression carries its reason. */
   calibration?: { suppressed: SuppressedFinding[] };
+  /** The review reply came from the response cache; no model was called. */
+  cachedResponse?: true;
 }
 
 export function buildReport(input: {
@@ -50,6 +54,7 @@ export function buildReport(input: {
   filtered: readonly Finding[];
   proposals: readonly ProposedGuideline[];
   droppedUncited: number;
+  droppedOutOfScope?: number;
   adjustedLines: number;
   redactions?: Record<string, number>;
   gate: GateDecision;
@@ -59,6 +64,7 @@ export function buildReport(input: {
   budget?: ReviewReport["budget"];
   toolCalls?: number;
   calibration?: ReviewReport["calibration"];
+  cachedResponse?: true;
   /** Findings the baseline accepted; they join findings flagged, never gate. */
   baselined?: readonly Finding[];
   /** Looks up the flagged line's text; absent entries simply carry none. */
@@ -84,6 +90,7 @@ export function buildReport(input: {
     filtered: input.filtered.map(withFingerprint),
     proposedGuidelines: [...input.proposals],
     droppedUncitedFindings: input.droppedUncited,
+    droppedOutOfScopeFindings: input.droppedOutOfScope ?? 0,
     adjustedLines: input.adjustedLines,
     redactions: input.redactions ?? {},
     gate: input.gate,
@@ -93,5 +100,6 @@ export function buildReport(input: {
     ...(input.budget ? { budget: input.budget } : {}),
     ...(input.toolCalls !== undefined ? { toolCalls: input.toolCalls } : {}),
     ...(input.calibration ? { calibration: input.calibration } : {}),
+    ...(input.cachedResponse ? { cachedResponse: input.cachedResponse } : {}),
   };
 }

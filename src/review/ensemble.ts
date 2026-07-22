@@ -124,6 +124,7 @@ export async function runEnsemble(
   const union: ParsedReview = {
     findings: dedupeFindings(parsedPerMember.flatMap((parsed) => parsed.findings)),
     droppedUncited: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedUncited, 0),
+    droppedOutOfScope: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedOutOfScope, 0),
     adjustedLines: parsedPerMember.reduce((sum, parsed) => sum + parsed.adjustedLines, 0),
   };
 
@@ -154,6 +155,7 @@ export async function runEnsemble(
       parsed: {
         findings: dedupeFindings(judged.findings),
         droppedUncited: union.droppedUncited + judged.droppedUncited,
+        droppedOutOfScope: union.droppedOutOfScope + judged.droppedOutOfScope,
         adjustedLines: union.adjustedLines + judged.adjustedLines,
       },
       usage,

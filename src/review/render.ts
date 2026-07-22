@@ -6,6 +6,7 @@ export interface RenderableReview {
   observations: readonly Finding[];
   proposals: readonly ProposedGuideline[];
   droppedUncited: number;
+  droppedOutOfScope?: number;
   adjustedLines: number;
   /** How many findings sit under the confidence floor, report-only. */
   filtered: number;
@@ -55,6 +56,11 @@ export function renderReview(review: RenderableReview): string {
   }
 
   const notices = [
+    ...((review.droppedOutOfScope ?? 0) > 0
+      ? [
+          `${String(review.droppedOutOfScope ?? 0)} finding(s) dropped: cited guideline out of scope for the file`,
+        ]
+      : []),
     ...(review.droppedUncited > 0
       ? [`${String(review.droppedUncited)} uncited finding(s) dropped`]
       : []),
