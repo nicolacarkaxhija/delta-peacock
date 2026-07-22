@@ -270,6 +270,21 @@ export function buildProgram(deps: CliDeps): Command {
       if (code !== 0) throw new ExitCodeError(code);
     });
 
+  guidelines
+    .command("import")
+    .description("convert a legacy guideline corpus to the delta-peacock format")
+    .requiredOption("--from <dir>", "directory holding legacy guideline markdown files")
+    .option("--out <dir>", "write converted files here; defaults to converting in place")
+    .action(async (options: { from: string; out?: string }) => {
+      const { runGuidelinesImport } = await import("./guidelines/import.js");
+      const code = runGuidelinesImport(deps, {
+        from: options.from,
+        ...(options.out !== undefined ? { out: options.out } : {}),
+      });
+      /* v8 ignore next -- import reports failures as thrown tool errors, not codes */
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
   const pack = guidelines.command("pack").description("guideline pack utilities");
   pack
     .command("init")
