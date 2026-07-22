@@ -127,6 +127,19 @@ export interface AcquiredDiff {
   skipped?: "too-large";
 }
 
+/** The index against HEAD: what a pre-commit hook is about to commit. */
+export function stagedDiff(
+  cwd: string,
+  request: Pick<DiffRequest, "include" | "exclude" | "maxDiffBytes">,
+): AcquiredDiff {
+  const raw = runGit(cwd, ["diff", "--cached"]);
+  const text = filterDiffByPath(raw, request.include, request.exclude);
+  if (Buffer.byteLength(text, "utf8") > request.maxDiffBytes) {
+    return { text: "", mode: "full", targetRef: "the index", notices: [], skipped: "too-large" };
+  }
+  return { text, mode: "full", targetRef: "the index", notices: [] };
+}
+
 /** New-file line numbers to their text, per file: what the review anchored on. */
 export function newLineTexts(diff: string): Map<string, Map<number, string>> {
   const result = new Map<string, Map<number, string>>();

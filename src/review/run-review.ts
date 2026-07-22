@@ -14,6 +14,7 @@ import {
   filterDiffByPath,
   newLineTexts,
   resolveTargetRef,
+  stagedDiff,
   type AcquiredDiff,
 } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
@@ -42,6 +43,8 @@ export type ReviewDeps = RuntimeDeps;
 export interface ReviewOptions {
   /** Accept every current finding into the baseline, then pass the gate. */
   writeBaseline?: boolean;
+  /** Review the index against HEAD, for pre-commit hooks. */
+  staged?: boolean;
 }
 
 export async function runReview(
@@ -51,16 +54,24 @@ export async function runReview(
 ): Promise<number> {
   const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
 
-  const resolvedTarget = resolveTargetRef(
-    deps.cwd,
-    config.review.target,
-    config.review.fetchTarget,
-  );
+  if (options.staged === true) {
+    // at commit time there is no target ref and no pull request to speak of
+    if (config.review.lastReviewedCommit !== undefined) {
+      throw new ToolError("--staged reviews the index; it cannot combine with lastReviewedCommit");
+    }
+    if (config.scm.provider !== "local") {
+      throw new ToolError("--staged is a pre-commit review; it needs no SCM configured");
+    }
+  }
+  const resolvedTarget =
+    options.staged === true
+      ? { ref: "HEAD", notices: [] }
+      : resolveTargetRef(deps.cwd, config.review.target, config.review.fetchTarget);
   for (const notice of resolvedTarget.notices) deps.err(`${notice}\n`);
 
   const loaded = resolveGuidelines(
     deps.cwd,
-    config.review.guidelinesRef,
+    options.staged === true ? "source" : config.review.guidelinesRef,
     config.review.guidelinesDir,
     resolvedTarget.ref,
     config.review.packs,
@@ -74,23 +85,31 @@ export async function runReview(
   }
 
   let acquired: AcquiredDiff;
-  try {
-    acquired = acquireDiff(
-      deps.cwd,
-      {
-        target: config.review.target,
-        fetchTarget: config.review.fetchTarget,
-        include: config.review.include,
-        exclude: config.review.exclude,
-        maxDiffBytes: config.review.maxDiffBytes,
-        ...(config.review.lastReviewedCommit !== undefined
-          ? { lastReviewedCommit: config.review.lastReviewedCommit }
-          : {}),
-      },
-      resolvedTarget,
-    );
-  } catch (error) {
-    acquired = await apiDiffFallback(deps, config, error);
+  if (options.staged === true) {
+    acquired = stagedDiff(deps.cwd, {
+      include: config.review.include,
+      exclude: config.review.exclude,
+      maxDiffBytes: config.review.maxDiffBytes,
+    });
+  } else {
+    try {
+      acquired = acquireDiff(
+        deps.cwd,
+        {
+          target: config.review.target,
+          fetchTarget: config.review.fetchTarget,
+          include: config.review.include,
+          exclude: config.review.exclude,
+          maxDiffBytes: config.review.maxDiffBytes,
+          ...(config.review.lastReviewedCommit !== undefined
+            ? { lastReviewedCommit: config.review.lastReviewedCommit }
+            : {}),
+        },
+        resolvedTarget,
+      );
+    } catch (error) {
+      acquired = await apiDiffFallback(deps, config, error);
+    }
   }
   for (const notice of acquired.notices) deps.err(`${notice}\n`);
   if (acquired.skipped === "too-large") {
