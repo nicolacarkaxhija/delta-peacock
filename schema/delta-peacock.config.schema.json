@@ -114,6 +114,11 @@
           "default": "delta-peacock.baseline.json",
           "type": "string",
           "minLength": 1
+        },
+        "language": {
+          "default": "en",
+          "type": "string",
+          "minLength": 2
         }
       },
       "additionalProperties": false

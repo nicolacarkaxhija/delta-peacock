@@ -35,6 +35,8 @@ export const ReviewSchema = z.strictObject({
   maxProposedGuidelines: z.number().int().min(0).default(3),
   /** Accepted legacy findings; entries inform but never gate. */
   baselinePath: z.string().min(1).default("delta-peacock.baseline.json"),
+  /** BCP 47 tag for finding prose; ids, severities and markers stay English. */
+  language: z.string().min(2).default("en"),
 });
 
 export const GateSchema = z.strictObject({
