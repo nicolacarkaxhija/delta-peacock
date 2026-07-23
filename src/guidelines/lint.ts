@@ -1,8 +1,13 @@
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
+import { approximateTokens } from "../context/port.js";
 import type { RuntimeDeps } from "../deps.js";
+import { renderGuideline } from "../review/prompt.js";
 import { isKnownLanguage } from "./languages.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "./loader.js";
+
+/** A single guideline past this many tokens strains the cacheable prefix. */
+const GUIDELINE_TOKEN_BUDGET = 1500;
 
 /**
  * Validates the guideline corpus in the working tree: the authoring loop's
@@ -27,6 +32,13 @@ export function runGuidelinesLint(
       if (!isKnownLanguage(language)) {
         problems.push(`${guideline.sourcePath}: unknown language "${language}"`);
       }
+    }
+    const tokens = approximateTokens(renderGuideline(guideline));
+    if (tokens > GUIDELINE_TOKEN_BUDGET) {
+      // guidelines are never chunked, so an oversized one bloats every prompt
+      deps.err(
+        `warning: ${guideline.sourcePath}: about ${String(tokens)} tokens, over the ${String(GUIDELINE_TOKEN_BUDGET)}-token budget; consider splitting it\n`,
+      );
     }
   }
 
