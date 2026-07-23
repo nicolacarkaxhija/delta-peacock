@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { ContextInput, ContextProvider } from "./port.js";
 
-const SIGNATURE_PATTERNS: Readonly<Record<string, RegExp>> = {
+export const SIGNATURE_PATTERNS: Readonly<Record<string, RegExp>> = {
   ".js": /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|const|let)\s+(\w+)/,
   ".ts":
     /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|const|let|interface|type|enum)\s+(\w+)/,
