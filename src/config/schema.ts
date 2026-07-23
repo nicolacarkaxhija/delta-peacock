@@ -69,6 +69,13 @@ export const EnsembleSchema = z.strictObject({
   judge: ModelRefSchema.optional(),
 });
 
+/** Opt-in per-contributor ledger; a coaching aid, disabled by default. */
+export const StatsSchema = z.strictObject({
+  enabled: z.boolean().default(false),
+  /** JSONL ledger location; one record appended per review. */
+  path: z.string().min(1).default("delta-peacock.stats.jsonl"),
+});
+
 /** On-disk response reuse for re-triggered runs on unchanged changesets. */
 export const CacheSchema = z.strictObject({
   enabled: z.boolean().default(false),
@@ -167,6 +174,7 @@ export const ConfigSchema = z
     ensemble: EnsembleSchema.prefault({}),
     calibration: CalibrationSchema.prefault({}),
     cache: CacheSchema.prefault({}),
+    stats: StatsSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {
