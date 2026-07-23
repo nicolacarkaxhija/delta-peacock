@@ -1,14 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runGit } from "../git/git.js";
+import { chunkSource } from "./chunk.js";
 import { cosine, type EmbeddingPort } from "./embedding.js";
 import type { ContextInput, ContextProvider } from "./port.js";
 
 const CACHE_DIR = ".delta-peacock-cache";
 const CACHE_FILE = "rag-index.json";
 const EMBED_CACHE_FILE = "rag-embeddings.json";
-const CHUNK_LINES = 40;
-const CHUNK_OVERLAP = 10;
 const TOP_CHUNKS = 8;
 const SKIP_DIRS = new Set([
   "node_modules",
@@ -64,19 +63,14 @@ function buildChunks(cwd: string): Chunk[] {
         if (statSync(full).size > MAX_FILE_BYTES) continue;
         const content = readFileSync(full, "utf8");
         if (content.includes("\u0000")) continue; // binary
-        const lines = content.split("\n");
         const relative = path.relative(cwd, full).replaceAll("\\", "/");
-        for (let start = 0; start < lines.length; start += CHUNK_LINES - CHUNK_OVERLAP) {
-          const slice = lines.slice(start, start + CHUNK_LINES);
-          const text = slice.join("\n");
-          if (text.trim() === "") continue;
+        for (const chunk of chunkSource(relative, content)) {
           chunks.push({
             file: relative,
-            startLine: start + 1,
-            text,
-            terms: termCounts(tokenize(text)),
+            startLine: chunk.startLine,
+            text: chunk.text,
+            terms: termCounts(tokenize(chunk.text)),
           });
-          if (start + CHUNK_LINES >= lines.length) break;
         }
       } catch {
         // unreadable files contribute nothing
