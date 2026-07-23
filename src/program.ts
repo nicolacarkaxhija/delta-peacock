@@ -288,6 +288,18 @@ export function buildProgram(deps: CliDeps): Command {
     });
 
   guidelines
+    .command("stats")
+    .description("per-guideline fire counts and stale-scope signals; zero model calls")
+    .option("--report <path>", "write the coverage as JSON")
+    .action(async (options: { report?: string }) => {
+      const { runGuidelineStats } = await import("./commands/guideline-stats.js");
+      const code = runGuidelineStats(deps, {
+        ...(options.report !== undefined ? { report: options.report } : {}),
+      });
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
+  guidelines
     .command("import")
     .description("convert a legacy guideline corpus to the delta-peacock format")
     .requiredOption("--from <dir>", "directory holding legacy guideline markdown files")
