@@ -204,6 +204,20 @@ export function buildProgram(deps: CliDeps): Command {
     });
 
   program
+    .command("stats")
+    .description("per-contributor findings, normalized per added line; a coaching aid")
+    .option("--report <path>", "write the aggregate as JSON")
+    .option("--backfill", "reconstruct a record from this pull request's marked comments")
+    .action(async (options: { report?: string; backfill?: boolean }) => {
+      const { runStats } = await import("./commands/stats.js");
+      const code = await runStats(deps, {
+        ...(options.report !== undefined ? { report: options.report } : {}),
+        backfill: options.backfill === true,
+      });
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
+  program
     .command("doctor")
     .description("validate the setup without reviewing anything")
     .action(async () => {

@@ -167,6 +167,24 @@ export function newLineTexts(diff: string): Map<string, Map<number, string>> {
   return result;
 }
 
+/** Added lines in a unified diff: the denominator contributor stats normalize by. */
+export function addedLineCount(diff: string): number {
+  let count = 0;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) count += 1;
+  }
+  return count;
+}
+
+/** The author handle recorded for a commit; empty when git cannot say. */
+export function commitAuthor(cwd: string, ref: string): string {
+  try {
+    return runGit(cwd, ["log", "-1", "--format=%an", ref]).trim();
+  } catch {
+    return "";
+  }
+}
+
 /** The b-side paths of every file chunk in a unified diff. */
 export function changedFilesFromDiff(diff: string): string[] {
   return diff

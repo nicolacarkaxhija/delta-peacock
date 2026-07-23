@@ -10,7 +10,9 @@ import { evaluateGate } from "../domain/gate.js";
 import { ToolError } from "../errors.js";
 import {
   acquireDiff,
+  addedLineCount,
   changedFilesFromDiff,
+  commitAuthor,
   filterDiffByPath,
   newLineTexts,
   resolveTargetRef,
@@ -38,6 +40,7 @@ import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { buildReport } from "./report.js";
+import { appendRecord, guidelineCounts, severityCounts } from "../stats/record.js";
 
 export type ReviewDeps = RuntimeDeps;
 
@@ -354,6 +357,17 @@ export async function runReview(
   if (usage && anyRateConfigured(config.cost)) {
     const spent = computeCost(usage, config.cost).total;
     recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+  }
+
+  if (config.stats.enabled) {
+    // the recorded findings are what survived to the gate, not what was baselined
+    appendRecord(deps.cwd, config.stats.path, {
+      at: now.toISOString(),
+      author: commitAuthor(deps.cwd, "HEAD"),
+      addedLines: addedLineCount(diff),
+      bySeverity: severityCounts(kept),
+      byGuideline: guidelineCounts(kept),
+    });
   }
 
   return gate.failed ? 2 : 0;

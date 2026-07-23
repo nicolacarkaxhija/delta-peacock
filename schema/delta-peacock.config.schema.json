@@ -496,6 +496,22 @@
         }
       },
       "additionalProperties": false
+    },
+    "stats": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "path": {
+          "default": "delta-peacock.stats.jsonl",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
