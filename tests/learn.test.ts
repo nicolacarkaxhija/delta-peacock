@@ -348,7 +348,7 @@ describe("learn cost and failure paths", () => {
 
 describe("draft rendering", () => {
   it("renders with and without a languages line", async () => {
-    const { renderDraft } = await import("../src/commands/learn.js");
+    const { renderDraft } = await import("../src/guidelines/draft.js");
     const base = {
       id: "x-rule",
       severity: "MINOR" as const,
