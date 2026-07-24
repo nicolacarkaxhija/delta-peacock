@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { RuntimeDeps } from "../deps.js";
 import type { Severity } from "../domain/severity.js";
+import { resolvePack } from "../guidelines/packs.js";
 
 /** Everything the guided walkthrough can decide; plain init runs on the defaults. */
 export interface WalkthroughAnswers {
@@ -241,6 +242,24 @@ export function writeScaffold(
 }
 
 /** First-ten-minutes scaffolding: config, an example guideline, a CI snippet. */
-export function runInit(deps: RuntimeDeps, options: { force: boolean }): number {
-  return writeScaffold(deps, planScaffold(DEFAULT_ANSWERS, ciSnippet(deps.env)), options.force);
+export function runInit(deps: RuntimeDeps, options: { force: boolean; starter?: string }): number {
+  if (options.starter === undefined) {
+    return writeScaffold(deps, planScaffold(DEFAULT_ANSWERS, ciSnippet(deps.env)), options.force);
+  }
+  // seed the corpus from a curated pack the human reviews before committing
+  const pack = resolvePack(deps.cwd, options.starter);
+  const seeded: PlannedFile[] = pack.files.map((file) => {
+    const base = path.basename(file.displayPath.split(":").at(-1) ?? "guideline.md");
+    return { relPath: `guidelines/${base}`, content: file.content };
+  });
+  deps.out(`starter pack ${pack.manifest.name}: seeding ${String(seeded.length)} guideline(s)\n`);
+  return writeScaffold(
+    deps,
+    [
+      { relPath: "delta-peacock.config.yaml", content: renderConfigYaml(DEFAULT_ANSWERS) },
+      ...seeded,
+      ciSnippet(deps.env),
+    ],
+    options.force,
+  );
 }
