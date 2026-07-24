@@ -47,6 +47,8 @@ export interface ReviewReport {
   calibration?: { suppressed: SuppressedFinding[] };
   /** The review reply came from the response cache; no model was called. */
   cachedResponse?: true;
+  /** The prompt exceeded the window; context was dropped or the diff batched. */
+  budgetDegraded?: true;
 }
 
 export function buildReport(input: {
@@ -65,6 +67,7 @@ export function buildReport(input: {
   toolCalls?: number;
   calibration?: ReviewReport["calibration"];
   cachedResponse?: true;
+  budgetDegraded?: true;
   /** Findings the baseline accepted; they join findings flagged, never gate. */
   baselined?: readonly Finding[];
   /** Looks up the flagged line's text; absent entries simply carry none. */
@@ -101,5 +104,6 @@ export function buildReport(input: {
     ...(input.toolCalls !== undefined ? { toolCalls: input.toolCalls } : {}),
     ...(input.calibration ? { calibration: input.calibration } : {}),
     ...(input.cachedResponse ? { cachedResponse: input.cachedResponse } : {}),
+    ...(input.budgetDegraded ? { budgetDegraded: input.budgetDegraded } : {}),
   };
 }
