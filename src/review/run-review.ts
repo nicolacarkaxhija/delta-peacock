@@ -30,9 +30,10 @@ import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
+import { planBudget, splitDiffByFile } from "./budget.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate, type SuppressedFinding } from "./calibrate.js";
-import { runEnsemble, type MemberOutcome } from "./ensemble.js";
+import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse } from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
@@ -159,12 +160,29 @@ export async function runReview(
   for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
   const contextTools = contextProvider.tools?.(contextInput);
 
-  const request = {
-    ...buildReviewPrompt(guidelines, redacted.text, {
+  const promptOf = (diffText: string, context: string) =>
+    buildReviewPrompt(guidelines, diffText, {
       generalPass: config.review.generalPass,
       language: config.review.language,
-      ...(projectContext !== "" ? { projectContext } : {}),
-    }),
+      ...(context !== "" ? { projectContext: context } : {}),
+    });
+  // one place weighs prefix + context + diff against the window and degrades
+  const plan = planBudget({
+    prefix: promptOf("", "").system,
+    context: projectContext,
+    diff: redacted.text,
+    windowTokens: config.review.windowTokens,
+  });
+  for (const notice of plan.notices) deps.err(`${notice}\n`);
+  const effectiveContext = plan.dropContext ? "" : projectContext;
+  const diffBatches =
+    plan.batchDiff && contextTools === undefined
+      ? splitDiffByFile(redacted.text, config.review.windowTokens)
+      : [redacted.text];
+  const budgetDegraded = plan.dropContext || plan.batchDiff;
+
+  const request = {
+    ...promptOf(redacted.text, effectiveContext),
     ...(contextTools !== undefined
       ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
       : {}),
@@ -230,20 +248,43 @@ export async function runReview(
 `);
       },
     );
-    let reply;
-    try {
-      reply = await modelPort.complete(request);
-    } catch (error) {
-      if (error instanceof ToolError) throw error;
-      throw new ToolError(`model call failed: ${(error as Error).message}`);
+    if (diffBatches.length > 1) {
+      deps.err(`budget: reviewing the diff in ${String(diffBatches.length)} batch(es)\n`);
     }
-    parsed = parseReviewResponse(reply.text, parseOptions);
-    usage = reply.usage;
-    if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
-      deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
-      toolCalls = reply.toolCalls;
+    const merged: Finding[] = [];
+    let batchDropped = 0;
+    let batchOutOfScope = 0;
+    let batchAdjusted = 0;
+    for (const batchDiff of diffBatches) {
+      const batchRequest =
+        diffBatches.length === 1 ? request : { ...promptOf(batchDiff, effectiveContext) };
+      let reply;
+      try {
+        reply = await modelPort.complete(batchRequest);
+      } catch (error) {
+        if (error instanceof ToolError) throw error;
+        throw new ToolError(`model call failed: ${(error as Error).message}`);
+      }
+      const batchParsed = parseReviewResponse(reply.text, parseOptions);
+      merged.push(...batchParsed.findings);
+      batchDropped += batchParsed.droppedUncited;
+      batchOutOfScope += batchParsed.droppedOutOfScope;
+      batchAdjusted += batchParsed.adjustedLines;
+      usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
+      if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
+        deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
+        toolCalls = (toolCalls ?? 0) + reply.toolCalls;
+      }
+      if (reply.cached === true) cachedResponse = true;
     }
-    if (reply.cached === true) cachedResponse = true;
+    parsed = {
+      // dedup only bridges batches; a single batch keeps same-base collisions
+      // for the publisher to suffix, exactly as before
+      findings: diffBatches.length > 1 ? dedupeFindings(merged) : merged,
+      droppedUncited: batchDropped,
+      droppedOutOfScope: batchOutOfScope,
+      adjustedLines: batchAdjusted,
+    };
   }
 
   const partitioned = partitionFindings(parsed.findings, config);
@@ -324,6 +365,7 @@ export async function runReview(
         : {}),
       ...(toolCalls !== undefined ? { toolCalls } : {}),
       ...(cachedResponse ? { cachedResponse: true as const } : {}),
+      ...(budgetDegraded ? { budgetDegraded: true as const } : {}),
       ...(config.calibration.enabled ? { calibration: { suppressed } } : {}),
     });
     if (config.output.report !== undefined) {
