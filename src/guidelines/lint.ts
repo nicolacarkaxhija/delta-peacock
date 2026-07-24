@@ -9,6 +9,10 @@ import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "./loader.js"
 /** A single guideline past this many tokens strains the cacheable prefix. */
 const GUIDELINE_TOKEN_BUDGET = 1500;
 
+/** Phrasing that a linter or formatter enforces better than a review can. */
+const MACHINE_CHECKABLE =
+  /\b(single quote|double quote|semicolon|indent|tab|trailing whitespace|line length|import order|sort (?:the )?imports|max(?:imum)? line)/i;
+
 /**
  * Validates the guideline corpus in the working tree: the authoring loop's
  * fast feedback, and the natural pre-commit hook for guideline repos.
@@ -38,6 +42,11 @@ export function runGuidelinesLint(
       // guidelines are never chunked, so an oversized one bloats every prompt
       deps.err(
         `warning: ${guideline.sourcePath}: about ${String(tokens)} tokens, over the ${String(GUIDELINE_TOKEN_BUDGET)}-token budget; consider splitting it\n`,
+      );
+    }
+    if (MACHINE_CHECKABLE.test(guideline.body)) {
+      deps.err(
+        `warning: ${guideline.sourcePath}: reads machine-checkable; a linter or formatter enforces this more cheaply than a review\n`,
       );
     }
   }
