@@ -8,6 +8,7 @@ import { SEVERITIES, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { buildModelPort } from "../model/build.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { renderDraft, type Draft } from "../guidelines/draft.js";
 import { parseJson } from "../review/parse.js";
 import { buildScmPort } from "../scm/build.js";
 import type { CommentSignal } from "../scm/port.js";
@@ -65,15 +66,6 @@ const SYSTEM = [
   "languages is optional; omit it for language-agnostic rules. An empty drafts array is a fine answer.",
 ].join("\n");
 
-interface Draft {
-  id: string;
-  severity: Severity;
-  title: string;
-  body: string;
-  rationale: string;
-  languages?: string[];
-}
-
 const DRAFT_ID = /^[a-z][a-z0-9-]*$/;
 
 function parseDrafts(text: string, notices: string[]): Draft[] {
@@ -114,27 +106,6 @@ function parseDrafts(text: string, notices: string[]): Draft[] {
     });
   }
   return drafts;
-}
-
-/** The draft file is a valid guideline the loader accepts unchanged. */
-export function renderDraft(draft: Draft): string {
-  return [
-    "---",
-    `id: ${draft.id}`,
-    `severity: ${draft.severity}`,
-    ...(draft.languages !== undefined && draft.languages.length > 0
-      ? [`languages: [${draft.languages.join(", ")}]`]
-      : []),
-    "---",
-    `# ${draft.title}`,
-    "",
-    draft.body,
-    "",
-    "## Rationale",
-    "",
-    draft.rationale,
-    "",
-  ].join("\n");
 }
 
 export interface LearnOptions {
