@@ -31,6 +31,7 @@ import { buildModelPortFor } from "../model/build.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { planBudget, splitDiffByFile } from "./budget.js";
+import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate, type SuppressedFinding } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
@@ -160,10 +161,13 @@ export async function runReview(
   for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
   const contextTools = contextProvider.tools?.(contextInput);
 
+  const linters = detectLinters(deps.cwd);
+  if (linters.length > 0) deps.err(`linters detected (not duplicated): ${linters.join(", ")}\n`);
   const promptOf = (diffText: string, context: string) =>
     buildReviewPrompt(guidelines, diffText, {
       generalPass: config.review.generalPass,
       language: config.review.language,
+      linterInstruction: linterInstruction(linters),
       ...(context !== "" ? { projectContext: context } : {}),
     });
   // one place weighs prefix + context + diff against the window and degrades
@@ -366,6 +370,7 @@ export async function runReview(
       ...(toolCalls !== undefined ? { toolCalls } : {}),
       ...(cachedResponse ? { cachedResponse: true as const } : {}),
       ...(budgetDegraded ? { budgetDegraded: true as const } : {}),
+      ...(linters.length > 0 ? { lintersDetected: linters } : {}),
       ...(config.calibration.enabled ? { calibration: { suppressed } } : {}),
     });
     if (config.output.report !== undefined) {

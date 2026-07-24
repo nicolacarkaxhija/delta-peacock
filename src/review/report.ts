@@ -49,6 +49,8 @@ export interface ReviewReport {
   cachedResponse?: true;
   /** The prompt exceeded the window; context was dropped or the diff batched. */
   budgetDegraded?: true;
+  /** Linters and formatters detected in the tree, whose rules the review skips. */
+  lintersDetected?: string[];
 }
 
 export function buildReport(input: {
@@ -68,6 +70,7 @@ export function buildReport(input: {
   calibration?: ReviewReport["calibration"];
   cachedResponse?: true;
   budgetDegraded?: true;
+  lintersDetected?: string[];
   /** Findings the baseline accepted; they join findings flagged, never gate. */
   baselined?: readonly Finding[];
   /** Looks up the flagged line's text; absent entries simply carry none. */
@@ -105,5 +108,6 @@ export function buildReport(input: {
     ...(input.calibration ? { calibration: input.calibration } : {}),
     ...(input.cachedResponse ? { cachedResponse: input.cachedResponse } : {}),
     ...(input.budgetDegraded ? { budgetDegraded: input.budgetDegraded } : {}),
+    ...(input.lintersDetected ? { lintersDetected: input.lintersDetected } : {}),
   };
 }

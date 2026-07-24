@@ -21,6 +21,7 @@ import { fingerprintOf } from "../domain/finding.js";
 import { buildReviewPrompt } from "../review/prompt.js";
 import { parseReviewResponse } from "../review/parse.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
+import { detectLinters, linterInstruction } from "../review/linters.js";
 import { renderReview } from "../review/render.js";
 import { buildReport } from "../review/report.js";
 
@@ -141,6 +142,7 @@ export async function runAudit(
   deps.err(`auditing ${String(files.length)} file(s) in ${String(batches.length)} batch(es)\n`);
 
   const patterns = compileCustomPatterns(config.redaction.patterns);
+  const linters = detectLinters(deps.cwd);
   const requests = batches.map((batch) => {
     const guidelines = loaded.guidelines.filter((guideline) => appliesTo(guideline, batch.files));
     const redacted = redactDiff(batch.diff, patterns);
@@ -150,6 +152,7 @@ export async function runAudit(
       request: buildReviewPrompt(guidelines, redacted.text, {
         generalPass: config.review.generalPass,
         language: config.review.language,
+        linterInstruction: linterInstruction(linters),
       }),
     };
   });

@@ -8,6 +8,8 @@ export interface PromptOptions {
   projectContext?: string;
   /** BCP 47 tag for finding prose; "en" adds nothing, keeping prompts unchanged. */
   language?: string;
+  /** Detected linters and formatters the review should not duplicate. */
+  linterInstruction?: string;
 }
 
 /** Shared by every command that shows the corpus, so the block stays byte-identical. */
@@ -43,6 +45,10 @@ export function buildReviewPrompt(
     'Set "confidence" honestly; uncertain findings with low confidence are filtered, not punished.',
     'If nothing violates a guideline respond {"findings": []}.',
     ...(options.generalPass ? [GENERAL_PASS] : []),
+    // stable prefix: changes only when a tool's config file appears or vanishes
+    ...(options.linterInstruction !== undefined && options.linterInstruction !== ""
+      ? [options.linterInstruction]
+      : []),
     // part of the stable prefix: the language changes once, then stands still
     ...(options.language !== undefined && options.language !== "en"
       ? [
