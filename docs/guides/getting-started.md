@@ -36,3 +36,7 @@ Exit codes: 0 clean or advisory, 1 tool error, 2 findings at or above the thresh
 ## Costs
 
 Set `cost` rates for your model and, optionally, caps: `maxPerReview` blocks a single expensive review before any model call; `monthlyCap` tracks cumulative spend through a local counter (or AWS Cost Explorer for Bedrock).
+
+## Starting from nothing
+
+With no guidelines yet, two paths seed the corpus without breaking the contract. `npx delta-peacock init --starter <pack>` copies a curated pack's guidelines into `guidelines/` for you to review before committing. `npx delta-peacock review --bootstrap` runs an observations-only review that never gates and posts nothing; its proposed guidelines accumulate as drafts under `guidelines-drafts/`, and you promote a draft by moving it into `guidelines/`. Without `--bootstrap`, an empty corpus keeps refusing to review, exactly as before.

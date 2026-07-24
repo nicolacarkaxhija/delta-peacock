@@ -42,6 +42,7 @@ import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { buildReport } from "./report.js";
+import { writeDrafts } from "../guidelines/draft.js";
 import { appendRecord, guidelineCounts, severityCounts } from "../stats/record.js";
 
 export type ReviewDeps = RuntimeDeps;
@@ -51,6 +52,13 @@ export interface ReviewOptions {
   writeBaseline?: boolean;
   /** Review the index against HEAD, for pre-commit hooks. */
   staged?: boolean;
+  /**
+   * Observations-only run for an empty corpus: never gates, never posts, and
+   * accumulates proposed guidelines as drafts a human promotes.
+   */
+  bootstrap?: boolean;
+  /** Where bootstrap drafts land; defaults to guidelines-drafts. */
+  draftsDir?: string;
 }
 
 export async function runReview(
@@ -75,16 +83,23 @@ export async function runReview(
       : resolveTargetRef(deps.cwd, config.review.target, config.review.fetchTarget);
   for (const notice of resolvedTarget.notices) deps.err(`${notice}\n`);
 
-  const loaded = resolveGuidelines(
-    deps.cwd,
-    options.staged === true ? "source" : config.review.guidelinesRef,
-    config.review.guidelinesDir,
-    resolvedTarget.ref,
-    config.review.packs,
-  );
+  let loaded;
+  try {
+    loaded = resolveGuidelines(
+      deps.cwd,
+      options.staged === true ? "source" : config.review.guidelinesRef,
+      config.review.guidelinesDir,
+      resolvedTarget.ref,
+      config.review.packs,
+    );
+  } catch (error) {
+    // bootstrapping a repo that has no guidelines directory yet is fine
+    if (options.bootstrap !== true || !(error instanceof ToolError)) throw error;
+    loaded = { guidelines: [], problems: [], notices: [], disabled: 0, origin: "none" };
+  }
   for (const notice of loaded.notices) deps.err(`${notice}\n`);
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);
-  if (loaded.guidelines.length === 0) {
+  if (loaded.guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no usable guidelines found; nothing to review against\n");
     await publishAllClear(deps, config);
     return 0;
@@ -136,7 +151,7 @@ export async function runReview(
   if (inapplicable > 0) {
     deps.err(`${String(inapplicable)} guideline(s) do not apply to this change\n`);
   }
-  if (guidelines.length === 0) {
+  if (guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no guidelines apply to this change; nothing to review against\n");
     await publishAllClear(deps, config);
     return 0;
@@ -344,6 +359,31 @@ export async function runReview(
       gate,
     }),
   );
+
+  if (options.bootstrap === true) {
+    const drafts = observations
+      .flatMap((observation) =>
+        observation.proposedGuideline !== undefined
+          ? [{ observation, proposal: observation.proposedGuideline }]
+          : [],
+      )
+      .map(({ observation, proposal }) => {
+        return {
+          id: proposal.id,
+          severity: proposal.severity,
+          title: observation.title,
+          body: observation.body,
+          rationale: proposal.rationale,
+        };
+      });
+    const written = writeDrafts(deps.cwd, options.draftsDir ?? "guidelines-drafts", drafts);
+    for (const file of written) deps.out(`draft written: ${file}\n`);
+    deps.out(
+      `bootstrap: ${String(observations.length)} observation(s), ${String(written.length)} guideline draft(s); a human promotes a draft by moving it into the guidelines directory\n`,
+    );
+    // bootstrap never posts and never gates; it only proposes
+    return 0;
+  }
 
   const wantsArtifacts =
     config.output.report !== undefined ||

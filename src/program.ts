@@ -43,6 +43,8 @@ interface ReviewCommandBooleans {
   dryRun?: boolean;
   writeBaseline?: boolean;
   staged?: boolean;
+  bootstrap?: boolean;
+  draftsDir?: string;
 }
 
 function reviewFlags(options: ReviewCommandOptions): Record<string, string> {
@@ -84,12 +86,21 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--dry-run", "suppress every outbound write, whatever is configured")
     .option("--write-baseline", "accept every current finding into the baseline file")
     .option("--staged", "review the index against HEAD, for pre-commit hooks")
+    .option("--bootstrap", "observations-only run for an empty corpus; writes guideline drafts")
+    .option("--drafts-dir <dir>", "where bootstrap drafts land; defaults to guidelines-drafts")
     .action(async (options: ReviewCommandOptions & ReviewCommandBooleans) => {
       const flags = reviewFlags(options);
       if (options.dryRun === true) flags["scm.dryRun"] = "true";
+      if (options.bootstrap === true) {
+        // bootstrap explores: general pass on, advisory gate, whatever the corpus
+        flags["review.generalPass"] = "true";
+        flags["gate.failOn"] = "none";
+      }
       const code = await runReview(deps, flags, {
         writeBaseline: options.writeBaseline === true,
         staged: options.staged === true,
+        bootstrap: options.bootstrap === true,
+        ...(options.draftsDir !== undefined ? { draftsDir: options.draftsDir } : {}),
       });
       if (code !== 0) throw new ExitCodeError(code);
     });
@@ -231,7 +242,8 @@ export function buildProgram(deps: CliDeps): Command {
     .description("scaffold config, an example guideline and a CI snippet")
     .option("--force", "overwrite files that already exist")
     .option("--walkthrough", "choose the configuration through guided questions")
-    .action(async (options: { force?: boolean; walkthrough?: boolean }) => {
+    .option("--starter <pack>", "seed the guidelines directory from a curated pack")
+    .action(async (options: { force?: boolean; walkthrough?: boolean; starter?: string }) => {
       if (options.walkthrough === true) {
         const { runInitWalkthrough } = await import("./commands/walkthrough.js");
         const code = await runInitWalkthrough(deps, { force: options.force === true });
@@ -239,7 +251,10 @@ export function buildProgram(deps: CliDeps): Command {
         return;
       }
       const { runInit } = await import("./commands/init.js");
-      runInit(deps, { force: options.force === true });
+      runInit(deps, {
+        force: options.force === true,
+        ...(options.starter !== undefined ? { starter: options.starter } : {}),
+      });
     });
 
   program
