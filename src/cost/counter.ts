@@ -31,7 +31,8 @@ export function readMonthSpend(counterPath: string, month: string): number {
 
 export function recordSpend(counterPath: string, month: string, amount: number): void {
   mkdirSync(path.dirname(counterPath), { recursive: true });
-  // read-modify-write under a best-effort lock so parallel runs never drop spend
+  // read-modify-write under a best-effort lock; under extreme contention a
+  // writer skips rather than clobber a concurrent total (see withLock)
   withLock(counterPath, () => {
     const all = readAll(counterPath);
     all[month] = (all[month] ?? 0) + amount;
