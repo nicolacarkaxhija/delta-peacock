@@ -11,6 +11,15 @@ export interface RenderableReview {
   droppedMalformed?: number;
   /** How many findings sit under the confidence floor, report-only. */
   filtered: number;
+  /** Violations excused by an in-code waiver: reported here, never gating. */
+  waived?: readonly {
+    guidelineId: string;
+    file: string;
+    line: number;
+    reason: string;
+    until?: string;
+    expired?: boolean;
+  }[];
   gate: GateDecision;
 }
 
@@ -53,6 +62,20 @@ export function renderReview(review: RenderableReview): string {
     sections.push("", "proposed guidelines:");
     for (const proposal of review.proposals) {
       sections.push(`  ${proposal.id} (${proposal.severity}): ${proposal.rationale}`);
+    }
+  }
+  if ((review.waived ?? []).length > 0) {
+    sections.push("", "waived (never gate):");
+    for (const entry of review.waived ?? []) {
+      const stamp =
+        entry.until === undefined
+          ? ""
+          : entry.expired === true
+            ? ` (expired ${entry.until})`
+            : ` (expires ${entry.until})`;
+      sections.push(
+        `  ${entry.guidelineId} @ ${entry.file}:${String(entry.line)} — ${entry.reason}${stamp}`,
+      );
     }
   }
 

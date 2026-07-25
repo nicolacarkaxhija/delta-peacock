@@ -293,6 +293,35 @@ describe("rendering and reporting edges", () => {
       cacheWriteTokens: 1,
     });
   });
+
+  it("renders each waived finding with its reason and expiry state", async () => {
+    const { renderReview } = await import("../src/review/render.js");
+    const text = renderReview({
+      violations: [],
+      observations: [],
+      proposals: [],
+      droppedUncited: 0,
+      adjustedLines: 0,
+      filtered: 0,
+      waived: [
+        { guidelineId: "a", file: "x.js", line: 1, reason: "no date" },
+        { guidelineId: "b", file: "y.js", line: 2, reason: "future", until: "2099-01-01" },
+        {
+          guidelineId: "c",
+          file: "z.js",
+          line: 3,
+          reason: "stale",
+          until: "2000-01-01",
+          expired: true,
+        },
+      ],
+      gate,
+    });
+    expect(text).toContain("waived (never gate):");
+    expect(text).toContain("a @ x.js:1 — no date");
+    expect(text).toContain("(expires 2099-01-01)");
+    expect(text).toContain("(expired 2000-01-01)");
+  });
 });
 
 describe("buildReviewPrompt", () => {
