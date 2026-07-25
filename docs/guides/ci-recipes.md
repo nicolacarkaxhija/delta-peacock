@@ -1,6 +1,6 @@
 # CI recipes
 
-Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. The Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` carries node and git; the npm package runs wherever node 20+ does.
+Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. Each tagged release publishes a Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` that carries node and git, plus an npm package that runs wherever node 20+ does; until the first release is cut, the composite action below builds from source instead.
 
 ## GitHub Action (one line)
 
