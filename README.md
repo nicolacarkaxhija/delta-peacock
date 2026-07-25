@@ -135,6 +135,7 @@ Credentials, tokens and API keys must come from the environment, never a literal
 | `describe`   | Generate the PR description from the change, idempotently.                                                                                      |
 | `ask`        | Question the changeset in the terminal, one-shot or a session.                                                                                  |
 | `fix`        | Apply report suggestions to the working tree or a patch file.                                                                                   |
+| `waive`      | Insert an in-code waiver for a finding: a person's deliberate, always-reported exception.                                                       |
 | `learn`      | Turn team reactions into proposed guideline drafts.                                                                                             |
 | `stats`      | Per-contributor findings, normalized per changed line. A coaching aid.                                                                          |
 | `guidelines` | `lint`, coverage `stats`, `pack` authoring, and legacy `import`.                                                                                |
