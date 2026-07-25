@@ -86,7 +86,7 @@ function formatMatrix(matrix: Record<string, Record<string, number>>): string {
 
 export async function runBenchCommand(
   deps: RuntimeDeps,
-  options: { cases: string; report?: string; contexts?: string[] },
+  options: { cases: string; report?: string; contexts?: string[]; minF1?: number },
   flags: Readonly<Record<string, string>>,
 ): Promise<number> {
   const cases = loadCases(path.resolve(deps.cwd, options.cases));
@@ -125,6 +125,18 @@ export async function runBenchCommand(
   deps.out(formatTable(outcome));
   if (options.report !== undefined) {
     writeFileSync(path.resolve(deps.cwd, options.report), `${JSON.stringify(outcome, null, 2)}\n`);
+  }
+  // a quality gate for CI: a live smoke run fails when the corpus regresses
+  if (
+    options.minF1 !== undefined &&
+    outcome.aggregate !== undefined &&
+    outcome.aggregate.f1 < options.minF1
+  ) {
+    const pct = (value: number): string => `${(value * 100).toFixed(0)}%`;
+    deps.err(
+      `bench: aggregate f1 ${pct(outcome.aggregate.f1)} is below the --min-f1 threshold ${pct(options.minF1)}\n`,
+    );
+    return 1;
   }
   return 0;
 }

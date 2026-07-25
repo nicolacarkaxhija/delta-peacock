@@ -217,6 +217,43 @@ describe("bench command discriminates context strategies", () => {
     expect(stdout).not.toContain("overlap matrix");
   });
 
+  it("passes the min-f1 gate when the corpus scores above the threshold", async () => {
+    let err = "";
+    const code = await runCli(
+      ["bench", "--cases", CASES_DIR, "--context", "repo_map", "--min-f1", "0.9"],
+      {
+        cwd: makeRepo(),
+        env: {},
+        out: () => undefined,
+        err: (text) => {
+          err += text;
+        },
+        modelPort: contextSensitiveModel,
+      },
+    );
+    expect(code).toBe(0);
+    expect(err).not.toContain("below the --min-f1");
+  });
+
+  it("fails the min-f1 gate when the corpus regresses", async () => {
+    const silent: ModelPort = { complete: () => Promise.resolve({ text: '{"findings": []}' }) };
+    let err = "";
+    const code = await runCli(
+      ["bench", "--cases", CASES_DIR, "--context", "none", "--min-f1", "0.5"],
+      {
+        cwd: makeRepo(),
+        env: {},
+        out: () => undefined,
+        err: (text) => {
+          err += text;
+        },
+        modelPort: silent,
+      },
+    );
+    expect(code).toBe(1);
+    expect(err).toContain("below the --min-f1 threshold");
+  });
+
   it("writes the outcome json when asked", async () => {
     const repo = makeRepo();
     const { readFileSync } = await import("node:fs");

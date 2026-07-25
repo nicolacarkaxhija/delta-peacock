@@ -267,8 +267,15 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--report <path>", "write the outcome as JSON")
     .option("--context <provider>", "context strategy to benchmark: none, repo_map, agentic, rag")
     .option("--contexts <list>", "comma-separated strategies to compare with an overlap matrix")
+    .option("--min-f1 <score>", "fail (exit 1) when aggregate f1 falls below this 0..1 threshold")
     .action(
-      async (options: { cases: string; report?: string; context?: string; contexts?: string }) => {
+      async (options: {
+        cases: string;
+        report?: string;
+        context?: string;
+        contexts?: string;
+        minF1?: string;
+      }) => {
         const { runBenchCommand, contextFlag } = await import("./commands/bench.js");
         const flags: Record<string, string> = {};
         if (options.context !== undefined) Object.assign(flags, contextFlag(options.context));
@@ -280,10 +287,10 @@ export function buildProgram(deps: CliDeps): Command {
             ...(options.contexts !== undefined
               ? { contexts: options.contexts.split(",").map((name) => name.trim()) }
               : {}),
+            ...(options.minF1 !== undefined ? { minF1: Number(options.minF1) } : {}),
           },
           flags,
         );
-        /* v8 ignore next -- the bench command reports through its outcome, not exit codes */
         if (code !== 0) throw new ExitCodeError(code);
       },
     );
