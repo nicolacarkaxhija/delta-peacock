@@ -22,7 +22,7 @@ import {
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
-import type { ModelUsage } from "../model/port.js";
+import type { ModelRequest, ModelUsage } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { checkBudget, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
@@ -36,7 +36,7 @@ import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate, type SuppressedFinding } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
-import { parseReviewResponse } from "./parse.js";
+import { parseReviewResponse, type ParsedReview, type ParseOptions } from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
 import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff } from "./redact.js";
@@ -247,69 +247,20 @@ export async function runReview(
     }
   }
 
-  let parsed;
-  let usage: ModelUsage | undefined;
-  let ensembleMembers: MemberOutcome[] | undefined;
-  let toolCalls: number | undefined;
-  let cachedResponse = false;
-  if (config.ensemble.enabled) {
-    const ensemble = await runEnsemble(deps, config, request, parseOptions);
-    for (const notice of ensemble.notices) deps.err(`${notice}\n`);
-    parsed = ensemble.parsed;
-    usage = ensemble.usage;
-    ensembleMembers = ensemble.members;
-  } else {
-    const modelPort = withResponseCache(
-      deps.modelPort ?? buildModelPort(config, deps.env),
-      config,
-      deps.cwd,
-      () => deps.clock?.() ?? new Date(),
-      (notice) => {
-        deps.err(`${notice}
-`);
-      },
-    );
-    if (diffBatches.length > 1) {
-      deps.err(`budget: reviewing the diff in ${String(diffBatches.length)} batch(es)\n`);
-    }
-    const merged: Finding[] = [];
-    let batchDropped = 0;
-    let batchOutOfScope = 0;
-    let batchAdjusted = 0;
-    let batchMalformed = 0;
-    for (const batchDiff of diffBatches) {
-      const batchRequest =
-        diffBatches.length === 1 ? request : { ...promptOf(batchDiff, effectiveContext) };
-      let reply;
-      try {
-        reply = await modelPort.complete(batchRequest);
-      } catch (error) {
-        if (error instanceof ToolError) throw error;
-        throw new ToolError(`model call failed: ${(error as Error).message}`);
-      }
-      const batchParsed = parseReviewResponse(reply.text, parseOptions);
-      merged.push(...batchParsed.findings);
-      batchDropped += batchParsed.droppedUncited;
-      batchOutOfScope += batchParsed.droppedOutOfScope;
-      batchAdjusted += batchParsed.adjustedLines;
-      batchMalformed += batchParsed.droppedMalformed;
-      usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
-      if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
-        deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
-        toolCalls = (toolCalls ?? 0) + reply.toolCalls;
-      }
-      if (reply.cached === true) cachedResponse = true;
-    }
-    parsed = {
-      // dedup only bridges batches; a single batch keeps same-base collisions
-      // for the publisher to suffix, exactly as before
-      findings: diffBatches.length > 1 ? dedupeFindings(merged) : merged,
-      droppedUncited: batchDropped,
-      droppedOutOfScope: batchOutOfScope,
-      adjustedLines: batchAdjusted,
-      droppedMalformed: batchMalformed,
-    };
-  }
+  const executed = await executeReview(
+    deps,
+    config,
+    request,
+    diffBatches,
+    effectiveContext,
+    parseOptions,
+    promptOf,
+  );
+  const parsed = executed.parsed;
+  let usage = executed.usage;
+  const ensembleMembers = executed.ensembleMembers;
+  const toolCalls = executed.toolCalls;
+  const cachedResponse = executed.cachedResponse;
 
   const partitioned = partitionFindings(parsed.findings, config);
   const filtered = partitioned.filtered;
@@ -465,6 +416,102 @@ export async function runReview(
   }
 
   return gate.failed ? 2 : 0;
+}
+
+interface ExecuteResult {
+  parsed: ParsedReview;
+  usage: ModelUsage | undefined;
+  ensembleMembers: MemberOutcome[] | undefined;
+  toolCalls: number | undefined;
+  cachedResponse: boolean;
+}
+
+/**
+ * The complete-and-parse stage: run the model (ensemble members, or a single
+ * pass over one or more diff batches) and fold every reply into one parsed
+ * result plus its usage, tool-call and cache metadata. Isolated so the batch
+ * fan-out lives in one named place rather than buried in the pipeline, which is
+ * where its cost-estimate mismatch once hid.
+ */
+async function executeReview(
+  deps: ReviewDeps,
+  config: Config,
+  request: ModelRequest,
+  diffBatches: readonly string[],
+  effectiveContext: string,
+  parseOptions: ParseOptions,
+  promptOf: (diffText: string, context: string) => ModelRequest,
+): Promise<ExecuteResult> {
+  if (config.ensemble.enabled) {
+    const ensemble = await runEnsemble(deps, config, request, parseOptions);
+    for (const notice of ensemble.notices) deps.err(`${notice}\n`);
+    return {
+      parsed: ensemble.parsed,
+      usage: ensemble.usage,
+      ensembleMembers: ensemble.members,
+      toolCalls: undefined,
+      cachedResponse: false,
+    };
+  }
+
+  const modelPort = withResponseCache(
+    deps.modelPort ?? buildModelPort(config, deps.env),
+    config,
+    deps.cwd,
+    () => deps.clock?.() ?? new Date(),
+    (notice) => {
+      deps.err(`${notice}\n`);
+    },
+  );
+  if (diffBatches.length > 1) {
+    deps.err(`budget: reviewing the diff in ${String(diffBatches.length)} batch(es)\n`);
+  }
+  const merged: Finding[] = [];
+  let usage: ModelUsage | undefined;
+  let toolCalls: number | undefined;
+  let cachedResponse = false;
+  let batchDropped = 0;
+  let batchOutOfScope = 0;
+  let batchAdjusted = 0;
+  let batchMalformed = 0;
+  for (const batchDiff of diffBatches) {
+    const batchRequest =
+      diffBatches.length === 1 ? request : { ...promptOf(batchDiff, effectiveContext) };
+    let reply;
+    try {
+      reply = await modelPort.complete(batchRequest);
+    } catch (error) {
+      if (error instanceof ToolError) throw error;
+      throw new ToolError(`model call failed: ${(error as Error).message}`);
+    }
+    const batchParsed = parseReviewResponse(reply.text, parseOptions);
+    merged.push(...batchParsed.findings);
+    batchDropped += batchParsed.droppedUncited;
+    batchOutOfScope += batchParsed.droppedOutOfScope;
+    batchAdjusted += batchParsed.adjustedLines;
+    batchMalformed += batchParsed.droppedMalformed;
+    usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
+    if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
+      deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
+      toolCalls = (toolCalls ?? 0) + reply.toolCalls;
+    }
+    if (reply.cached === true) cachedResponse = true;
+  }
+  return {
+    parsed: {
+      // dedup only bridges batches; a single batch keeps same-base collisions
+      // for the publisher to suffix, exactly as before
+      findings: diffBatches.length > 1 ? dedupeFindings(merged) : merged,
+      droppedUncited: batchDropped,
+      droppedOutOfScope: batchOutOfScope,
+      adjustedLines: batchAdjusted,
+      droppedMalformed: batchMalformed,
+    },
+    usage,
+    ensembleMembers: undefined,
+    toolCalls,
+    cachedResponse,
+  };
 }
 
 function partitionFindings(findings: readonly Finding[], config: Config) {
