@@ -237,6 +237,35 @@ describe("embedding retrieval", () => {
     expect(text).not.toContain("src/app.js:"); // changed files never retrieve themselves
   });
 
+  it("re-embeds only the changed file when the tree moves, reusing the rest", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/g.md", GUIDELINE);
+    write(repo, "src/a.js", "function alpha() {\n  return greet('a');\n}\n");
+    write(repo, "src/b.js", "function beta() {\n  return 'unrelated' + 2;\n}\n");
+    write(repo, "src/c.js", "function gamma() {\n  return 3;\n}\n");
+    commitAll(repo, "base");
+    const input = { cwd: repo, diff: "+greet('x')\n", changedFiles: [] as string[] };
+
+    const first = keywordPort();
+    await createRagEmbeddingsProvider({ port: first.port, embeddingKey: "k" }).systemContext(input);
+    const embeddedFirst = first.calls[0]?.length ?? 0; // all corpus chunks
+    expect(embeddedFirst).toBeGreaterThanOrEqual(3);
+
+    // change one file's content and re-commit: the tree key moves
+    write(repo, "src/b.js", "function beta() {\n  return 'changed body' + 99;\n}\n");
+    commitAll(repo, "touch b");
+
+    const second = keywordPort();
+    const provider = createRagEmbeddingsProvider({ port: second.port, embeddingKey: "k" });
+    await provider.systemContext(input);
+    // the corpus re-embed call carries only the changed chunk, not the whole tree
+    expect(second.calls[0]?.length).toBe(1);
+    expect(second.calls[0]?.[0]).toContain("changed body");
+    expect(provider.notices?.().some((n) => n.includes("reused") && n.includes("embedded 1"))).toBe(
+      true,
+    );
+  });
+
   it("reuses cached vectors and re-embeds only the query", async () => {
     const { repo, diff } = makeCrossFileRepo();
     const input = { cwd: repo, diff, changedFiles: ["src/app.js"] };
