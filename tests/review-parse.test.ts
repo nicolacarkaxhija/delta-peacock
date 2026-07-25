@@ -313,4 +313,15 @@ describe("buildReviewPrompt", () => {
     expect(request.system).toContain("proposedGuideline");
     expect(request.system).toContain("no listed guideline covers");
   });
+
+  it("tells the model that a redaction placeholder is not a defect", () => {
+    const request = buildReviewPrompt([guideline], "diff");
+    expect(request.system).toContain("[redacted:");
+    expect(request.system).toContain("valid opaque value");
+  });
+
+  it("tells the model to ground findings in the guideline's own words", () => {
+    const request = buildReviewPrompt([guideline], "diff");
+    expect(request.system).toContain("do not extend a rule by analogy");
+  });
 });
