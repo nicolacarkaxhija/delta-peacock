@@ -161,6 +161,8 @@ export const RedactionSchema = z.strictObject({
   patterns: z
     .array(z.strictObject({ name: z.string().min(1), pattern: z.string().min(1) }))
     .default([]),
+  /** Add the aggressive strict shapes (long values assigned to secret-named keys). */
+  strict: z.boolean().default(false),
 });
 
 export const ConfigSchema = z

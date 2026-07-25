@@ -217,7 +217,7 @@ cost:
 
 - **No telemetry, no phone home.** Nothing about your code or your review leaves the process except the model call you configured.
 - **Secrets never in config.** Credentials are read from the environment only, and the loader flags credential-shaped values that slip into config.
-- **Redaction before the model.** Secret and PII patterns are stripped from the diff before it is ever sent, with the counts recorded in the report.
+- **Best-effort redaction before the model.** Known secret and PII shapes are stripped from the diff before it is ever sent, with the counts recorded in the report, and a strict opt-in adds aggressive matching of secret-named assignments. Pattern matching is not exhaustive by nature, so when nothing at all may leave your network, point the reviewer at a local model instead of relying on redaction alone.
 - **The dry-run guarantee.** `--dry-run` is enforced before any adapter is built: no comment, status, or write of any kind is emitted, whatever is configured.
 - **Bring your own model.** Point it at a local endpoint and no code leaves your network at all.
 

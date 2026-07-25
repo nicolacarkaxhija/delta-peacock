@@ -100,7 +100,9 @@ export async function runAsk(
     deps.out("ask skipped: the diff exceeds the configured size ceiling\n");
     return 0;
   }
-  const redacted = redactDiff(acquired.text, compileCustomPatterns(config.redaction.patterns));
+  const redacted = redactDiff(acquired.text, compileCustomPatterns(config.redaction.patterns), {
+    strict: config.redaction.strict,
+  });
   const changedFiles = changedFilesFromDiff(redacted.text);
 
   // unlike a review, a question is still answerable without a corpus

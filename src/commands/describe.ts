@@ -99,7 +99,9 @@ export async function runDescribe(
     return 0;
   }
 
-  const redacted = redactDiff(acquired.text, compileCustomPatterns(config.redaction.patterns));
+  const redacted = redactDiff(acquired.text, compileCustomPatterns(config.redaction.patterns), {
+    strict: config.redaction.strict,
+  });
   const request = { system: SYSTEM, user: redacted.text };
 
   const now = deps.clock?.() ?? new Date();

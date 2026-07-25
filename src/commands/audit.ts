@@ -145,7 +145,7 @@ export async function runAudit(
   const linters = detectLinters(deps.cwd);
   const requests = batches.map((batch) => {
     const guidelines = loaded.guidelines.filter((guideline) => appliesTo(guideline, batch.files));
-    const redacted = redactDiff(batch.diff, patterns);
+    const redacted = redactDiff(batch.diff, patterns, { strict: config.redaction.strict });
     return {
       guidelines,
       redacted,
