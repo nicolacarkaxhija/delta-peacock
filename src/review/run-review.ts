@@ -43,7 +43,7 @@ import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
-import { buildReport } from "./report.js";
+import { buildReport, type WaivedFinding } from "./report.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import { appendRecord, guidelineCounts, severityCounts } from "../stats/record.js";
 
@@ -239,6 +239,15 @@ export async function runReview(
     if (waiver === undefined) kept.push(finding);
     else waived.push({ finding, waiver });
   }
+  const today = now.toISOString().slice(0, 10);
+  const waivedEntries: WaivedFinding[] = waived.map(({ finding, waiver }) => ({
+    guidelineId: finding.kind === "violation" ? finding.guidelineId : "",
+    file: finding.file,
+    line: finding.line,
+    reason: waiver.reason,
+    // until never moves the gate (ADR 0008); an expired one only reads as stale
+    ...(waiver.until !== undefined ? { until: waiver.until, expired: waiver.until < today } : {}),
+  }));
   const { violations, observations, proposals } = lanesOf(kept, config);
   // the gate judges what calibration let through and no waiver excused
   const gate = evaluateGate(kept, config.gate.failOn);
@@ -253,16 +262,7 @@ export async function runReview(
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       filtered: filtered.length,
-      waived: waived.map(({ finding, waiver }) => ({
-        guidelineId: finding.kind === "violation" ? finding.guidelineId : "",
-        file: finding.file,
-        line: finding.line,
-        reason: waiver.reason,
-        // until never moves the gate (ADR 0008); an expired one only reads as stale
-        ...(waiver.until !== undefined
-          ? { until: waiver.until, expired: waiver.until < now.toISOString().slice(0, 10) }
-          : {}),
-      })),
+      waived: waivedEntries,
       gate,
     }),
   );
@@ -302,6 +302,7 @@ export async function runReview(
       lineTextOf: (finding) => anchorTexts.get(finding.file)?.get(finding.line),
       findings: kept,
       baselined,
+      ...(waivedEntries.length > 0 ? { waived: waivedEntries } : {}),
       filtered,
       proposals,
       droppedUncited: parsed.droppedUncited,

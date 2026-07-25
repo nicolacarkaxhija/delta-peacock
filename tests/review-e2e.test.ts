@@ -138,10 +138,22 @@ describe("review end to end (local mode)", () => {
       "function greet(name) {\n  console.log(name); // delta-peacock:allow no-console — legacy shim\n  return name;\n}\n",
     );
     commitAll(repo, "add logging with a waiver");
-    const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "MAJOR");
+    const { code, stdout } = await review(
+      repo,
+      scriptedModel(CITED).port,
+      "--fail-on",
+      "MAJOR",
+      "--report",
+      "review.json",
+    );
     expect(code).toBe(0); // waived: the gate passes despite --fail-on MAJOR
     expect(stdout).toContain("waived");
     expect(stdout).toContain("legacy shim");
+
+    const report = JSON.parse(readFileSync(path.join(repo, "review.json"), "utf8")) as ReviewReport;
+    expect(report.findings).toHaveLength(0); // the sole finding was waived
+    expect(report.waived).toHaveLength(1);
+    expect(report.waived?.[0]).toMatchObject({ guidelineId: "no-console", reason: "legacy shim" });
   });
 
   it("keeps the gate suppressed for an expired waiver but flags it stale", async () => {
