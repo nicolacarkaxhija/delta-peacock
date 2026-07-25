@@ -45,6 +45,7 @@ interface ReviewCommandBooleans {
   staged?: boolean;
   bootstrap?: boolean;
   draftsDir?: string;
+  explainDrops?: boolean;
 }
 
 function reviewFlags(options: ReviewCommandOptions): Record<string, string> {
@@ -88,6 +89,7 @@ export function buildProgram(deps: CliDeps): Command {
     .option("--staged", "review the index against HEAD, for pre-commit hooks")
     .option("--bootstrap", "observations-only run for an empty corpus; writes guideline drafts")
     .option("--drafts-dir <dir>", "where bootstrap drafts land; defaults to guidelines-drafts")
+    .option("--explain-drops", "log the raw payload of each rejected candidate to stderr")
     .action(async (options: ReviewCommandOptions & ReviewCommandBooleans) => {
       const flags = reviewFlags(options);
       if (options.dryRun === true) flags["scm.dryRun"] = "true";
@@ -100,6 +102,7 @@ export function buildProgram(deps: CliDeps): Command {
         writeBaseline: options.writeBaseline === true,
         staged: options.staged === true,
         bootstrap: options.bootstrap === true,
+        explainDrops: options.explainDrops === true,
         ...(options.draftsDir !== undefined ? { draftsDir: options.draftsDir } : {}),
       });
       if (code !== 0) throw new ExitCodeError(code);

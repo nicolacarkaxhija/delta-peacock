@@ -37,7 +37,12 @@ import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate, type SuppressedFinding } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
-import { parseReviewResponse, type ParsedReview, type ParseOptions } from "./parse.js";
+import {
+  parseReviewResponse,
+  type ParsedReview,
+  type ParseOptions,
+  type RejectedCandidate,
+} from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
 import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
@@ -61,6 +66,8 @@ export interface ReviewOptions {
   bootstrap?: boolean;
   /** Where bootstrap drafts land; defaults to guidelines-drafts. */
   draftsDir?: string;
+  /** Log the raw payload of every rejected candidate to stderr. */
+  explainDrops?: boolean;
 }
 
 export async function runReview(
@@ -213,6 +220,11 @@ export async function runReview(
     promptOf,
   );
   const parsed = executed.parsed;
+  if (options.explainDrops === true) {
+    for (const entry of parsed.rejected) {
+      deps.err(`rejected (${entry.reason}): ${entry.raw}\n`);
+    }
+  }
   let usage = executed.usage;
   const ensembleMembers = executed.ensembleMembers;
   const toolCalls = executed.toolCalls;
@@ -518,6 +530,7 @@ async function executeReview(
   let batchOutOfScope = 0;
   let batchAdjusted = 0;
   let batchMalformed = 0;
+  const batchRejected: RejectedCandidate[] = [];
   for (const batchDiff of diffBatches) {
     const batchRequest =
       diffBatches.length === 1 ? request : { ...promptOf(batchDiff, effectiveContext) };
@@ -534,6 +547,7 @@ async function executeReview(
     batchOutOfScope += batchParsed.droppedOutOfScope;
     batchAdjusted += batchParsed.adjustedLines;
     batchMalformed += batchParsed.droppedMalformed;
+    batchRejected.push(...batchParsed.rejected);
     usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
     if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
       deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
@@ -550,6 +564,7 @@ async function executeReview(
       droppedOutOfScope: batchOutOfScope,
       adjustedLines: batchAdjusted,
       droppedMalformed: batchMalformed,
+      rejected: batchRejected,
     },
     usage,
     ensembleMembers: undefined,

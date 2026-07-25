@@ -120,6 +120,16 @@ describe("review end to end (local mode)", () => {
     expect(stdout).toContain("[no-console]");
   });
 
+  it("logs the payload of each rejected candidate under --explain-drops", async () => {
+    const repo = makeScenario();
+    const uncited = JSON.stringify({
+      findings: [{ guidelineId: "invented", file: "src/app.js", line: 2, title: "x", body: "y" }],
+    });
+    const { code, stderr } = await review(repo, scriptedModel(uncited).port, "--explain-drops");
+    expect(code).toBe(0);
+    expect(stderr).toContain("invented");
+  });
+
   it("fails the gate at exit 2 when a finding meets the threshold", async () => {
     const repo = makeScenario();
     const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "MAJOR");
