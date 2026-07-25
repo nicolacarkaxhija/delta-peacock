@@ -37,6 +37,15 @@ export interface ParseOptions {
   observationSeverityCap: Severity;
 }
 
+/** A raw model element the parser refused, kept for diagnostics (never a finding). */
+export interface RejectedCandidate {
+  reason: "malformed" | "uncited" | "out-of-scope";
+  /** The candidate's JSON, capped; the diff it came from was already redacted. */
+  raw: string;
+  /** The cited guideline id, when the candidate carried one. */
+  guidelineId?: string;
+}
+
 export interface ParsedReview {
   findings: Finding[];
   /** Findings the model reported without citing a known guideline, dropped. */
@@ -47,7 +56,12 @@ export interface ParsedReview {
   adjustedLines: number;
   /** Findings in a shape we could not read at all (or a truncated tail), dropped. */
   droppedMalformed: number;
+  /** The payloads behind the drop counts, for --explain-drops and the report. */
+  rejected: RejectedCandidate[];
 }
+
+const REJECTED_RAW_CAP = 500;
+const rawOf = (candidate: unknown): string => JSON.stringify(candidate).slice(0, REJECTED_RAW_CAP);
 
 /** Candidate JSON slices in order of confidence; the first that parses wins. */
 function jsonCandidates(text: string): string[] {
@@ -151,6 +165,7 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
     );
   }
   const findings: Finding[] = [];
+  const rejected: RejectedCandidate[] = [];
   let droppedUncited = 0;
   let droppedOutOfScope = 0;
   let adjustedLines = 0;
@@ -161,20 +176,24 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
     const raw = RawFinding.safeParse(candidate);
     if (!raw.success) {
       droppedMalformed += 1;
+      rejected.push({ reason: "malformed", raw: rawOf(candidate) });
       continue;
     }
+    const cited = raw.data.guidelineId !== undefined ? { guidelineId: raw.data.guidelineId } : {};
     const { line, adjusted } = normalizeLine(raw.data.line);
     if (adjusted) adjustedLines += 1;
     const finding = toFinding(raw.data, line, options);
     if (finding === "out-of-scope") {
       droppedOutOfScope += 1;
+      rejected.push({ reason: "out-of-scope", raw: rawOf(candidate), ...cited });
       continue;
     }
     if (finding === undefined) {
       droppedUncited += 1;
+      rejected.push({ reason: "uncited", raw: rawOf(candidate), ...cited });
       continue;
     }
     findings.push(finding);
   }
-  return { findings, droppedUncited, droppedOutOfScope, adjustedLines, droppedMalformed };
+  return { findings, droppedUncited, droppedOutOfScope, adjustedLines, droppedMalformed, rejected };
 }

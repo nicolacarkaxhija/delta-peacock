@@ -186,6 +186,20 @@ describe("parseReviewResponse", () => {
     expect(parsed.findings).toHaveLength(2);
     expect(parsed.findings.map((found) => found.line)).toEqual([2, 7]);
   });
+
+  it("captures the raw payload and reason of each rejected candidate", () => {
+    const parsed = parseReviewResponse(
+      response([
+        finding, // valid
+        { guidelineId: "no-console", line: 5 }, // malformed: no file
+        { ...finding, guidelineId: "invented-rule" }, // uncited
+      ]),
+      options(),
+    );
+    expect(parsed.rejected.map((entry) => entry.reason).sort()).toEqual(["malformed", "uncited"]);
+    const uncited = parsed.rejected.find((entry) => entry.reason === "uncited");
+    expect(uncited?.raw).toContain("invented-rule");
+  });
 });
 
 describe("rendering and reporting edges", () => {
