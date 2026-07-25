@@ -130,6 +130,17 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("invented");
   });
 
+  it("records rejected candidates in the JSON report", async () => {
+    const repo = makeScenario();
+    const uncited = JSON.stringify({
+      findings: [{ guidelineId: "invented", file: "src/app.js", line: 2, title: "x", body: "y" }],
+    });
+    await review(repo, scriptedModel(uncited).port, "--report", "review.json");
+    const report = JSON.parse(readFileSync(path.join(repo, "review.json"), "utf8")) as ReviewReport;
+    expect(report.rejectedCandidates?.[0]).toMatchObject({ reason: "uncited" });
+    expect(report.rejectedCandidates?.[0]?.raw).toContain("invented");
+  });
+
   it("fails the gate at exit 2 when a finding meets the threshold", async () => {
     const repo = makeScenario();
     const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "MAJOR");

@@ -315,6 +315,7 @@ export async function runReview(
       findings: kept,
       baselined,
       ...(waivedEntries.length > 0 ? { waived: waivedEntries } : {}),
+      ...(parsed.rejected.length > 0 ? { rejected: parsed.rejected } : {}),
       filtered,
       proposals,
       droppedUncited: parsed.droppedUncited,
