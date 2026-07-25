@@ -1,5 +1,8 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
+import type { RejectedCandidate } from "./parse.js";
 import type { SuppressedFinding } from "./calibrate.js";
+
+const REJECTED_CAP = 200;
 import type { GateDecision } from "../domain/gate.js";
 import type { ModelUsage } from "../model/port.js";
 import type { ComputedCost } from "../model/usage.js";
@@ -28,6 +31,8 @@ export interface ReviewReport {
   findings: ReportedFinding[];
   /** Violations excused by an in-code waiver: recorded, never gating. */
   waived?: WaivedFinding[];
+  /** Raw payloads the parser refused, next to the drop counts; capped. */
+  rejectedCandidates?: RejectedCandidate[];
   /** Findings under the confidence floor; kept for tuning, never rendered or posted. */
   filtered: ReportedFinding[];
   proposedGuidelines: ProposedGuideline[];
@@ -90,6 +95,8 @@ export function buildReport(input: {
   baselined?: readonly Finding[];
   /** Violations an in-code waiver excused; recorded separately, never gating. */
   waived?: readonly WaivedFinding[];
+  /** Payloads the parser refused; recorded (capped) next to the drop counts. */
+  rejected?: readonly RejectedCandidate[];
   /** Looks up the flagged line's text; absent entries simply carry none. */
   lineTextOf?: (finding: Finding) => string | undefined;
 }): ReviewReport {
@@ -112,6 +119,9 @@ export function buildReport(input: {
     ],
     filtered: input.filtered.map(withFingerprint),
     ...(input.waived && input.waived.length > 0 ? { waived: [...input.waived] } : {}),
+    ...(input.rejected && input.rejected.length > 0
+      ? { rejectedCandidates: input.rejected.slice(0, REJECTED_CAP) }
+      : {}),
     proposedGuidelines: [...input.proposals],
     droppedUncitedFindings: input.droppedUncited,
     droppedOutOfScopeFindings: input.droppedOutOfScope ?? 0,
