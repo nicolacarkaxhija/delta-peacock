@@ -112,7 +112,7 @@ Credentials, tokens and API keys must come from the environment, never a literal
 
 **Tamper resistance.** By default the corpus is read from the **merge target**, so a pull request cannot weaken the rules that judge it. Language and path scoping keep each rule to the files it governs, and a violation citing a guideline whose scope excludes the flagged file is dropped deterministically.
 
-**A gate, not a suggestion box.** Findings are compared against your `failOn` threshold. The exit code is the outcome: `0` clean or advisory, `1` a tool error, `2` a gate failure. Nothing is guessed.
+**A gate, not a suggestion box.** Findings are compared against your `failOn` threshold. The exit code is the outcome: `0` clean or advisory, `1` a tool error, `2` a gate failure. Everything downstream of the findings is deterministic: the threshold test, the report, the fingerprints, and the scope drops. The findings themselves come from a model, so they run at temperature zero and reuse the response cache on an unchanged changeset; a fresh review is as reproducible as the provider allows, and no more.
 
 **Auditable by construction.** Comments carry a stable fingerprint marker, so re-runs update or resolve rather than duplicate. The JSON report is a plain artifact you can diff, archive, or feed into other tools, and it also renders to SARIF, GitLab Code Quality, and Bitbucket Code Insights.
 
