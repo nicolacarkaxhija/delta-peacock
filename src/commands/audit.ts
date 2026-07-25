@@ -180,6 +180,7 @@ export async function runAudit(
   let droppedUncited = 0;
   let droppedOutOfScope = 0;
   let adjustedLines = 0;
+  let droppedMalformed = 0;
   const redactionCounts: Record<string, number> = {};
   for (const entry of requests) {
     let reply;
@@ -198,6 +199,7 @@ export async function runAudit(
     droppedUncited += parsed.droppedUncited;
     droppedOutOfScope += parsed.droppedOutOfScope;
     adjustedLines += parsed.adjustedLines;
+    droppedMalformed += parsed.droppedMalformed;
     for (const [name, count] of Object.entries(entry.redacted.counts)) {
       redactionCounts[name] = (redactionCounts[name] ?? 0) + count;
     }
@@ -242,6 +244,7 @@ export async function runAudit(
       droppedUncited,
       droppedOutOfScope,
       adjustedLines,
+      droppedMalformed,
       filtered: filtered.length,
       gate,
     }),
@@ -262,6 +265,7 @@ export async function runAudit(
       droppedUncited,
       droppedOutOfScope,
       adjustedLines,
+      droppedMalformed,
       redactions: redactionCounts,
       gate,
       ...(usage ? { usage } : {}),

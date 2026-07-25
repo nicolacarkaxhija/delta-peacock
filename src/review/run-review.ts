@@ -274,6 +274,7 @@ export async function runReview(
     let batchDropped = 0;
     let batchOutOfScope = 0;
     let batchAdjusted = 0;
+    let batchMalformed = 0;
     for (const batchDiff of diffBatches) {
       const batchRequest =
         diffBatches.length === 1 ? request : { ...promptOf(batchDiff, effectiveContext) };
@@ -289,6 +290,7 @@ export async function runReview(
       batchDropped += batchParsed.droppedUncited;
       batchOutOfScope += batchParsed.droppedOutOfScope;
       batchAdjusted += batchParsed.adjustedLines;
+      batchMalformed += batchParsed.droppedMalformed;
       usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
       if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
         deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
@@ -303,6 +305,7 @@ export async function runReview(
       droppedUncited: batchDropped,
       droppedOutOfScope: batchOutOfScope,
       adjustedLines: batchAdjusted,
+      droppedMalformed: batchMalformed,
     };
   }
 
@@ -355,6 +358,7 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
       adjustedLines: parsed.adjustedLines,
+      droppedMalformed: parsed.droppedMalformed,
       filtered: filtered.length,
       gate,
     }),
@@ -400,6 +404,7 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
       adjustedLines: parsed.adjustedLines,
+      droppedMalformed: parsed.droppedMalformed,
       redactions: redacted.counts,
       gate,
       ...(usage ? { usage } : {}),

@@ -167,6 +167,25 @@ describe("parseReviewResponse", () => {
     expect(parsed.findings).toEqual([]);
     expect(parsed.droppedUncited).toBe(0);
   });
+
+  it("keeps the valid findings when one element is malformed, counting the drop", () => {
+    const parsed = parseReviewResponse(
+      response([finding, { guidelineId: "no-console", line: 5 }, "not even an object"]),
+      options(),
+    );
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]).toMatchObject({ guidelineId: "no-console", line: 2 });
+    expect(parsed.droppedMalformed).toBe(2);
+  });
+
+  it("recovers the complete findings from a reply truncated mid-array", () => {
+    const truncated =
+      `{"findings":[${JSON.stringify(finding)},` +
+      `${JSON.stringify({ ...finding, line: 7 })},{"guidelineId":"no-con`;
+    const parsed = parseReviewResponse(truncated, options());
+    expect(parsed.findings).toHaveLength(2);
+    expect(parsed.findings.map((found) => found.line)).toEqual([2, 7]);
+  });
 });
 
 describe("rendering and reporting edges", () => {
@@ -237,6 +256,20 @@ describe("rendering and reporting edges", () => {
     });
     expect("usage" in report).toBe(false);
     expect(report.filtered).toEqual([]);
+  });
+
+  it("carries the malformed-finding count into the report", async () => {
+    const { buildReport } = await import("../src/review/report.js");
+    const report = buildReport({
+      findings: [],
+      filtered: [],
+      proposals: [],
+      droppedUncited: 0,
+      adjustedLines: 0,
+      droppedMalformed: 3,
+      gate,
+    });
+    expect(report.droppedMalformedFindings).toBe(3);
   });
 
   it("normalizes missing token counts to zero", async () => {

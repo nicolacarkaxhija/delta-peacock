@@ -23,6 +23,8 @@ export interface ReviewReport {
   /** Violations whose cited guideline declares a scope excluding the file. */
   droppedOutOfScopeFindings: number;
   adjustedLines: number;
+  /** Findings the model returned in an unreadable shape (or a truncated tail). */
+  droppedMalformedFindings: number;
   /** Replacement counts per redaction pattern that fired. */
   redactions: Record<string, number>;
   gate: GateDecision;
@@ -60,6 +62,7 @@ export function buildReport(input: {
   droppedUncited: number;
   droppedOutOfScope?: number;
   adjustedLines: number;
+  droppedMalformed?: number;
   redactions?: Record<string, number>;
   gate: GateDecision;
   usage?: ModelUsage;
@@ -98,6 +101,7 @@ export function buildReport(input: {
     droppedUncitedFindings: input.droppedUncited,
     droppedOutOfScopeFindings: input.droppedOutOfScope ?? 0,
     adjustedLines: input.adjustedLines,
+    droppedMalformedFindings: input.droppedMalformed ?? 0,
     redactions: input.redactions ?? {},
     gate: input.gate,
     ...(input.usage ? { usage: input.usage } : {}),
