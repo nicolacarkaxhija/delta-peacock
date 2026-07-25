@@ -1,0 +1,51 @@
+name: bench-smoke
+
+# A manual, secret-gated smoke run of the reviewer against a live model, so a
+# regression in prompt or parsing shows up as a real quality drop rather than a
+# green unit suite. Never runs on a pull request: it spends tokens and needs a
+# key, so it is dispatched by hand and gates on the aggregate score.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model id to review with"
+        default: "claude-sonnet-4-5"
+      min-f1:
+        description: "Fail below this aggregate f1 (0..1)"
+        default: "0.5"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Bench the golden cases against a live model
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DELTA_PEACOCK_MODEL_PROVIDER: anthropic
+          DELTA_PEACOCK_MODEL_ID: ${{ inputs.model }}
+        run: >
+          node dist/cli.js bench
+          --cases bench/cases
+          --context repo_map
+          --min-f1 ${{ inputs.min-f1 }}
+          --report bench-report.json
+
+      - name: Upload the score report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-report
+          path: bench-report.json
