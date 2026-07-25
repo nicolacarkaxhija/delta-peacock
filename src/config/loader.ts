@@ -32,6 +32,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",
   DELTA_PEACOCK_OUTPUT_CODE_QUALITY_PATH: "output.codeQualityPath",
   DELTA_PEACOCK_REDACTION_PATTERNS: "redaction.patterns",
+  DELTA_PEACOCK_REDACTION_STRICT: "redaction.strict",
   DELTA_PEACOCK_SCM_PROVIDER: "scm.provider",
   DELTA_PEACOCK_SCM_REPOSITORY: "scm.repository",
   DELTA_PEACOCK_SCM_PULL_REQUEST: "scm.pullRequest",
@@ -105,6 +106,7 @@ const BOOLEAN_PATHS = new Set([
   "calibration.enabled",
   "cache.enabled",
   "stats.enabled",
+  "redaction.strict",
 ]);
 const JSON_PATHS = new Set([
   "redaction.patterns",

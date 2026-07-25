@@ -13,6 +13,8 @@ describe("redactDiff", () => {
       secret: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N",
     },
     { name: "bearer-token", secret: "Bearer abcdefghijklmnopqrstuvwxyz123456" },
+    { name: "google-api-key", secret: "AIzaSyD1234567890abcdefghijklmnopqrstuv" },
+    { name: "stripe-key", secret: "sk_live_abcdEFGH1234567890xyzT" },
     { name: "email", secret: "test.user@example.com" },
   ])("redacts and counts $name", ({ name, secret }) => {
     const { text, counts } = redactDiff(`+const value = "${secret}";\n`);
@@ -48,6 +50,24 @@ describe("redactDiff", () => {
     const { text, counts } = redactDiff("+customer ACME-123456 registered\n", custom);
     expect(text).toContain("[redacted:acme-id]");
     expect(counts["acme-id"]).toBe(1);
+  });
+
+  it("redacts credentials inside a connection string, keeping scheme and host", () => {
+    const fakeCreds = "user:example-fake-pw-01";
+    const { text, counts } = redactDiff(`+DB=mongodb://${fakeCreds}@cluster.example.net/db\n`);
+    expect(text).toContain("mongodb://[redacted:basic-auth]@cluster.example.net/db");
+    expect(text).not.toContain(fakeCreds);
+    expect(counts["basic-auth"]).toBe(1);
+  });
+
+  it("adds strict assigned-secret matching only when strict is on", () => {
+    const diff = '+const password = "s3cr3t-v4lue-not-a-known-shape";\n';
+    const lenient = redactDiff(diff);
+    expect(lenient.text).toContain("s3cr3t-v4lue-not-a-known-shape");
+    expect(lenient.counts["assigned-secret"]).toBeUndefined();
+    const strict = redactDiff(diff, [], { strict: true });
+    expect(strict.text).not.toContain("s3cr3t-v4lue-not-a-known-shape");
+    expect(strict.counts["assigned-secret"]).toBe(1);
   });
 
   it("aborts on a custom pattern that does not compile", () => {

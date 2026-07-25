@@ -157,7 +157,9 @@ export async function runReview(
     return 0;
   }
 
-  const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns));
+  const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns), {
+    strict: config.redaction.strict,
+  });
   const redactionTotal = Object.values(redacted.counts).reduce((sum, n) => sum + n, 0);
   if (redactionTotal > 0) {
     deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted before the model call\n`);
