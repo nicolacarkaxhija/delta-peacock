@@ -137,6 +137,27 @@ describe("per-review cap", () => {
     expect(ensembled.estimated).toBeCloseTo(single.estimated * 4);
   });
 
+  it("blocks when the planned diff batches push the estimate over the per-review cap", async () => {
+    const repo = makeScenario();
+    const config = loadConfig({
+      root: repo,
+      env: {
+        DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+        DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+        DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.1",
+      },
+    });
+    const request = { system: "s", user: "u" };
+    // one call fits the cap; the same diff split into five batches does not, and
+    // the guard must see the five before any model call is made
+    const whole = await checkBudget(config, request, new Date(), { batches: 1 });
+    const batched = await checkBudget(config, request, new Date(), { batches: 5 });
+    expect(whole.allowed).toBe(true);
+    expect(batched.allowed).toBe(false);
+    expect(batched.estimated).toBeGreaterThan(whole.estimated);
+    expect(batched.reasons.join("\n")).toContain("maxPerReview");
+  });
+
   it("warns when caps are set without rates and lets the review proceed", async () => {
     const repo = makeScenario();
     let stderr = "";
@@ -226,9 +247,10 @@ describe("cost explorer source", () => {
         DELTA_PEACOCK_COST_SPEND_SOURCE: "aws-cost-explorer",
       },
     });
-    const decision = await checkBudget(config, { system: "s", user: "u" }, new Date(), () =>
-      Promise.resolve({ ResultsByTime: [{ Total: { UnblendedCost: { Amount: "12.34" } } }] }),
-    );
+    const decision = await checkBudget(config, { system: "s", user: "u" }, new Date(), {
+      costExplorerSend: () =>
+        Promise.resolve({ ResultsByTime: [{ Total: { UnblendedCost: { Amount: "12.34" } } }] }),
+    });
     expect(decision.allowed).toBe(false);
     expect(decision.monthToDate).toBeCloseTo(12.34);
   });
@@ -291,9 +313,9 @@ describe("cost explorer source", () => {
         DELTA_PEACOCK_COST_COUNTER_PATH: counter,
       },
     });
-    const decision = await checkBudget(config, { system: "s", user: "u" }, new Date(), () =>
-      Promise.reject(new Error("no credentials")),
-    );
+    const decision = await checkBudget(config, { system: "s", user: "u" }, new Date(), {
+      costExplorerSend: () => Promise.reject(new Error("no credentials")),
+    });
     expect(decision.allowed).toBe(true);
     expect(decision.notices.join("\n")).toContain("cost explorer unavailable");
     expect(decision.monthToDate).toBe(0); // fell back to the empty counter

@@ -30,28 +30,40 @@ export function modelCallCount(config: Config): number {
   return config.ensemble.members.length + (config.ensemble.mode === "judge" ? 1 : 0) + calibration;
 }
 
+export interface BudgetOptions {
+  /** Planned diff batches; each is its own call carrying the system prefix. */
+  batches?: number;
+  /** Injected for tests; production reads the real Cost Explorer. */
+  costExplorerSend?: CostExplorerSend;
+}
+
 export async function checkBudget(
   config: Config,
   request: ModelRequest,
   now: Date,
-  costExplorerSend?: CostExplorerSend,
+  options: BudgetOptions = {},
 ): Promise<BudgetDecision> {
   const notices: string[] = [];
   const reasons: string[] = [];
+  const batches = Math.max(1, options.batches ?? 1);
 
   if (!anyRateConfigured(config.cost)) {
     notices.push(
       "cost caps are set but no rates are configured; the estimate is zero and the caps cannot bite",
     );
   }
-  const perCall = computeCost(
+  // each batch is its own model call carrying the full system prefix; the diff
+  // is split across them, so its input is counted once while every batch pays
+  // for its own bounded output. Batches default to one, so a single-call review
+  // keeps exactly its former estimate.
+  const perStrategy = computeCost(
     {
-      inputTokens: approximateTokens(`${request.system}\n${request.user}`),
-      outputTokens: ESTIMATED_OUTPUT_TOKENS,
+      inputTokens: approximateTokens(request.system) * batches + approximateTokens(request.user),
+      outputTokens: ESTIMATED_OUTPUT_TOKENS * batches,
     },
     config.cost,
   ).total;
-  const estimated = perCall * modelCallCount(config);
+  const estimated = perStrategy * modelCallCount(config);
 
   if (config.cost.maxPerReview > 0 && estimated > config.cost.maxPerReview) {
     reasons.push(
@@ -64,7 +76,7 @@ export async function checkBudget(
     const counterPath = config.cost.counterPath ?? defaultCounterPath();
     if (config.cost.spendSource === "aws-cost-explorer") {
       try {
-        monthToDate = await costExplorerMonthToDate(now, costExplorerSend);
+        monthToDate = await costExplorerMonthToDate(now, options.costExplorerSend);
       } catch (error) {
         notices.push(
           `cost explorer unavailable (${(error as Error).message}); using the local counter`,

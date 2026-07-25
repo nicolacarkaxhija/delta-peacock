@@ -214,7 +214,7 @@ export async function runReview(
 
   const now = deps.clock?.() ?? new Date();
   if (guardActive(config)) {
-    const decision = await checkBudget(config, request, now);
+    const decision = await checkBudget(config, request, now, { batches: diffBatches.length });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
