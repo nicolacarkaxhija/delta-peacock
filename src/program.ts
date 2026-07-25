@@ -350,5 +350,15 @@ export function buildProgram(deps: CliDeps): Command {
       if (code !== 0) throw new ExitCodeError(code);
     });
 
+  pack
+    .command("lint")
+    .description("validate a pack's manifest and every guideline in it")
+    .requiredOption("--dir <dir>", "the pack directory to validate")
+    .action(async (options: { dir: string }) => {
+      const { runGuidelinesPackLint } = await import("./guidelines/pack-lint.js");
+      const code = runGuidelinesPackLint(deps, { dir: options.dir });
+      if (code !== 0) throw new ExitCodeError(code);
+    });
+
   return program;
 }

@@ -1,17 +1,8 @@
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
-import { approximateTokens } from "../context/port.js";
 import type { RuntimeDeps } from "../deps.js";
-import { renderGuideline } from "../review/prompt.js";
-import { isKnownLanguage } from "./languages.js";
+import { guidelineProblems, guidelineWarnings } from "./checks.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "./loader.js";
-
-/** A single guideline past this many tokens strains the cacheable prefix. */
-const GUIDELINE_TOKEN_BUDGET = 1500;
-
-/** Phrasing that a linter or formatter enforces better than a review can. */
-const MACHINE_CHECKABLE =
-  /\b(single quote|double quote|semicolon|indent|tab|trailing whitespace|line length|import order|sort (?:the )?imports|max(?:imum)? line)/i;
 
 /**
  * Validates the guideline corpus in the working tree: the authoring loop's
@@ -27,28 +18,8 @@ export function runGuidelinesLint(
 
   const problems = [...loaded.problems];
   for (const guideline of loaded.guidelines) {
-    if (guideline.body === "") {
-      problems.push(
-        `${guideline.sourcePath}: empty body; a guideline needs its expectations spelled out`,
-      );
-    }
-    for (const language of guideline.languages) {
-      if (!isKnownLanguage(language)) {
-        problems.push(`${guideline.sourcePath}: unknown language "${language}"`);
-      }
-    }
-    const tokens = approximateTokens(renderGuideline(guideline));
-    if (tokens > GUIDELINE_TOKEN_BUDGET) {
-      // guidelines are never chunked, so an oversized one bloats every prompt
-      deps.err(
-        `warning: ${guideline.sourcePath}: about ${String(tokens)} tokens, over the ${String(GUIDELINE_TOKEN_BUDGET)}-token budget; consider splitting it\n`,
-      );
-    }
-    if (MACHINE_CHECKABLE.test(guideline.body)) {
-      deps.err(
-        `warning: ${guideline.sourcePath}: reads machine-checkable; a linter or formatter enforces this more cheaply than a review\n`,
-      );
-    }
+    problems.push(...guidelineProblems(guideline));
+    for (const warning of guidelineWarnings(guideline)) deps.err(`warning: ${warning}\n`);
   }
 
   if (problems.length > 0) {
