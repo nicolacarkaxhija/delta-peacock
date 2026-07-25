@@ -1,0 +1,107 @@
+name: "delta-peacock"
+description: "Gate a pull request against your team's guidelines. Your rules, any model, one exit code."
+author: "delta-peacock"
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  command:
+    description: "Which command to run: review or audit."
+    default: "review"
+  fail-on:
+    description: "Gate threshold: BLOCKER, CRITICAL, MAJOR, MINOR, INFO, or none."
+    default: "none"
+  guidelines-dir:
+    description: "Directory holding guideline markdown files."
+    default: "guidelines"
+  report:
+    description: "Path for the JSON report artifact."
+    default: "delta-peacock-report.json"
+  sarif:
+    description: "Path for a SARIF 2.1.0 artifact; leave empty to skip."
+    default: ""
+  provider:
+    description: "Model provider: anthropic, bedrock, openrouter, or openai-compatible."
+    default: "anthropic"
+  model:
+    description: "Model id to review with."
+    default: ""
+  model-base-url:
+    description: "Base URL for an openai-compatible endpoint."
+    default: ""
+  api-key:
+    description: "Model provider API key. Routed to the right env var by provider."
+    default: ""
+  post:
+    description: "Post comments and a commit status to the pull request. When false, runs local-only."
+    default: "true"
+  extra-args:
+    description: "Additional flags passed through to the CLI verbatim."
+    default: ""
+  github-token:
+    description: "Token used to post to the pull request."
+    default: ${{ github.token }}
+  node-version:
+    description: "Node.js version used to run the reviewer."
+    default: "24"
+
+outputs:
+  report:
+    description: "Path to the JSON report that was written."
+    value: ${{ inputs.report }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Build delta-peacock
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        corepack enable
+        pnpm install --frozen-lockfile
+        pnpm build
+
+    - name: Review
+      shell: bash
+      env:
+        DELTA_PEACOCK_MODEL_PROVIDER: ${{ inputs.provider }}
+        DELTA_PEACOCK_MODEL_ID: ${{ inputs.model }}
+        DELTA_PEACOCK_MODEL_BASE_URL: ${{ inputs.model-base-url }}
+        DELTA_PEACOCK_REVIEW_GUIDELINES_DIR: ${{ inputs.guidelines-dir }}
+        DELTA_PEACOCK_GATE_FAIL_ON: ${{ inputs.fail-on }}
+        DELTA_PEACOCK_OUTPUT_REPORT: ${{ inputs.report }}
+        DELTA_PEACOCK_OUTPUT_SARIF_PATH: ${{ inputs.sarif }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        DP_POST: ${{ inputs.post }}
+        DP_PROVIDER: ${{ inputs.provider }}
+        DP_API_KEY: ${{ inputs.api-key }}
+        DP_COMMAND: ${{ inputs.command }}
+        DP_EXTRA: ${{ inputs.extra-args }}
+        DP_PR: ${{ github.event.pull_request.number }}
+        DP_BASE: ${{ github.base_ref }}
+      run: |
+        set -euo pipefail
+
+        # Route the model key to the provider's expected variable.
+        case "$DP_PROVIDER" in
+          anthropic)         export ANTHROPIC_API_KEY="$DP_API_KEY" ;;
+          openrouter)        export OPENROUTER_API_KEY="$DP_API_KEY" ;;
+          openai-compatible) export OPENAI_API_KEY="$DP_API_KEY" ;;
+          bedrock)           : ;;  # Bedrock reads AWS_* from the job environment
+        esac
+
+        # Auto-wire the pull request context when posting is on.
+        if [ "$DP_POST" = "true" ] && [ -n "$DP_PR" ]; then
+          export DELTA_PEACOCK_SCM_PROVIDER="github"
+          export DELTA_PEACOCK_SCM_REPOSITORY="${GITHUB_REPOSITORY}"
+          export DELTA_PEACOCK_SCM_PULL_REQUEST="$DP_PR"
+          export DELTA_PEACOCK_REVIEW_TARGET="$DP_BASE"
+        fi
+
+        node "${{ github.action_path }}/dist/cli.js" "$DP_COMMAND" $DP_EXTRA

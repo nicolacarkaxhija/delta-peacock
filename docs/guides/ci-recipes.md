@@ -2,7 +2,34 @@
 
 Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. The Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` carries node and git; the npm package runs wherever node 20+ does.
 
-## GitHub Actions
+## GitHub Action (one line)
+
+The repository ships a composite Action, so the whole recipe collapses to a single `uses:`. It builds the reviewer from source, auto-wires the pull request context, and routes your model key to the right provider variable.
+
+```yaml
+name: review
+on: pull_request
+jobs:
+  delta-peacock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: nicolacarkaxhija/delta-peacock@v1
+        with:
+          fail-on: MAJOR
+          provider: anthropic
+          model: claude-sonnet-4-5
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          sarif: findings.sarif # optional: upload to code scanning
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with: { sarif_file: findings.sarif }
+```
+
+Set `post: false` to run local-only (no comments, gate exit code only). Every input is documented in [`action.yml`](../../action.yml).
+
+## GitHub Actions (explicit)
 
 ```yaml
 name: review
