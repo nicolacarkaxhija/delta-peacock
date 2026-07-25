@@ -42,6 +42,7 @@ import { buildScmPort } from "../scm/build.js";
 import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
+import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
 import { buildReport } from "./report.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import { appendRecord, guidelineCounts, severityCounts } from "../stats/record.js";
@@ -226,12 +227,20 @@ export async function runReview(
     usage,
   );
   const filtered = finalized.filtered;
-  const kept = finalized.kept;
   const suppressed = finalized.suppressed;
   const baselined = finalized.baselined;
   usage = finalized.usage;
+  // an in-code waiver moves a violation out of the gate but not out of the report
+  const waivers = parseWaivers(newLineTexts(redacted.text)).waivers;
+  const waived: { finding: Finding; waiver: Waiver }[] = [];
+  const kept: Finding[] = [];
+  for (const finding of finalized.kept) {
+    const waiver = findWaiver(finding, waivers);
+    if (waiver === undefined) kept.push(finding);
+    else waived.push({ finding, waiver });
+  }
   const { violations, observations, proposals } = lanesOf(kept, config);
-  // the gate judges what calibration let through, never what it removed
+  // the gate judges what calibration let through and no waiver excused
   const gate = evaluateGate(kept, config.gate.failOn);
 
   deps.out(
@@ -244,6 +253,16 @@ export async function runReview(
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       filtered: filtered.length,
+      waived: waived.map(({ finding, waiver }) => ({
+        guidelineId: finding.kind === "violation" ? finding.guidelineId : "",
+        file: finding.file,
+        line: finding.line,
+        reason: waiver.reason,
+        // until never moves the gate (ADR 0008); an expired one only reads as stale
+        ...(waiver.until !== undefined
+          ? { until: waiver.until, expired: waiver.until < now.toISOString().slice(0, 10) }
+          : {}),
+      })),
       gate,
     }),
   );

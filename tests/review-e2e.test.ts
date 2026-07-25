@@ -127,6 +127,39 @@ describe("review end to end (local mode)", () => {
     expect(stdout).toContain("FAILED");
   });
 
+  it("waives a violation carrying a matching in-code waiver: reported, not gating", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "add guidelines");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(
+      repo,
+      "src/app.js",
+      "function greet(name) {\n  console.log(name); // delta-peacock:allow no-console — legacy shim\n  return name;\n}\n",
+    );
+    commitAll(repo, "add logging with a waiver");
+    const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "MAJOR");
+    expect(code).toBe(0); // waived: the gate passes despite --fail-on MAJOR
+    expect(stdout).toContain("waived");
+    expect(stdout).toContain("legacy shim");
+  });
+
+  it("keeps the gate suppressed for an expired waiver but flags it stale", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "add guidelines");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(
+      repo,
+      "src/app.js",
+      "function greet(name) {\n  console.log(name); // delta-peacock:allow no-console — shim until=2020-01-01\n  return name;\n}\n",
+    );
+    commitAll(repo, "add logging with an expired waiver");
+    const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "MAJOR");
+    expect(code).toBe(0); // an expired waiver still suppresses the gate (ADR 0008)
+    expect(stdout).toContain("expired");
+  });
+
   it("passes the gate when findings sit below the threshold", async () => {
     const repo = makeScenario();
     const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "CRITICAL");
