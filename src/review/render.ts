@@ -8,6 +8,7 @@ export interface RenderableReview {
   droppedUncited: number;
   droppedOutOfScope?: number;
   adjustedLines: number;
+  droppedMalformed?: number;
   /** How many findings sit under the confidence floor, report-only. */
   filtered: number;
   gate: GateDecision;
@@ -66,6 +67,9 @@ export function renderReview(review: RenderableReview): string {
       : []),
     ...(review.adjustedLines > 0
       ? [`${String(review.adjustedLines)} finding(s) had no usable line and were pinned to line 1`]
+      : []),
+    ...((review.droppedMalformed ?? 0) > 0
+      ? [`${String(review.droppedMalformed ?? 0)} malformed finding(s) dropped`]
       : []),
     ...(review.filtered > 0
       ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]

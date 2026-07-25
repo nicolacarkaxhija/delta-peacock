@@ -126,6 +126,7 @@ export async function runEnsemble(
     droppedUncited: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedUncited, 0),
     droppedOutOfScope: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedOutOfScope, 0),
     adjustedLines: parsedPerMember.reduce((sum, parsed) => sum + parsed.adjustedLines, 0),
+    droppedMalformed: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedMalformed, 0),
   };
 
   if (config.ensemble.mode === "union" || union.findings.length === 0) {
@@ -157,6 +158,7 @@ export async function runEnsemble(
         droppedUncited: union.droppedUncited + judged.droppedUncited,
         droppedOutOfScope: union.droppedOutOfScope + judged.droppedOutOfScope,
         adjustedLines: union.adjustedLines + judged.adjustedLines,
+        droppedMalformed: union.droppedMalformed + judged.droppedMalformed,
       },
       usage,
       members,

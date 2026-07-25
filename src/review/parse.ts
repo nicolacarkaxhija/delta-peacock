@@ -23,8 +23,10 @@ const RawFinding = z.object({
     .optional(),
 });
 
+// the envelope is read loosely so one off-shape element cannot fail the whole
+// array; each finding is validated on its own below
 const RawResponse = z.object({
-  findings: z.array(RawFinding).default([]),
+  findings: z.array(z.unknown()).default([]),
 });
 
 export interface ParseOptions {
@@ -43,6 +45,8 @@ export interface ParsedReview {
   droppedOutOfScope: number;
   /** Findings whose line number was missing or invalid and got pinned to 1. */
   adjustedLines: number;
+  /** Findings in a shape we could not read at all (or a truncated tail), dropped. */
+  droppedMalformed: number;
 }
 
 /** Candidate JSON slices in order of confidence; the first that parses wins. */
@@ -53,7 +57,14 @@ function jsonCandidates(text: string): string[] {
   if (fenced?.[1] !== undefined) candidates.push(fenced[1]);
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
-  if (start !== -1 && end > start) candidates.push(trimmed.slice(start, end + 1));
+  if (start !== -1 && end > start) {
+    const greedy = trimmed.slice(start, end + 1);
+    candidates.push(greedy);
+    // a reply truncated mid-array (a model that hit its output cap) leaves the
+    // findings array open; recover its complete elements by closing it. Only a
+    // guarded fallback: it is tried after the intact slices and skipped if wrong.
+    if (/"findings"\s*:\s*\[/.test(trimmed)) candidates.push(`${greedy}]}`);
+  }
   return candidates;
 }
 
@@ -143,10 +154,18 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
   let droppedUncited = 0;
   let droppedOutOfScope = 0;
   let adjustedLines = 0;
-  for (const raw of result.data.findings) {
-    const { line, adjusted } = normalizeLine(raw.line);
+  let droppedMalformed = 0;
+  for (const candidate of result.data.findings) {
+    // validate each finding alone: one off-shape element costs one finding, not
+    // the whole review, so a single stray field can never blank the gate
+    const raw = RawFinding.safeParse(candidate);
+    if (!raw.success) {
+      droppedMalformed += 1;
+      continue;
+    }
+    const { line, adjusted } = normalizeLine(raw.data.line);
     if (adjusted) adjustedLines += 1;
-    const finding = toFinding(raw, line, options);
+    const finding = toFinding(raw.data, line, options);
     if (finding === "out-of-scope") {
       droppedOutOfScope += 1;
       continue;
@@ -157,5 +176,5 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
     }
     findings.push(finding);
   }
-  return { findings, droppedUncited, droppedOutOfScope, adjustedLines };
+  return { findings, droppedUncited, droppedOutOfScope, adjustedLines, droppedMalformed };
 }
