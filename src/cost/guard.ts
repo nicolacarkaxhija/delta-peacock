@@ -1,12 +1,15 @@
 import type { Config } from "../config/schema.js";
 import { approximateTokens } from "../context/port.js";
-import type { ModelRequest } from "../model/port.js";
+import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelRequest } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { costExplorerMonthToDate, type CostExplorerSend } from "./cost-explorer.js";
 import { defaultCounterPath, monthKey, readMonthSpend } from "./counter.js";
 
-/** A conservative stand-in for the response we have not paid for yet. */
-export const ESTIMATED_OUTPUT_TOKENS = 4000;
+/**
+ * The response we have not paid for yet, priced at the reply's hard ceiling so
+ * the estimate is an upper bound rather than a guess (see the model port).
+ */
+export const ESTIMATED_OUTPUT_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS;
 
 export interface BudgetDecision {
   /** Whether the review may proceed. */

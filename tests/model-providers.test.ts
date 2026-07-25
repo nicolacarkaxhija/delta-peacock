@@ -98,6 +98,18 @@ describe("openai-compatible adapter contract", () => {
     await warm.complete({ system: "sys", user: "usr", temperature: 0.7 });
     expect(second.calls[0]?.body["temperature"]).toBe(0.7);
   });
+
+  it("bounds the reply with a default output token cap", async () => {
+    const { calls, fetch } = capturingFetch(canned);
+    const port = createOpenAiishPort({
+      apiKey: "test-key",
+      modelId: "test-model",
+      baseUrl: "https://example.test/v1",
+      fetch,
+    });
+    await port.complete({ system: "sys", user: "usr" });
+    expect(calls[0]?.body["max_tokens"]).toBe(4000);
+  });
 });
 
 describe("bedrock adapter contract", () => {

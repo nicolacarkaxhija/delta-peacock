@@ -1,5 +1,12 @@
 import type { ToolSet } from "ai";
 
+/**
+ * Default ceiling on a reply's length. The cost guard prices this same number
+ * as its output stand-in, so the pre-flight estimate is a real upper bound on
+ * output rather than a guess: cost, truncation risk and the estimate agree.
+ */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 4000;
+
 export interface ModelRequest {
   system: string;
   user: string;
@@ -9,6 +16,8 @@ export interface ModelRequest {
   maxToolRounds?: number;
   /** Sampling temperature; defaults to 0 so a fresh review is reproducible. */
   temperature?: number;
+  /** Ceiling on reply length; defaults to {@link DEFAULT_MAX_OUTPUT_TOKENS}. */
+  maxOutputTokens?: number;
 }
 
 export interface ModelUsage {

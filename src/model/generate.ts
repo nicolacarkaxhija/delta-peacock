@@ -1,5 +1,5 @@
 import { generateText, stepCountIs, type LanguageModel } from "ai";
-import type { ModelReply, ModelRequest } from "./port.js";
+import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelReply, type ModelRequest } from "./port.js";
 import { normalizeUsage } from "./usage.js";
 
 /**
@@ -17,6 +17,8 @@ export async function completeWith(
     // pinned low by default: two fresh reviews of one diff should agree, so the
     // gate outcome does not swing on sampling noise the caller never asked for
     temperature: request.temperature ?? 0,
+    // bound the reply so runaway output cannot outrun the cost estimate
+    maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     ...(request.tools
       ? { tools: request.tools, stopWhen: stepCountIs(request.maxToolRounds ?? 6) }
       : {}),
