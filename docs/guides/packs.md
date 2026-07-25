@@ -49,6 +49,25 @@ npx delta-peacock guidelines pack init --name sfcc
 
 This writes `packs/sfcc/pack.yaml` and copies the markdown files from `guidelines/` (override with `--dir`); `--out` picks a different destination and `--force` overwrites one that exists. Publish the resulting directory as a git repository or an npm package.
 
+Before you publish, validate it:
+
+```
+npx delta-peacock guidelines pack lint --dir packs/sfcc
+```
+
+`pack lint` checks the manifest (a name is required; a missing version or description is a warning, since the registry and pinned consumers rely on them) and runs the full guideline validation over every rule in the pack, including the token-budget and machine-checkable warnings. It exits non-zero on any problem, so it belongs in the pack repository's own CI.
+
+## Available packs
+
+The repository ships curated starter packs under [`packs/`](../../packs). Seed a new corpus from one with `init --starter`, or list them in `review.packs`:
+
+| Pack                                   | What it covers                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| [`security`](../../packs/security)     | Hard-coded secrets, dynamic-code execution, input validation, query parameterization. |
+| [`typescript`](../../packs/typescript) | Escaping the type system, exhaustive union switches, floating promises.               |
+
+These are a floor, not a policy: fork one, cut what does not fit, and keep the rest under your own id namespace. Community packs are welcome by pull request; add a row here and make sure `pack lint` passes.
+
 ## Migrating a legacy corpus
 
 Guideline sets written for the predecessor format (singular `language`, a `name` field instead of an H1 title) convert in one step:
