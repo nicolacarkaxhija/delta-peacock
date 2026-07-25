@@ -14,6 +14,9 @@ export async function completeWith(
     model,
     system: request.system,
     prompt: request.user,
+    // pinned low by default: two fresh reviews of one diff should agree, so the
+    // gate outcome does not swing on sampling noise the caller never asked for
+    temperature: request.temperature ?? 0,
     ...(request.tools
       ? { tools: request.tools, stopWhen: stepCountIs(request.maxToolRounds ?? 6) }
       : {}),

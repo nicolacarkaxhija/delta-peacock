@@ -7,6 +7,8 @@ export interface ModelRequest {
   tools?: ToolSet;
   /** Bound on tool rounds before the model must conclude. */
   maxToolRounds?: number;
+  /** Sampling temperature; defaults to 0 so a fresh review is reproducible. */
+  temperature?: number;
 }
 
 export interface ModelUsage {

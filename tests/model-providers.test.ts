@@ -76,6 +76,28 @@ describe("openai-compatible adapter contract", () => {
       cacheReadTokens: 30,
     });
   });
+
+  it("pins temperature to zero by default and honors an override", async () => {
+    const first = capturingFetch(canned);
+    const port = createOpenAiishPort({
+      apiKey: "test-key",
+      modelId: "test-model",
+      baseUrl: "https://example.test/v1",
+      fetch: first.fetch,
+    });
+    await port.complete({ system: "sys", user: "usr" });
+    expect(first.calls[0]?.body["temperature"]).toBe(0);
+
+    const second = capturingFetch(canned);
+    const warm = createOpenAiishPort({
+      apiKey: "test-key",
+      modelId: "test-model",
+      baseUrl: "https://example.test/v1",
+      fetch: second.fetch,
+    });
+    await warm.complete({ system: "sys", user: "usr", temperature: 0.7 });
+    expect(second.calls[0]?.body["temperature"]).toBe(0.7);
+  });
 });
 
 describe("bedrock adapter contract", () => {
