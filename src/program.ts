@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { Command } from "commander";
 import { loadConfig } from "./config/loader.js";
 import type { RuntimeDeps } from "./deps.js";
-import { ExitCodeError } from "./errors.js";
+import { ExitCodeError, ToolError } from "./errors.js";
 import { runGuidelinesLint } from "./guidelines/lint.js";
 import { runReview } from "./review/run-review.js";
 
@@ -196,6 +196,38 @@ export function buildProgram(deps: CliDeps): Command {
       );
       if (code !== 0) throw new ExitCodeError(code);
     });
+
+  program
+    .command("waive")
+    .description("insert an in-code waiver for a finding: a person's deliberate exception")
+    .argument("<guideline-id>", "the guideline id to stop gating on")
+    .argument("<location>", "file:line where the finding sits")
+    .requiredOption("--reason <text>", "why this finding is acceptable here")
+    .option("--until <date>", "YYYY-MM-DD after which the waiver reads as stale; it never gates")
+    .action(
+      async (
+        guidelineId: string,
+        location: string,
+        options: { reason: string; until?: string },
+      ) => {
+        const { runWaive } = await import("./commands/waive.js");
+        const at = location.lastIndexOf(":");
+        const line = at === -1 ? Number.NaN : Number(location.slice(at + 1));
+        if (at === -1 || !Number.isInteger(line) || line < 1) {
+          throw new ToolError(
+            `location must be file:line, for example src/app.js:12 (got "${location}")`,
+          );
+        }
+        const code = runWaive(deps, {
+          guidelineId,
+          file: location.slice(0, at),
+          line,
+          reason: options.reason,
+          ...(options.until !== undefined ? { until: options.until } : {}),
+        });
+        if (code !== 0) throw new ExitCodeError(code);
+      },
+    );
 
   program
     .command("learn")
