@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { runGit } from "../git/git.js";
 import { chunkSource } from "./chunk.js";
 import { cosine, type EmbeddingPort } from "./embedding.js";
@@ -125,6 +126,12 @@ interface EmbedIndex {
   chunks: EmbeddedChunk[];
 }
 
+/** A small, stable key for a chunk's content, so reuse never holds full text. */
+function contentKey(chunk: { file: string; text: string }): string {
+  // file paths hold no newline, so it is a collision-free separator
+  return createHash("sha1").update(`${chunk.file}\n${chunk.text}`).digest("hex");
+}
+
 export function isEmbeddedChunk(value: unknown): value is EmbeddedChunk {
   if (typeof value !== "object" || value === null) return false;
   const chunk = value as Record<string, unknown>;
@@ -158,6 +165,8 @@ export function createRagEmbeddingsProvider(options: RagEmbeddingsOptions): Cont
       const treeKey = treeKeyOf(input.cwd);
       const cacheUsable = treeKey !== "no-tree";
       let index: EmbedIndex | undefined;
+      // vectors from a previous run, reusable by content even when the tree moved
+      let reusable: EmbeddedChunk[] = [];
       if (cacheUsable && existsSync(cachePath)) {
         try {
           const parsed = JSON.parse(readFileSync(cachePath, "utf8")) as {
@@ -168,17 +177,20 @@ export function createRagEmbeddingsProvider(options: RagEmbeddingsOptions): Cont
           };
           if (
             parsed.version === 1 &&
-            parsed.treeKey === treeKey &&
             parsed.embeddingKey === options.embeddingKey &&
             Array.isArray(parsed.chunks) &&
             parsed.chunks.every(isEmbeddedChunk)
           ) {
-            index = {
-              version: 1,
-              treeKey,
-              embeddingKey: options.embeddingKey,
-              chunks: parsed.chunks,
-            };
+            if (parsed.treeKey === treeKey) {
+              index = {
+                version: 1,
+                treeKey,
+                embeddingKey: options.embeddingKey,
+                chunks: parsed.chunks,
+              };
+            } else {
+              reusable = parsed.chunks;
+            }
           }
         } catch {
           notices.push("rag embeddings cache was unreadable; rebuilding it");
@@ -186,14 +198,32 @@ export function createRagEmbeddingsProvider(options: RagEmbeddingsOptions): Cont
       }
       if (index === undefined) {
         const chunks = buildChunks(input.cwd);
-        let vectors: number[][];
-        try {
-          vectors = (await options.port.embed(chunks.map((chunk) => chunk.text))).vectors;
-        } catch (error) {
+        // reuse a cached vector whenever a chunk's content is byte-identical, so
+        // a one-file change in a large tree re-embeds one file, not the repo
+        const reuseByContent = new Map(reusable.map((chunk) => [contentKey(chunk), chunk.vector]));
+        const embedded: (number[] | undefined)[] = chunks.map((chunk) =>
+          reuseByContent.get(contentKey(chunk)),
+        );
+        const missIndexes = embedded.flatMap((vector, at) => (vector === undefined ? [at] : []));
+        if (missIndexes.length > 0) {
+          let fresh: number[][];
+          try {
+            fresh = (await options.port.embed(missIndexes.map((at) => chunks[at]?.text ?? "")))
+              .vectors;
+          } catch (error) {
+            notices.push(
+              `embeddings unavailable (${(error as Error).message}); continuing without retrieval`,
+            );
+            return "";
+          }
+          missIndexes.forEach((at, k) => {
+            embedded[at] = fresh[k] ?? [];
+          });
+        }
+        if (reusable.length > 0) {
           notices.push(
-            `embeddings unavailable (${(error as Error).message}); continuing without retrieval`,
+            `rag index: reused ${String(chunks.length - missIndexes.length)} vector(s), embedded ${String(missIndexes.length)} changed`,
           );
-          return "";
         }
         index = {
           version: 1,
@@ -203,7 +233,7 @@ export function createRagEmbeddingsProvider(options: RagEmbeddingsOptions): Cont
             file: chunk.file,
             startLine: chunk.startLine,
             text: chunk.text,
-            vector: vectors[at] ?? [],
+            vector: embedded[at] ?? [],
           })),
         };
         if (cacheUsable) {
