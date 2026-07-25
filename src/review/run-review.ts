@@ -6,6 +6,7 @@ import { buildContextProvider } from "../context/build.js";
 import { capToTokenBudget } from "../context/port.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Finding } from "../domain/finding.js";
+import type { Guideline } from "../domain/guideline.js";
 import { evaluateGate } from "../domain/gate.js";
 import { ToolError } from "../errors.js";
 import {
@@ -39,7 +40,7 @@ import { buildReviewPrompt } from "./prompt.js";
 import { parseReviewResponse, type ParsedReview, type ParseOptions } from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
 import { publishReview } from "../scm/publish.js";
-import { compileCustomPatterns, redactDiff } from "./redact.js";
+import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { buildReport } from "./report.js";
 import { writeDrafts } from "../guidelines/draft.js";
@@ -157,62 +158,16 @@ export async function runReview(
     return 0;
   }
 
-  const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns), {
-    strict: config.redaction.strict,
-  });
-  const redactionTotal = Object.values(redacted.counts).reduce((sum, n) => sum + n, 0);
-  if (redactionTotal > 0) {
-    deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted before the model call\n`);
-  }
-
-  const contextProvider = buildContextProvider(config, {
-    env: deps.env,
-    ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
-    ...(deps.clock ? { clock: deps.clock } : {}),
-  });
-  const contextInput = { cwd: deps.cwd, diff: redacted.text, changedFiles };
-  const projectContext = capToTokenBudget(
-    await contextProvider.systemContext(contextInput),
-    config.context.maxTokens,
-  );
-  for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
-  const contextTools = contextProvider.tools?.(contextInput);
-
-  const linters = detectLinters(deps.cwd);
-  if (linters.length > 0) deps.err(`linters detected (not duplicated): ${linters.join(", ")}\n`);
-  const promptOf = (diffText: string, context: string) =>
-    buildReviewPrompt(guidelines, diffText, {
-      generalPass: config.review.generalPass,
-      language: config.review.language,
-      linterInstruction: linterInstruction(linters),
-      ...(context !== "" ? { projectContext: context } : {}),
-    });
-  // one place weighs prefix + context + diff against the window and degrades
-  const plan = planBudget({
-    prefix: promptOf("", "").system,
-    context: projectContext,
-    diff: redacted.text,
-    windowTokens: config.review.windowTokens,
-  });
-  for (const notice of plan.notices) deps.err(`${notice}\n`);
-  const effectiveContext = plan.dropContext ? "" : projectContext;
-  const diffBatches =
-    plan.batchDiff && contextTools === undefined
-      ? splitDiffByFile(redacted.text, config.review.windowTokens)
-      : [redacted.text];
-  const budgetDegraded = plan.dropContext || plan.batchDiff;
-
-  const request = {
-    ...promptOf(redacted.text, effectiveContext),
-    ...(contextTools !== undefined
-      ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
-      : {}),
-  };
-  const parseOptions = {
-    guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),
-    generalPass: config.review.generalPass,
-    observationSeverityCap: config.review.observationSeverityCap,
-  };
+  const {
+    redacted,
+    request,
+    diffBatches,
+    effectiveContext,
+    parseOptions,
+    promptOf,
+    budgetDegraded,
+    linters,
+  } = await assembleReview(deps, config, diff, guidelines, changedFiles);
 
   const now = deps.clock?.() ?? new Date();
   if (guardActive(config)) {
@@ -262,43 +217,19 @@ export async function runReview(
   const toolCalls = executed.toolCalls;
   const cachedResponse = executed.cachedResponse;
 
-  const partitioned = partitionFindings(parsed.findings, config);
-  const filtered = partitioned.filtered;
-  let kept = partitioned.kept;
-  let suppressed: SuppressedFinding[] = [];
-  if (config.calibration.enabled) {
-    const ref = config.calibration.model;
-    const calibrationPort = ref
-      ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.env))
-      : (deps.modelPort ?? buildModelPort(config, deps.env));
-    const outcome = await calibrate(calibrationPort, kept, redacted.text);
-    for (const notice of outcome.notices) deps.err(`${notice}\n`);
-    kept = outcome.findings;
-    suppressed = outcome.suppressed;
-    if (outcome.usage) usage = usage ? addUsage(usage, outcome.usage) : outcome.usage;
-    if (suppressed.length > 0) {
-      deps.err(`calibration suppressed ${String(suppressed.length)} finding(s)\n`);
-    }
-  }
-  if (options.writeBaseline === true) {
-    const accepted = writeBaseline(deps.cwd, config.review.baselinePath, kept);
-    deps.out(
-      `baseline written: ${String(accepted)} finding(s) accepted into ${config.review.baselinePath}\n`,
-    );
-  }
-  // a broken baseline fails loudly, or it would silently un-accept everything
-  const baseline = loadBaseline(deps.cwd, config.review.baselinePath);
-  let baselined: Finding[] = [];
-  if (baseline.size > 0) {
-    const split = splitByBaseline(kept, baseline);
-    kept = split.fresh;
-    baselined = split.baselined;
-    if (baselined.length > 0) {
-      deps.err(
-        `${String(baselined.length)} baselined finding(s) inform the report but never gate\n`,
-      );
-    }
-  }
+  const finalized = await finalizeFindings(
+    deps,
+    config,
+    options,
+    parsed.findings,
+    redacted.text,
+    usage,
+  );
+  const filtered = finalized.filtered;
+  const kept = finalized.kept;
+  const suppressed = finalized.suppressed;
+  const baselined = finalized.baselined;
+  usage = finalized.usage;
   const { violations, observations, proposals } = lanesOf(kept, config);
   // the gate judges what calibration let through, never what it removed
   const gate = evaluateGate(kept, config.gate.failOn);
@@ -418,6 +349,99 @@ export async function runReview(
   return gate.failed ? 2 : 0;
 }
 
+interface AssembledReview {
+  redacted: RedactedDiff;
+  request: ModelRequest;
+  diffBatches: string[];
+  effectiveContext: string;
+  parseOptions: ParseOptions;
+  promptOf: (diffText: string, context: string) => ModelRequest;
+  budgetDegraded: boolean;
+  linters: string[];
+}
+
+/**
+ * The assemble stage: redact the diff, gather cross-file context, detect
+ * linters, and weigh the prompt against the window, degrading (drop context,
+ * then batch the diff) so what leaves here already fits. Everything the rest of
+ * the pipeline needs to call the model and build the report comes back in one
+ * struct; the notices are emitted as they happen.
+ */
+async function assembleReview(
+  deps: ReviewDeps,
+  config: Config,
+  diff: string,
+  guidelines: readonly Guideline[],
+  changedFiles: readonly string[],
+): Promise<AssembledReview> {
+  const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns), {
+    strict: config.redaction.strict,
+  });
+  const redactionTotal = Object.values(redacted.counts).reduce((sum, n) => sum + n, 0);
+  if (redactionTotal > 0) {
+    deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted before the model call\n`);
+  }
+
+  const contextProvider = buildContextProvider(config, {
+    env: deps.env,
+    ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
+    ...(deps.clock ? { clock: deps.clock } : {}),
+  });
+  const contextInput = { cwd: deps.cwd, diff: redacted.text, changedFiles: [...changedFiles] };
+  const projectContext = capToTokenBudget(
+    await contextProvider.systemContext(contextInput),
+    config.context.maxTokens,
+  );
+  for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
+  const contextTools = contextProvider.tools?.(contextInput);
+
+  const linters = detectLinters(deps.cwd);
+  if (linters.length > 0) deps.err(`linters detected (not duplicated): ${linters.join(", ")}\n`);
+  const promptOf = (diffText: string, context: string): ModelRequest =>
+    buildReviewPrompt(guidelines, diffText, {
+      generalPass: config.review.generalPass,
+      language: config.review.language,
+      linterInstruction: linterInstruction(linters),
+      ...(context !== "" ? { projectContext: context } : {}),
+    });
+  // one place weighs prefix + context + diff against the window and degrades
+  const plan = planBudget({
+    prefix: promptOf("", "").system,
+    context: projectContext,
+    diff: redacted.text,
+    windowTokens: config.review.windowTokens,
+  });
+  for (const notice of plan.notices) deps.err(`${notice}\n`);
+  const effectiveContext = plan.dropContext ? "" : projectContext;
+  const diffBatches =
+    plan.batchDiff && contextTools === undefined
+      ? splitDiffByFile(redacted.text, config.review.windowTokens)
+      : [redacted.text];
+  const budgetDegraded = plan.dropContext || plan.batchDiff;
+
+  const request = {
+    ...promptOf(redacted.text, effectiveContext),
+    ...(contextTools !== undefined
+      ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
+      : {}),
+  };
+  const parseOptions = {
+    guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),
+    generalPass: config.review.generalPass,
+    observationSeverityCap: config.review.observationSeverityCap,
+  };
+  return {
+    redacted,
+    request,
+    diffBatches,
+    effectiveContext,
+    parseOptions,
+    promptOf,
+    budgetDegraded,
+    linters,
+  };
+}
+
 interface ExecuteResult {
   parsed: ParsedReview;
   usage: ModelUsage | undefined;
@@ -512,6 +536,69 @@ async function executeReview(
     toolCalls,
     cachedResponse,
   };
+}
+
+interface FinalizedFindings {
+  kept: Finding[];
+  filtered: Finding[];
+  suppressed: SuppressedFinding[];
+  baselined: Finding[];
+  usage: ModelUsage | undefined;
+}
+
+/**
+ * The finalize stage: drop findings under the confidence floor, run the
+ * optional calibration pass (which can suppress and adds its own usage), and
+ * split off baselined findings that inform the report but never gate. Returns
+ * the lanes the gate and report read, plus usage grown by any calibration call.
+ */
+async function finalizeFindings(
+  deps: ReviewDeps,
+  config: Config,
+  options: ReviewOptions,
+  findings: readonly Finding[],
+  diffText: string,
+  usageIn: ModelUsage | undefined,
+): Promise<FinalizedFindings> {
+  const partitioned = partitionFindings(findings, config);
+  const filtered = partitioned.filtered;
+  let kept = partitioned.kept;
+  let usage = usageIn;
+  let suppressed: SuppressedFinding[] = [];
+  if (config.calibration.enabled) {
+    const ref = config.calibration.model;
+    const calibrationPort = ref
+      ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.env))
+      : (deps.modelPort ?? buildModelPort(config, deps.env));
+    const outcome = await calibrate(calibrationPort, kept, diffText);
+    for (const notice of outcome.notices) deps.err(`${notice}\n`);
+    kept = outcome.findings;
+    suppressed = outcome.suppressed;
+    if (outcome.usage) usage = usage ? addUsage(usage, outcome.usage) : outcome.usage;
+    if (suppressed.length > 0) {
+      deps.err(`calibration suppressed ${String(suppressed.length)} finding(s)\n`);
+    }
+  }
+  if (options.writeBaseline === true) {
+    const accepted = writeBaseline(deps.cwd, config.review.baselinePath, kept);
+    deps.out(
+      `baseline written: ${String(accepted)} finding(s) accepted into ${config.review.baselinePath}\n`,
+    );
+  }
+  // a broken baseline fails loudly, or it would silently un-accept everything
+  const baseline = loadBaseline(deps.cwd, config.review.baselinePath);
+  let baselined: Finding[] = [];
+  if (baseline.size > 0) {
+    const split = splitByBaseline(kept, baseline);
+    kept = split.fresh;
+    baselined = split.baselined;
+    if (baselined.length > 0) {
+      deps.err(
+        `${String(baselined.length)} baselined finding(s) inform the report but never gate\n`,
+      );
+    }
+  }
+  return { kept, filtered, suppressed, baselined, usage };
 }
 
 function partitionFindings(findings: readonly Finding[], config: Config) {
