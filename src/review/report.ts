@@ -12,10 +12,22 @@ export type ReportedFinding = Finding & {
   baselined?: true;
 };
 
+/** A violation an in-code waiver excused: recorded here, never gating (ADR 0008). */
+export interface WaivedFinding {
+  guidelineId: string;
+  file: string;
+  line: number;
+  reason: string;
+  until?: string;
+  expired?: boolean;
+}
+
 export interface ReviewReport {
   version: 1;
   /** Rendered findings: violations and observations at or above the confidence floor. */
   findings: ReportedFinding[];
+  /** Violations excused by an in-code waiver: recorded, never gating. */
+  waived?: WaivedFinding[];
   /** Findings under the confidence floor; kept for tuning, never rendered or posted. */
   filtered: ReportedFinding[];
   proposedGuidelines: ProposedGuideline[];
@@ -76,6 +88,8 @@ export function buildReport(input: {
   lintersDetected?: string[];
   /** Findings the baseline accepted; they join findings flagged, never gate. */
   baselined?: readonly Finding[];
+  /** Violations an in-code waiver excused; recorded separately, never gating. */
+  waived?: readonly WaivedFinding[];
   /** Looks up the flagged line's text; absent entries simply carry none. */
   lineTextOf?: (finding: Finding) => string | undefined;
 }): ReviewReport {
@@ -97,6 +111,7 @@ export function buildReport(input: {
       })),
     ],
     filtered: input.filtered.map(withFingerprint),
+    ...(input.waived && input.waived.length > 0 ? { waived: [...input.waived] } : {}),
     proposedGuidelines: [...input.proposals],
     droppedUncitedFindings: input.droppedUncited,
     droppedOutOfScopeFindings: input.droppedOutOfScope ?? 0,
