@@ -22,6 +22,14 @@ Most AI reviewers answer one question: _what does a model think of this diff?_ d
 
 It reviews pull requests against guidelines your team keeps as markdown in its own repository. Every finding cites the guideline it breaks and **inherits that guideline's severity**, so the model can never invent importance. The gate is a real exit code. There is no server, no account, and no telemetry: it runs as a single stateless CLI in any CI pipeline, or locally in your terminal without ever touching a pull request.
 
+<div align="center">
+
+![delta-peacock reviewing a branch and failing the gate on two findings](docs/media/review.gif)
+
+**[▶ Live feature tour](https://nicolacarkaxhija.github.io/delta-peacock/)** &nbsp;·&nbsp; every clip below is real captured output, no mock-ups
+
+</div>
+
 ## Table of contents
 
 - [Why delta-peacock](#why-delta-peacock)
@@ -134,6 +142,33 @@ Credentials, tokens and API keys must come from the environment, never a literal
 | `init`       | Scaffold config, a guideline, and a CI snippet. `--walkthrough`, `--starter`.                                                                   |
 | `bench`      | Score the reviewer against benchmark cases.                                                                                                     |
 | `config`     | Resolve and print the effective configuration.                                                                                                  |
+
+<details>
+<summary><b>See it in motion</b> — recorded command sessions</summary>
+
+<br>
+
+**Machine-readable report with stable fingerprints**
+
+![report](docs/media/report.gif)
+
+**SARIF 2.1.0 for GitHub code scanning**
+
+![sarif](docs/media/sarif.gif)
+
+**Apply a suggestion to the working tree**
+
+![fix](docs/media/fix.gif)
+
+**Lint the guideline corpus, with a machine-checkable warning**
+
+![lint](docs/media/lint.gif)
+
+**Validate the whole install before spending a token**
+
+![doctor](docs/media/doctor.gif)
+
+</details>
 
 ## Continuous integration
 

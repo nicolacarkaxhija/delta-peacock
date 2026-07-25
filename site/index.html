@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The code review that enforces your rules, not an LLM's opinion. Your guidelines, any SCM, any model, one deterministic exit code.">
+<meta property="og:title" content="delta-peacock — the review that enforces your rules">
+<meta property="og:description" content="Guideline-anchored, provider-agnostic PR reviewer. Your rules, any SCM, any LLM.">
+<style>*{margin:0;padding:0;box-sizing:border-box}</style>
+<title>delta-peacock — the review that enforces your rules</title>
+<style>
+  :root {
+    --ground: #0b1417;
+    --panel: #10201f;
+    --panel-2: #14282a;
+    --ink: #eaf2f0;
+    --ink-soft: #9fb4b3;
+    --ink-faint: #6c8180;
+    --hair: #223836;
+    --teal: #1fb6ba;
+    --teal-deep: #14898c;
+    --gold: #e0a63a;
+    --sev-blocker: #e05561;
+    --sev-major: #e0a63a;
+    --sev-minor: #6fa0a4;
+    --sev-info: #8a9a9a;
+    --pass: #37c7a4;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --measure: 66ch;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #f3f6f5;
+      --panel: #ffffff;
+      --panel-2: #eef3f2;
+      --ink: #0e1a1c;
+      --ink-soft: #3d5250;
+      --ink-faint: #6b807e;
+      --hair: #d9e3e1;
+      --teal: #0e898d;
+      --teal-deep: #0b6f72;
+      --gold: #b57e15;
+      --sev-blocker: #cc3742;
+      --sev-major: #b57e15;
+      --sev-minor: #3f6d71;
+      --sev-info: #5f7472;
+      --pass: #16906f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0b1417; --panel: #10201f; --panel-2: #14282a; --ink: #eaf2f0;
+    --ink-soft: #9fb4b3; --ink-faint: #6c8180; --hair: #223836; --teal: #1fb6ba;
+    --teal-deep: #14898c; --gold: #e0a63a; --sev-blocker: #e05561; --sev-major: #e0a63a;
+    --sev-minor: #6fa0a4; --sev-info: #8a9a9a; --pass: #37c7a4;
+  }
+  :root[data-theme="light"] {
+    --ground: #f3f6f5; --panel: #ffffff; --panel-2: #eef3f2; --ink: #0e1a1c;
+    --ink-soft: #3d5250; --ink-faint: #6b807e; --hair: #d9e3e1; --teal: #0e898d;
+    --teal-deep: #0b6f72; --gold: #b57e15; --sev-blocker: #cc3742; --sev-major: #b57e15;
+    --sev-minor: #3f6d71; --sev-info: #5f7472; --pass: #16906f;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { width: min(100% - 2.5rem, 940px); margin-inline: auto; }
+  a { color: var(--teal); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--teal); margin: 0 0 .9rem;
+  }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.1; margin: 0; }
+  h1 { font-size: clamp(2.3rem, 6vw, 3.9rem); font-weight: 680; letter-spacing: -.02em; }
+  h2 { font-size: clamp(1.55rem, 3.4vw, 2.15rem); font-weight: 660; letter-spacing: -.015em; }
+  p { max-width: var(--measure); }
+  .lead { font-size: 1.16rem; color: var(--ink-soft); }
+
+  /* ---- top bar ---- */
+  header.bar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in oklab, var(--ground) 86%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--hair);
+  }
+  .bar .wrap { display: flex; align-items: center; gap: 1rem; height: 56px; }
+  .brand { font-family: var(--mono); font-weight: 600; letter-spacing: -.01em; display: flex; align-items: center; gap: .5rem; }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 3px color-mix(in oklab, var(--teal) 25%, transparent); }
+  .bar nav { margin-left: auto; display: flex; gap: 1.4rem; font-family: var(--mono); font-size: .8rem; }
+  .bar nav a { color: var(--ink-soft); text-decoration: none; }
+  .bar nav a:hover { color: var(--ink); }
+  #theme { background: none; border: 1px solid var(--hair); color: var(--ink-soft); font-family: var(--mono); font-size: .78rem; border-radius: 6px; padding: .3rem .6rem; cursor: pointer; }
+  #theme:hover { border-color: var(--teal); color: var(--ink); }
+  @media (max-width: 680px) { .bar nav .hide-sm { display: none; } }
+
+  /* ---- hero ---- */
+  .hero { padding: clamp(3.5rem, 9vw, 6.5rem) 0 2.2rem; }
+  .hero .plume { font-family: var(--mono); font-size: .74rem; letter-spacing: .12em; color: var(--gold); text-transform: uppercase; }
+  .hero h1 { margin: .8rem 0 1.1rem; }
+  .hero h1 .grad { color: var(--teal); }
+  .cta-row { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 1.8rem; align-items: center; }
+  .btn {
+    font-family: var(--mono); font-size: .85rem; padding: .7rem 1.15rem; border-radius: 8px;
+    border: 1px solid var(--teal); background: var(--teal); color: #04100f; font-weight: 600;
+    text-decoration: none; display: inline-flex; gap: .5rem; align-items: center;
+  }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--hair); }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.ghost:hover { border-color: var(--teal); }
+  .kpis { display: flex; flex-wrap: wrap; gap: 1.8rem 2.6rem; margin-top: 2.6rem; }
+  .kpi b { font-family: var(--mono); font-size: 1.5rem; color: var(--ink); display: block; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .kpi span { font-size: .82rem; color: var(--ink-faint); }
+
+  /* ---- terminal ---- */
+  .term {
+    background: var(--panel); border: 1px solid var(--hair); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 24px 60px -30px rgba(0,0,0,.6);
+  }
+  .term .chrome {
+    display: flex; align-items: center; gap: .5rem; padding: .6rem .85rem;
+    background: var(--panel-2); border-bottom: 1px solid var(--hair);
+  }
+  .term .chrome i { width: 11px; height: 11px; border-radius: 50%; background: var(--hair); display: block; }
+  .term .chrome i:nth-child(1) { background: #e0625f; }
+  .term .chrome i:nth-child(2) { background: #e0a63a; }
+  .term .chrome i:nth-child(3) { background: #46c98a; }
+  .term .chrome span { margin-left: .5rem; font-family: var(--mono); font-size: .74rem; color: var(--ink-faint); }
+  .term pre {
+    margin: 0; padding: 1.1rem 1.2rem; overflow-x: auto;
+    font-family: var(--mono); font-size: .82rem; line-height: 1.7; color: var(--ink);
+    font-variant-ligatures: none;
+  }
+  .term pre::-webkit-scrollbar { height: 8px; }
+  .term pre::-webkit-scrollbar-thumb { background: var(--hair); border-radius: 8px; }
+  .cmd { color: var(--teal); }
+  .cmd::before { content: "$ "; color: var(--ink-faint); }
+  .cmt { color: var(--ink-faint); }
+  .b-blocker { color: var(--sev-blocker); font-weight: 600; }
+  .b-major { color: var(--sev-major); font-weight: 600; }
+  .b-minor { color: var(--sev-minor); font-weight: 600; }
+  .b-info { color: var(--sev-info); font-weight: 600; }
+  .ok { color: var(--pass); }
+  .fail { color: var(--sev-blocker); font-weight: 600; }
+  .muted { color: var(--ink-faint); }
+  .key { color: var(--gold); }
+  .cursor { display: inline-block; width: .55ch; height: 1.05em; background: var(--teal); vertical-align: -.15em; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
+
+  /* ---- sections ---- */
+  section { padding: clamp(3rem, 7vw, 5rem) 0; border-top: 1px solid var(--hair); }
+  .sec-head { margin-bottom: 2.2rem; }
+  .sec-head p { margin-top: .8rem; }
+
+  .feature { display: grid; grid-template-columns: 1fr; gap: 1.4rem; margin-bottom: 2.4rem; }
+  @media (min-width: 820px) { .feature { grid-template-columns: 320px 1fr; gap: 2.4rem; align-items: start; } }
+  .feature .say .tag { font-family: var(--mono); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+  .feature .say h3 { font-size: 1.32rem; margin: .5rem 0 .6rem; }
+  .feature .say p { font-size: .96rem; color: var(--ink-soft); }
+
+  /* ---- severity legend ---- */
+  .legend { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.4rem; }
+  .chip {
+    font-family: var(--mono); font-size: .74rem; padding: .3rem .6rem; border-radius: 20px;
+    border: 1px solid var(--hair); display: inline-flex; gap: .45rem; align-items: center;
+  }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .chip.blocker { color: var(--sev-blocker); }
+  .chip.major { color: var(--sev-major); }
+  .chip.minor { color: var(--sev-minor); }
+  .chip.info { color: var(--sev-info); }
+
+  /* ---- comparison ---- */
+  .cmp-wrap { overflow-x: auto; border: 1px solid var(--hair); border-radius: 12px; }
+  table.cmp { border-collapse: collapse; width: 100%; min-width: 620px; font-size: .9rem; }
+  table.cmp th, table.cmp td { text-align: left; padding: .8rem 1rem; border-bottom: 1px solid var(--hair); }
+  table.cmp thead th { font-family: var(--mono); font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); background: var(--panel-2); }
+  table.cmp tbody td:first-child, table.cmp td:first-child { color: var(--ink-soft); }
+  table.cmp .yes { color: var(--pass); font-weight: 600; }
+  table.cmp .no { color: var(--ink-faint); }
+  table.cmp .col-us { color: var(--teal); font-weight: 600; }
+  table.cmp tr td.col-us-cell { background: color-mix(in oklab, var(--teal) 8%, transparent); }
+
+  /* ---- command grid ---- */
+  .grid-cmds { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .8rem; }
+  .cmdcard { border: 1px solid var(--hair); border-radius: 10px; padding: .9rem 1rem; background: var(--panel); }
+  .cmdcard code { font-family: var(--mono); font-size: .84rem; color: var(--teal); }
+  .cmdcard p { font-size: .85rem; color: var(--ink-soft); margin: .35rem 0 0; }
+
+  /* ---- callout ---- */
+  .callout { border: 1px solid var(--hair); border-left: 3px solid var(--gold); border-radius: 0 10px 10px 0; padding: 1.1rem 1.3rem; background: var(--panel); }
+  .callout p { margin: 0; color: var(--ink-soft); font-size: .95rem; }
+  .callout strong { color: var(--ink); }
+
+  footer { border-top: 1px solid var(--hair); padding: 3rem 0 4rem; color: var(--ink-faint); font-size: .85rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: baseline; }
+  footer .mono { font-family: var(--mono); }
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+  .demo-figure { margin: 2.4rem 0 0; }
+  .demo-screen { border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; background: #0b1417; box-shadow: 0 24px 60px -30px rgba(0,0,0,.6); }
+  .demo-screen img { display: block; width: 100%; height: auto; }
+  .demo-figure figcaption { font-family: var(--mono); font-size: .74rem; color: var(--ink-faint); margin-top: .7rem; letter-spacing: .04em; }
+  .gif-frame { border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; background: #0b1417; box-shadow: 0 18px 44px -28px rgba(0,0,0,.55); }
+  .gif-frame img { display: block; width: 100%; height: auto; }
+</style>
+
+<header class="bar">
+  <div class="wrap">
+    <span class="brand"><span class="dot"></span>delta-peacock</span>
+    <nav>
+      <a href="#gate" class="hide-sm">The gate</a>
+      <a href="#features">Features</a>
+      <a href="#compare" class="hide-sm">Compare</a>
+      <a href="#commands">Commands</a>
+      <button id="theme" type="button">theme</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" style="border-top:none">
+    <div class="wrap">
+      <div class="plume">◆ guideline-anchored code review</div>
+      <h1>The review that <span class="grad">enforces your rules</span>,<br>not an LLM's opinion.</h1>
+      <p class="lead">Most AI reviewers answer "what does a model think of this diff?" delta-peacock answers a sharper question: <strong>does this change violate the rules your team wrote down — and should the build fail?</strong> Your guidelines, any SCM, any model, one deterministic exit code.</p>
+      <div class="cta-row">
+        <a class="btn" href="#gate">See it gate a build →</a>
+        <a class="btn ghost" href="#commands">The command surface</a>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><b>0</b><span>hosted services · runs as one CLI</span></div>
+        <div class="kpi"><b>3</b><span>SCMs · GitHub · GitLab · Bitbucket</span></div>
+        <div class="kpi"><b>4</b><span>model providers · incl. local</span></div>
+        <div class="kpi"><b>2</b><span>exit codes that mean something</span></div>
+      </div>
+    
+      <figure class="demo-figure reveal">
+        <div class="demo-screen"><img src="media/review.gif" alt="delta-peacock reviewing a branch and failing the gate on two findings" loading="lazy"></div>
+        <figcaption>◆ a real session: the gate fails on a hard-coded secret and a Rhino incompatibility</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="gate" style="border-top:none; padding-top:1rem">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="eyebrow">The thesis, live</div>
+        <h2>A gate, not a suggestion box.</h2>
+        <p>Point it at a branch. It reads your guidelines from the <em>target</em> ref — so a pull request can't weaken the rules that judge it — reviews the diff, and returns exit&nbsp;2 when a violation crosses your threshold. This is a real, unedited session against a demo cartridge repo.</p>
+      </div>
+      <div class="term reveal">
+        <div class="chrome"><i></i><i></i><i></i><span>feature/api-token — delta-peacock review</span></div>
+<pre><span class="cmd">delta-peacock review --fail-on MAJOR</span>
+<span class="b-blocker">BLOCKER</span>  src/config.js:3  <span class="muted">[no-secrets-in-code]</span> Hard-coded credential
+         Move this token to an environment variable; never commit secrets.
+<span class="b-major">MAJOR</span>    src/config.js:6  <span class="muted">[rhino-compat]</span> Optional chaining unsupported on the SFCC backend
+         Rhino does not support ?.; use an explicit guard.
+
+2 finding(s)
+<span class="fail">gate: failOn=MAJOR FAILED (2 at or above threshold)</span>
+<span class="muted">exit code:</span> <span class="fail">2</span><span class="cursor"></span></pre>
+      </div>
+      <div class="legend reveal">
+        <span class="chip blocker">BLOCKER</span>
+        <span class="chip major">MAJOR</span>
+        <span class="chip minor">MINOR</span>
+        <span class="chip info">INFO</span>
+        <span class="chip" style="color:var(--pass)">severity is inherited from the guideline — the model never invents it</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="eyebrow">What it actually does</div>
+        <h2>Every feature, shown — not described.</h2>
+        <p>Each block below is genuine captured output from the built CLI. No mock-ups.</p>
+      </div>
+
+      <div class="feature reveal">
+        <div class="say">
+          <span class="tag">the contract</span>
+          <h3>Findings cite a rule, or they don't gate</h3>
+          <p>Every violation names the guideline it breaks and carries a stable fingerprint, so comments stay idempotent across re-runs and machines. The report is a plain JSON artifact — auditable, diffable, yours.</p>
+        </div>
+        <div class="term">
+          <div class="chrome"><i></i><i></i><i></i><span>review.json</span></div>
+<pre><span class="cmd">delta-peacock review --report review.json</span>
+{
+  <span class="key">"gate"</span>: { <span class="key">"threshold"</span>: <span class="ok">"MAJOR"</span>, <span class="key">"failing"</span>: 2, <span class="key">"failed"</span>: <span class="fail">true</span> },
+  <span class="key">"findings"</span>: [
+    {
+      <span class="key">"severity"</span>: <span class="b-blocker">"BLOCKER"</span>,
+      <span class="key">"file"</span>: <span class="ok">"src/config.js"</span>, <span class="key">"line"</span>: 3,
+      <span class="key">"guidelineId"</span>: <span class="ok">"no-secrets-in-code"</span>,
+      <span class="key">"fingerprint"</span>: <span class="muted">"d1262ae38bb8"</span>
+    },
+    {
+      <span class="key">"severity"</span>: <span class="b-major">"MAJOR"</span>,
+      <span class="key">"file"</span>: <span class="ok">"src/config.js"</span>, <span class="key">"line"</span>: 6,
+      <span class="key">"guidelineId"</span>: <span class="ok">"rhino-compat"</span>,
+      <span class="key">"fingerprint"</span>: <span class="muted">"048174baee53"</span>
+    }
+  ]
+}</pre>
+        </div>
+      </div>
+
+      <div class="feature reveal">
+        <div class="say">
+          <span class="tag">code scanning</span>
+          <h3>SARIF &amp; native host formats, for free</h3>
+          <p>The same findings render to SARIF 2.1.0 for GitHub's Security tab, GitLab Code Quality for the MR widget, or Bitbucket Code Insights — plain files that work in dry-run, local mode, and commentless CI.</p>
+        </div>
+        <div class="term">
+          <div class="chrome"><i></i><i></i><i></i><span>findings.sarif</span></div>
+<pre><span class="cmt"># DELTA_PEACOCK_OUTPUT_SARIF_PATH=findings.sarif delta-peacock review</span>
+{
+  <span class="key">"tool"</span>: <span class="ok">"delta-peacock"</span>,
+  <span class="key">"version"</span>: <span class="ok">"2.1.0"</span>,
+  <span class="key">"results"</span>: [
+    { <span class="key">"ruleId"</span>: <span class="ok">"no-secrets-in-code"</span>, <span class="key">"level"</span>: <span class="b-blocker">"error"</span>,
+      <span class="key">"message"</span>: <span class="muted">"Hard-coded credential"</span> },
+    { <span class="key">"ruleId"</span>: <span class="ok">"rhino-compat"</span>, <span class="key">"level"</span>: <span class="b-major">"warning"</span>,
+      <span class="key">"message"</span>: <span class="muted">"Optional chaining unsupported..."</span> }
+  ]
+}</pre>
+        </div>
+      </div>
+
+      <div class="feature reveal">
+        <div class="say">
+          <span class="tag">one-click fixes</span>
+          <h3>Apply the suggestion to the working tree</h3>
+          <p>When a finding carries a fix, <code>fix</code> applies it in place — validated against the exact line the reviewer saw, skipped with a reason if the file drifted. Or emit a <code>--patch-file</code> for CI to attach.</p>
+        </div>
+        <div class="term">
+          <div class="chrome"><i></i><i></i><i></i><span>delta-peacock fix</span></div>
+<pre><span class="cmd">delta-peacock fix --report review.json</span>
+<span class="ok">applied</span>  src/config.js:3
+1 applied, 0 skipped</pre>
+        </div>
+      </div>
+
+      <div class="feature reveal">
+        <div class="say">
+          <span class="tag">keep the reviewer in its lane</span>
+          <h3>It knows what your linters already do</h3>
+          <p>Guideline authoring gets fast feedback: <code>guidelines lint</code> validates the corpus and warns when a rule reads machine-checkable — the kind of thing a formatter enforces for free, so the model never wastes tokens on it.</p>
+        </div>
+        <div class="term">
+          <div class="chrome"><i></i><i></i><i></i><span>delta-peacock guidelines lint</span></div>
+<pre><span class="cmd">delta-peacock guidelines lint</span>
+<span class="b-major">warning</span>: guidelines/quotes.md: reads machine-checkable;
+  a linter or formatter enforces this more cheaply than a review
+<span class="ok">guidelines ok</span>: 3 usable, 0 disabled</pre>
+        </div>
+      </div>
+
+      <div class="feature reveal">
+        <div class="say">
+          <span class="tag">first ten minutes</span>
+          <h3>Set up, then verify, without a single API call</h3>
+          <p><code>init</code> scaffolds config, an example guideline and a CI snippet for your host. <code>doctor</code> then validates the whole install — config, git, guidelines, model credentials, SCM reachability — with actionable messages before you spend a token.</p>
+        </div>
+        <div class="term">
+          <div class="chrome"><i></i><i></i><i></i><span>delta-peacock doctor</span></div>
+<pre><span class="cmd">delta-peacock doctor</span>
+<span class="ok">ok</span>    config: configuration resolves and validates
+<span class="ok">ok</span>    git: merge base with main resolves
+<span class="ok">ok</span>    guidelines: 2 usable guideline(s) from main
+<span class="ok">ok</span>    model: openai-compatible / demo-model with credentials present
+<span class="ok">ok</span>    scm: local mode; nothing will be posted, checks skipped
+<span class="ok">doctor: all checks passed</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="compare">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="eyebrow">Where it stands alone</div>
+        <h2>Positioned as the policy gate — not another general assistant.</h2>
+        <p>The field is crowded with capable assistants. None of them treats your written standards as an enforceable contract. This is the axis delta-peacock owns.</p>
+      </div>
+      <div class="cmp-wrap reveal">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th class="col-us">delta-peacock</th>
+              <th>Typical AI reviewer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Severity set by <em>your</em> guideline, gates the build</td><td class="col-us-cell col-us">Yes</td><td class="no">Model opinion, advisory</td></tr>
+            <tr><td>Guidelines read from the target ref (tamper-proof)</td><td class="col-us-cell col-us">Yes</td><td class="no">Rarely</td></tr>
+            <tr><td>Runs with no server, no telemetry, any local model</td><td class="col-us-cell col-us">Yes</td><td class="no">SaaS, per-seat</td></tr>
+            <tr><td>Pre-flight per-review &amp; monthly spend caps</td><td class="col-us-cell col-us">Yes</td><td class="no">No budget concept</td></tr>
+            <tr><td>Deterministic report + SARIF / Code Quality / Insights</td><td class="col-us-cell col-us">Yes</td><td class="no">Comments only</td></tr>
+            <tr><td>Idempotent comments via stable fingerprints</td><td class="col-us-cell col-us">Yes</td><td class="no">Often duplicates</td></tr>
+            <tr><td>Ensemble review + judge reconciliation</td><td class="col-us-cell col-us">Yes</td><td class="no">Single model</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout reveal" style="margin-top:1.6rem">
+        <p><strong>Honest by design.</strong> It's not trying to be the chattiest assistant. For teams that already write standards down and want them enforced deterministically — self-hosted, on any model, with a spend ceiling — nothing else fills the gap.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="commands">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="eyebrow">The surface</div>
+        <h2>One binary, thirteen verbs.</h2>
+        <p>From <code>delta-peacock --help</code> — every command is composable, CI-friendly, and honours a hard <code>--dry-run</code> that never touches a PR.</p>
+      </div>
+      <div class="grid-cmds reveal">
+        <div class="cmdcard"><code>review</code><p>Gate a branch against its guidelines. <code>--staged</code>, <code>--bootstrap</code>, <code>--write-baseline</code>.</p></div>
+        <div class="cmdcard"><code>audit</code><p>Review the whole tree, not just a diff. Adoption on day one.</p></div>
+        <div class="cmdcard"><code>describe</code><p>Write the PR description from the change, idempotently.</p></div>
+        <div class="cmdcard"><code>ask</code><p>Question the changeset in the terminal, one-shot or a session.</p></div>
+        <div class="cmdcard"><code>fix</code><p>Apply report suggestions to the tree or a patch file.</p></div>
+        <div class="cmdcard"><code>learn</code><p>Turn team reactions into proposed guideline drafts.</p></div>
+        <div class="cmdcard"><code>stats</code><p>Per-contributor findings, normalized — a coaching aid.</p></div>
+        <div class="cmdcard"><code>guidelines</code><p>Lint, coverage stats, packs, and legacy import.</p></div>
+        <div class="cmdcard"><code>doctor</code><p>Validate the whole install before you spend a token.</p></div>
+        <div class="cmdcard"><code>init</code><p>Scaffold config, a guideline, a CI snippet. <code>--walkthrough</code>.</p></div>
+        <div class="cmdcard"><code>bench</code><p>Score the reviewer against benchmark cases.</p></div>
+        <div class="cmdcard"><code>config</code><p>Resolve and print the effective configuration.</p></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="brand"><span class="dot"></span>delta-peacock</span>
+    <span class="mono">Apache-2.0 · TypeScript · zero telemetry</span>
+    <span class="mono">Your rules · any SCM · any LLM</span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var btn = document.getElementById("theme");
+    var root = document.documentElement;
+    btn.addEventListener("click", function () {
+      var dark = matchMedia("(prefers-color-scheme: dark)").matches;
+      var cur = root.getAttribute("data-theme") || (dark ? "dark" : "light");
+      root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+    });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+    }, { threshold: 0.12 });
+    document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+  })();
+</script>
+
+</body>
+</html>
