@@ -200,6 +200,16 @@ describe("parseReviewResponse", () => {
     const uncited = parsed.rejected.find((entry) => entry.reason === "uncited");
     expect(uncited?.raw).toContain("invented-rule");
   });
+
+  it("carries the title and claimed severity of an uncited candidate", () => {
+    const parsed = parseReviewResponse(
+      response([{ file: "a.js", line: 1, title: "Magic number", severity: "MINOR" }]),
+      options(),
+    );
+    const uncited = parsed.rejected.find((entry) => entry.reason === "uncited");
+    expect(uncited?.title).toBe("Magic number");
+    expect(uncited?.severity).toBe("MINOR");
+  });
 });
 
 describe("rendering and reporting edges", () => {

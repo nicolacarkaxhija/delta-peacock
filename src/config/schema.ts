@@ -29,6 +29,8 @@ export const ReviewSchema = z.strictObject({
   confidenceFloor: z.number().min(0).max(1).default(0.5),
   /** Opt-in: let the model report observations that cite no guideline. */
   generalPass: z.boolean().default(false),
+  /** Opt-in: turn recurring uncited candidates into promotable guideline drafts. */
+  harvestUncited: z.boolean().default(false),
   /** The most severe an observation can ever be. */
   observationSeverityCap: z.enum(SEVERITIES).default("MINOR"),
   /** How many proposed guidelines a single review may surface. */

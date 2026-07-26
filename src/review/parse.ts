@@ -44,6 +44,10 @@ export interface RejectedCandidate {
   raw: string;
   /** The cited guideline id, when the candidate carried one. */
   guidelineId?: string;
+  /** The candidate's title, when it parsed as a finding (uncited/out-of-scope). */
+  title?: string;
+  /** The severity the model claimed, for an uncited candidate. */
+  severity?: Severity;
 }
 
 export interface ParsedReview {
@@ -179,18 +183,22 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
       rejected.push({ reason: "malformed", raw: rawOf(candidate) });
       continue;
     }
-    const cited = raw.data.guidelineId !== undefined ? { guidelineId: raw.data.guidelineId } : {};
+    const meta = {
+      ...(raw.data.guidelineId !== undefined ? { guidelineId: raw.data.guidelineId } : {}),
+      ...(raw.data.title !== "" ? { title: raw.data.title } : {}),
+      ...(raw.data.severity !== undefined ? { severity: raw.data.severity } : {}),
+    };
     const { line, adjusted } = normalizeLine(raw.data.line);
     if (adjusted) adjustedLines += 1;
     const finding = toFinding(raw.data, line, options);
     if (finding === "out-of-scope") {
       droppedOutOfScope += 1;
-      rejected.push({ reason: "out-of-scope", raw: rawOf(candidate), ...cited });
+      rejected.push({ reason: "out-of-scope", raw: rawOf(candidate), ...meta });
       continue;
     }
     if (finding === undefined) {
       droppedUncited += 1;
-      rejected.push({ reason: "uncited", raw: rawOf(candidate), ...cited });
+      rejected.push({ reason: "uncited", raw: rawOf(candidate), ...meta });
       continue;
     }
     findings.push(finding);

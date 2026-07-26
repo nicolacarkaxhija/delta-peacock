@@ -47,6 +47,7 @@ import { buildScmPort } from "../scm/build.js";
 import { publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
+import { harvestUncited } from "./harvest.js";
 import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
 import { buildReport, type WaivedFinding } from "./report.js";
 import { writeDrafts } from "../guidelines/draft.js";
@@ -223,6 +224,18 @@ export async function runReview(
   if (options.explainDrops === true) {
     for (const entry of parsed.rejected) {
       deps.err(`rejected (${entry.reason}): ${entry.raw}\n`);
+    }
+  }
+  if (config.review.harvestUncited) {
+    const written = writeDrafts(
+      deps.cwd,
+      options.draftsDir ?? "guidelines-drafts",
+      harvestUncited(parsed.rejected),
+    );
+    if (written.length > 0) {
+      deps.out(
+        `harvested ${String(written.length)} guideline draft(s) from recurring uncited findings; a human promotes a draft by moving it into the guidelines directory\n`,
+      );
     }
   }
   let usage = executed.usage;

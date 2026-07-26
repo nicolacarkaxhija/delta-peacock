@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/index.js";
@@ -128,6 +128,27 @@ describe("review end to end (local mode)", () => {
     const { code, stderr } = await review(repo, scriptedModel(uncited).port, "--explain-drops");
     expect(code).toBe(0);
     expect(stderr).toContain("invented");
+  });
+
+  it("harvests recurring uncited findings into drafts when review.harvestUncited is on", async () => {
+    const repo = makeScenario();
+    const twoUncited = JSON.stringify({
+      findings: [
+        { file: "src/app.js", line: 2, title: "Magic number", body: "b", severity: "MINOR" },
+        { file: "src/app.js", line: 3, title: "Magic number", body: "b", severity: "MINOR" },
+      ],
+    });
+    const code = await runCli(["review"], {
+      cwd: repo,
+      env: { DELTA_PEACOCK_REVIEW_HARVEST_UNCITED: "true" },
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: scriptedModel(twoUncited).port,
+    });
+    expect(code).toBe(0);
+    const draft = path.join(repo, "guidelines-drafts", "magic-number.md");
+    expect(existsSync(draft)).toBe(true);
+    expect(readFileSync(draft, "utf8")).toContain("Magic number");
   });
 
   it("records rejected candidates in the JSON report", async () => {
