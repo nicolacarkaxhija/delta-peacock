@@ -183,7 +183,9 @@ export interface ResolvedGuidelines extends LoadedGuidelines {
 /**
  * The guidelines that judge a review come from the target ref by default
  * (ADR 0002), so a pull request cannot weaken its own rules. The working
- * tree serves the bootstrap case and the explicit source mode.
+ * tree serves the bootstrap case and the explicit source mode. The `local`
+ * ref reads a filesystem directory (absolute or relative to cwd) directly,
+ * bypassing git — a troubleshooting aid for trying a guideline set locally.
  */
 function resolveLocalGuidelines(
   cwd: string,
@@ -192,6 +194,14 @@ function resolveLocalGuidelines(
   targetRef: string,
 ): ResolvedGuidelines {
   const notices: string[] = [];
+  if (guidelinesRef === "local") {
+    const dir = path.resolve(cwd, guidelinesDir);
+    return {
+      ...loadGuidelinesFromFiles(readWorkingTreeGuidelines(dir)),
+      origin: `local:${dir}`,
+      notices,
+    };
+  }
   if (guidelinesRef !== "source") {
     const ref = guidelinesRef === "target" ? targetRef : guidelinesRef;
     let files: GuidelineFile[] | undefined;

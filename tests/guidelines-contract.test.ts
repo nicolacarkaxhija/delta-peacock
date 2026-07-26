@@ -93,6 +93,23 @@ describe("resolveGuidelines", () => {
     expect(resolved.guidelines[0]?.severity).toBe("INFO");
   });
 
+  it("local mode reads guidelines straight from the given directory, bypassing git", () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", RULE_V1);
+    commitAll(repo, "committed rules");
+    // an arbitrary directory (not the tracked guidelines dir) holds the rules to use
+    write(repo, "external-guidelines/no-console.md", RULE_V2_WEAKENED);
+
+    const resolved = resolveGuidelines(
+      repo,
+      "local",
+      path.join(repo, "external-guidelines"),
+      "main",
+    );
+    expect(resolved.origin).toContain("local");
+    expect(resolved.guidelines[0]?.severity).toBe("INFO");
+  });
+
   it("falls back to the working tree with a notice while bootstrapping", () => {
     const repo = makeRepo();
     write(repo, "guidelines/no-console.md", RULE_V1);
