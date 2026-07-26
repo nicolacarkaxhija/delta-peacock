@@ -1,7 +1,7 @@
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
-import { guidelineProblems, guidelineWarnings } from "./checks.js";
+import { guidelineProblems, guidelineWarnings } from "./validate.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "./loader.js";
 
 /**

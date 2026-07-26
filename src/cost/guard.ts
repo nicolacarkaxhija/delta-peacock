@@ -11,7 +11,7 @@ import { defaultCounterPath, monthKey, readMonthSpend } from "./counter.js";
  */
 export const ESTIMATED_OUTPUT_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS;
 
-export interface BudgetDecision {
+export interface CostGuardDecision {
   /** Whether the review may proceed. */
   allowed: boolean;
   estimated: number;
@@ -30,19 +30,19 @@ export function modelCallCount(config: Config): number {
   return config.ensemble.members.length + (config.ensemble.mode === "judge" ? 1 : 0) + calibration;
 }
 
-export interface BudgetOptions {
+export interface CostGuardOptions {
   /** Planned diff batches; each is its own call carrying the system prefix. */
   batches?: number;
   /** Injected for tests; production reads the real Cost Explorer. */
   costExplorerSend?: CostExplorerSend;
 }
 
-export async function checkBudget(
+export async function checkCostGuard(
   config: Config,
   request: ModelRequest,
   now: Date,
-  options: BudgetOptions = {},
-): Promise<BudgetDecision> {
+  options: CostGuardOptions = {},
+): Promise<CostGuardDecision> {
   const notices: string[] = [];
   const reasons: string[] = [];
   const batches = Math.max(1, options.batches ?? 1);

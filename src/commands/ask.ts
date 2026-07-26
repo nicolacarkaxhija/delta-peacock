@@ -1,7 +1,7 @@
 import { loadConfig } from "../config/loader.js";
 import { buildContextProvider } from "../context/build.js";
 import { capToTokenBudget } from "../context/port.js";
-import { checkBudget, guardActive } from "../cost/guard.js";
+import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Guideline } from "../domain/guideline.js";
@@ -178,7 +178,7 @@ export async function runAsk(
       return 0;
     }
     if (guardActive(config)) {
-      const decision = await checkBudget(config, request, now);
+      const decision = await checkCostGuard(config, request, now);
       for (const notice of decision.notices) deps.err(`${notice}\n`);
       if (!decision.allowed) {
         for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
