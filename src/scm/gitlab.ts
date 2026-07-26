@@ -1,4 +1,3 @@
-import { ToolError } from "../errors.js";
 import type {
   NewInlineComment,
   PullRequestText,
@@ -6,6 +5,7 @@ import type {
   ScmPort,
   StatusState,
 } from "./port.js";
+import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface GitLabPortOptions {
   /** group/project; nested subgroups are fine (group/subgroup/project). */
@@ -38,52 +38,53 @@ const STATUS_STATES: Record<StatusState, string> = {
 };
 
 export function createGitLabPort(options: GitLabPortOptions): ScmPort {
-  if (!SAFE_REPOSITORY.test(options.repository)) {
-    throw new ToolError(
-      `scm.repository must look like group/project (subgroups allowed), got ${JSON.stringify(options.repository)}`,
-    );
-  }
-  const base = (options.baseUrl ?? "https://gitlab.com/api/v4").replace(/\/$/, "");
+  assertSafeRepository(
+    options.repository,
+    SAFE_REPOSITORY,
+    (repository) =>
+      `scm.repository must look like group/project (subgroups allowed), got ${JSON.stringify(repository)}`,
+  );
+  const base = normalizeBaseUrl(options.baseUrl, "https://gitlab.com/api/v4");
   const project = encodeURIComponent(options.repository);
   const mr = `${base}/projects/${project}/merge_requests/${String(options.pullRequest)}`;
   let meta: MergeRequestMeta | undefined;
 
   async function request(method: string, url: string, body?: unknown): Promise<Response> {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        "private-token": options.token,
-        accept: "application/json",
-        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    return httpRequest(
+      url,
+      {
+        method,
+        headers: {
+          "private-token": options.token,
+          accept: "application/json",
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-    if (response.status === 401) {
-      throw new ToolError("GitLab rejected the credentials; check GITLAB_TOKEN");
-    }
-    if (response.status === 403) {
-      throw new ToolError("GitLab denied the request (403); the token may lack api scope");
-    }
-    if (response.status === 429) {
-      throw new ToolError("GitLab rate limit exhausted; retry after the limit resets");
-    }
-    if (!response.ok) {
-      throw new ToolError(`GitLab responded ${String(response.status)} to ${method} ${url}`);
-    }
-    return response;
+      [
+        { status: 401, toMessage: () => "GitLab rejected the credentials; check GITLAB_TOKEN" },
+        {
+          status: 403,
+          toMessage: () => "GitLab denied the request (403); the token may lack api scope",
+        },
+        {
+          status: 429,
+          toMessage: () => "GitLab rate limit exhausted; retry after the limit resets",
+        },
+      ],
+      (status) => `GitLab responded ${String(status)} to ${method} ${url}`,
+    );
   }
 
   async function listNotes(): Promise<GitLabNote[]> {
-    const all: GitLabNote[] = [];
-    for (let page = 1; ; page += 1) {
+    const all = await collectAllPages(1, async (page) => {
       const response = await request(
         "GET",
         `${mr}/notes?per_page=100&page=${String(page)}&sort=asc`,
       );
       const batch = (await response.json()) as GitLabNote[];
-      all.push(...batch);
-      if (batch.length === 0) break;
-    }
+      return { items: batch, next: batch.length === 0 ? undefined : page + 1 };
+    });
     return all.filter((note) => note.system !== true);
   }
 
@@ -160,12 +161,12 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
       });
     },
     async fetchPullRequestDiff(): Promise<string> {
-      const response = await fetch(`${mr}/raw_diffs`, {
-        headers: { "private-token": options.token, accept: "text/plain" },
-      });
-      if (!response.ok) {
-        throw new ToolError(`GitLab responded ${String(response.status)} to the diff request`);
-      }
+      const response = await httpRequest(
+        `${mr}/raw_diffs`,
+        { headers: { "private-token": options.token, accept: "text/plain" } },
+        [],
+        (status) => `GitLab responded ${String(status)} to the diff request`,
+      );
       return response.text();
     },
   };
