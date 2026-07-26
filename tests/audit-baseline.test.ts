@@ -403,6 +403,18 @@ describe("audit file selection", () => {
 });
 
 describe("baseline file shapes", () => {
+  it("stamps the current fingerprint-scheme version on write", async () => {
+    const { writeBaseline } = await import("../src/review/baseline.js");
+    const repo = makeRepo();
+    writeBaseline(repo, "delta-peacock.baseline.json", []);
+    const raw = JSON.parse(
+      readFileSync(path.join(repo, "delta-peacock.baseline.json"), "utf8"),
+    ) as { version: number };
+    // bumped alongside the observation fingerprint scheme change: a baseline
+    // written under version 1 keys observations by title and will churn once
+    expect(raw.version).toBe(2);
+  });
+
   it("writes observations without a guideline id", async () => {
     const { writeBaseline, loadBaseline } = await import("../src/review/baseline.js");
     const repo = makeRepo();

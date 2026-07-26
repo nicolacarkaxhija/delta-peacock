@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fingerprintOf, type Violation } from "../src/domain/finding.js";
+import { fingerprintOf, type Observation, type Violation } from "../src/domain/finding.js";
 import { evaluateGate } from "../src/domain/gate.js";
 import { meetsThreshold } from "../src/domain/severity.js";
 
@@ -12,6 +12,18 @@ function violation(overrides: Partial<Violation> = {}): Violation {
     line: 3,
     title: "Console statement",
     body: "Remove the console call.",
+    ...overrides,
+  };
+}
+
+function observation(overrides: Partial<Observation> = {}): Observation {
+  return {
+    kind: "observation",
+    severity: "MINOR",
+    file: "src/app.js",
+    line: 3,
+    title: "Magic number",
+    body: "Extract a constant.",
     ...overrides,
   };
 }
@@ -52,5 +64,28 @@ describe("fingerprint", () => {
     expect(fingerprintOf(violation())).not.toBe(
       fingerprintOf(violation({ guidelineId: "no-eval" })),
     );
+  });
+
+  it("keeps a violation's guidelineId-based key unchanged by its title", () => {
+    expect(fingerprintOf(violation({ title: "Any title at all" }))).toBe(
+      fingerprintOf(violation({ title: "A totally different title" })),
+    );
+  });
+
+  it("fingerprints an observation from file + line + kind, ignoring freeform title", () => {
+    expect(fingerprintOf(observation({ title: "First phrasing of the same problem" }))).toBe(
+      fingerprintOf(observation({ title: "Completely different phrasing" })),
+    );
+  });
+
+  it("still varies an observation's fingerprint by file or line", () => {
+    expect(fingerprintOf(observation())).not.toBe(fingerprintOf(observation({ line: 4 })));
+    expect(fingerprintOf(observation())).not.toBe(
+      fingerprintOf(observation({ file: "src/other.js" })),
+    );
+  });
+
+  it("never collides a violation and an observation at the same file and line", () => {
+    expect(fingerprintOf(violation({ line: 1 }))).not.toBe(fingerprintOf(observation({ line: 1 })));
   });
 });

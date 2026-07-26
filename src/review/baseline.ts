@@ -16,8 +16,16 @@ export interface BaselineEntry {
   note: string;
 }
 
+/**
+ * 2 since the observation fingerprint scheme changed to file + line + kind
+ * (previously file + line + title): a baseline written under version 1 keys
+ * an observation by its freeform title, so its fingerprints no longer match
+ * and it churns back to fresh once. Violations are unaffected — their key
+ * is still the cited guideline. `loadBaseline` reads either version; the
+ * number is a signal for humans and tooling, not an enforced gate.
+ */
 interface BaselineFile {
-  version: 1;
+  version: 1 | 2;
   entries: BaselineEntry[];
 }
 
@@ -54,7 +62,7 @@ export function loadBaseline(cwd: string, relPath: string): Map<string, Baseline
 
 export function writeBaseline(cwd: string, relPath: string, findings: readonly Finding[]): number {
   const file: BaselineFile = {
-    version: 1,
+    version: 2,
     entries: fingerprintEntries(findings).map(({ fingerprint, finding }) => ({
       fingerprint,
       ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),
