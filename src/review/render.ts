@@ -27,7 +27,15 @@ function findingLines(finding: Finding, badge: string): string[] {
   const head = `${badge}${finding.severity.padEnd(8)} ${finding.file}:${String(finding.line)}  ${
     finding.kind === "violation" ? `[${finding.guidelineId}]` : "[observation]"
   } ${finding.title}`;
-  return finding.body === "" ? [head] : [head, `         ${finding.body}`];
+  const lines = finding.body === "" ? [head] : [head, `         ${finding.body}`];
+  // advisory only (ADR 0008): calibration never changed this finding's gate
+  // membership, so its note is surfaced here for a human to triage, not acted on
+  if (finding.calibration !== undefined) {
+    lines.push(
+      `         calibration: ${finding.calibration.action} — ${finding.calibration.reason}`,
+    );
+  }
+  return lines;
 }
 
 function gateLine(gate: GateDecision): string {

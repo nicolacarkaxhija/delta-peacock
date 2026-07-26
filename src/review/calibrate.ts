@@ -2,18 +2,13 @@ import { fingerprintOf, type Finding } from "../domain/finding.js";
 import type { ModelPort, ModelRequest, ModelUsage } from "../model/port.js";
 import { parseJson } from "./parse.js";
 
-export interface SuppressedFinding {
-  fingerprint: string;
-  action: "drop" | "demote";
-  reason: string;
-  title: string;
-  file: string;
-  line: number;
-}
-
 export interface CalibrationOutcome {
+  /**
+   * The same findings calibration received, kind and severity untouched;
+   * a finding calibration disagreed with carries a `calibration` note rather
+   * than a changed gate membership (ADR 0008).
+   */
   findings: Finding[];
-  suppressed: SuppressedFinding[];
   usage?: ModelUsage;
   notices: string[];
 }
@@ -82,37 +77,20 @@ function parseDecisions(text: string): Decision[] {
   return decisions;
 }
 
-export function applyCalibration(
-  findings: readonly Finding[],
-  replyText: string,
-): Pick<CalibrationOutcome, "findings" | "suppressed"> {
+/**
+ * Applies the calibration model's decisions as advisory notes only: a
+ * finding's kind, severity, and gate membership never change here (ADR
+ * 0008). A finding calibration wants to drop or demote is returned with a
+ * `calibration` note attached so the report can surface it; a finding kept
+ * or not mentioned at all comes back unchanged.
+ */
+export function applyCalibration(findings: readonly Finding[], replyText: string): Finding[] {
   const byFingerprint = new Map(parseDecisions(replyText).map((d) => [d.fingerprint, d]));
-  const kept: Finding[] = [];
-  const suppressed: SuppressedFinding[] = [];
-  for (const finding of findings) {
-    const fingerprint = fingerprintOf(finding);
-    const decision = byFingerprint.get(fingerprint);
-    if (decision === undefined || decision.action === "keep") {
-      kept.push(finding);
-      continue;
-    }
-    const record = {
-      fingerprint,
-      reason: decision.reason,
-      title: finding.title,
-      file: finding.file,
-      line: finding.line,
-    };
-    if (decision.action === "demote" && finding.kind === "violation") {
-      // demotion removes the gate's teeth but keeps the finding visible
-      kept.push({ ...finding, kind: "observation" });
-      suppressed.push({ ...record, action: "demote" });
-    } else {
-      // dropped outright; demoting an observation means the same thing
-      suppressed.push({ ...record, action: "drop" });
-    }
-  }
-  return { findings: kept, suppressed };
+  return findings.map((finding) => {
+    const decision = byFingerprint.get(fingerprintOf(finding));
+    if (decision === undefined || decision.action === "keep") return finding;
+    return { ...finding, calibration: { action: decision.action, reason: decision.reason } };
+  });
 }
 
 /**
@@ -124,19 +102,17 @@ export async function calibrate(
   findings: readonly Finding[],
   diff: string,
 ): Promise<CalibrationOutcome> {
-  if (findings.length === 0) return { findings: [], suppressed: [], notices: [] };
+  if (findings.length === 0) return { findings: [], notices: [] };
   try {
     const reply = await port.complete(buildCalibrationRequest(findings, diff));
-    const applied = applyCalibration(findings, reply.text);
     return {
-      ...applied,
+      findings: applyCalibration(findings, reply.text),
       ...(reply.usage ? { usage: reply.usage } : {}),
       notices: [],
     };
   } catch (error) {
     return {
       findings: [...findings],
-      suppressed: [],
       notices: [
         `calibration failed (${(error as Error).message}); publishing the uncalibrated findings`,
       ],

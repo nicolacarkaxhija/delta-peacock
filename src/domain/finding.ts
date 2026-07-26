@@ -1,6 +1,17 @@
 import { createHash } from "node:crypto";
 import type { Severity } from "./severity.js";
 
+/**
+ * Advisory-only note from the calibration pass: what it would have done, had
+ * it been allowed to gate. It never changes a finding's kind, severity, or
+ * gate membership (ADR 0008) — attaching one is the only effect calibration
+ * has on a finding, purely so a human can triage it in the report.
+ */
+export interface CalibrationNote {
+  action: "drop" | "demote";
+  reason: string;
+}
+
 export interface Violation {
   kind: "violation";
   guidelineId: string;
@@ -16,6 +27,8 @@ export interface Violation {
   confidence?: number;
   /** Replacement code for the flagged lines, rendered as a one-click suggestion. */
   suggestion?: string;
+  /** Present when the calibration pass disagreed; advisory only, never gates. */
+  calibration?: CalibrationNote;
 }
 
 export interface ProposedGuideline {
@@ -35,6 +48,8 @@ export interface Observation {
   confidence?: number;
   suggestion?: string;
   proposedGuideline?: ProposedGuideline;
+  /** Present when the calibration pass disagreed; advisory only, never gates. */
+  calibration?: CalibrationNote;
 }
 
 export type Finding = Violation | Observation;

@@ -3,8 +3,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config/loader.js";
 import { modelCallCount } from "../src/cost/guard.js";
+import { evaluateGate } from "../src/domain/gate.js";
+import { fingerprintOf, type Violation } from "../src/domain/finding.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
+import { applyCalibration } from "../src/review/calibrate.js";
+import { renderReview } from "../src/review/render.js";
 import type { ReviewReport } from "../src/review/report.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
@@ -65,6 +69,70 @@ function duoPort(decide: (fingerprints: string[]) => string): {
   };
 }
 
+function violation(overrides: Partial<Violation> = {}): Violation {
+  return {
+    kind: "violation",
+    guidelineId: "no-console",
+    severity: "MAJOR",
+    file: "src/app.js",
+    line: 1,
+    title: "Console statement",
+    body: "b",
+    ...overrides,
+  };
+}
+
+describe("applyCalibration (ADR 0008: advisory only)", () => {
+  it("never changes kind, severity, or gate membership; only attaches an advisory note", () => {
+    const finding = violation();
+    const reply = JSON.stringify({
+      decisions: [{ fingerprint: fingerprintOf(finding), action: "demote", reason: "borderline" }],
+    });
+    const [annotated] = applyCalibration([finding], reply);
+    expect(annotated).toMatchObject({ kind: "violation", severity: "MAJOR" });
+    expect(annotated?.calibration).toEqual({ action: "demote", reason: "borderline" });
+    expect(evaluateGate([annotated as Violation], "MAJOR")).toEqual(
+      evaluateGate([finding], "MAJOR"),
+    );
+  });
+
+  it("attaches a note for a drop decision too, without removing the finding", () => {
+    const finding = violation();
+    const reply = JSON.stringify({
+      decisions: [{ fingerprint: fingerprintOf(finding), action: "drop", reason: "false alarm" }],
+    });
+    const [annotated] = applyCalibration([finding], reply);
+    expect(annotated).toBeDefined();
+    expect(annotated?.calibration).toEqual({ action: "drop", reason: "false alarm" });
+  });
+
+  it("leaves an explicitly kept or unmentioned finding without any annotation", () => {
+    const kept = violation({ line: 1 });
+    const unmentioned = violation({ line: 2 });
+    const reply = JSON.stringify({
+      decisions: [{ fingerprint: fingerprintOf(kept), action: "keep", reason: "fine" }],
+    });
+    const [annotatedKept, annotatedUnmentioned] = applyCalibration([kept, unmentioned], reply);
+    expect(annotatedKept?.calibration).toBeUndefined();
+    expect(annotatedUnmentioned?.calibration).toBeUndefined();
+  });
+
+  it("renders the annotation inline next to the finding it flags", () => {
+    const gate = evaluateGate([], "none");
+    const text = renderReview({
+      violations: [{ ...violation(), calibration: { action: "demote", reason: "borderline" } }],
+      observations: [],
+      proposals: [],
+      droppedUncited: 0,
+      adjustedLines: 0,
+      filtered: 0,
+      gate,
+    });
+    expect(text).toContain("calibration: demote");
+    expect(text).toContain("borderline");
+  });
+});
+
 async function reviewWith(
   port: ModelPort,
   env: Record<string, string>,
@@ -120,7 +188,7 @@ describe("calibration pass", () => {
     expect(requests).toHaveLength(1);
   });
 
-  it("drops with an audit trail and gates on what is left", async () => {
+  it("annotates a drop decision but still gates on every finding (ADR 0008)", async () => {
     const { requests, port } = duoPort((fingerprints) =>
       JSON.stringify({
         decisions: fingerprints.map((fingerprint) => ({
@@ -134,14 +202,14 @@ describe("calibration pass", () => {
       DELTA_PEACOCK_CALIBRATION_ENABLED: "true",
     });
     expect(requests).toHaveLength(2);
-    expect(code).toBe(0); // everything the gate would count was dropped
-    expect(report.findings).toHaveLength(0);
-    expect(report.calibration?.suppressed).toHaveLength(2);
-    expect(report.calibration?.suppressed[0]?.reason).toContain("false positive");
-    expect(report.calibration?.suppressed[0]?.action).toBe("drop");
+    expect(code).toBe(2); // calibration is advisory; the gate ignores its verdict entirely
+    expect(report.findings).toHaveLength(2);
+    expect(report.findings.every((finding) => finding.kind === "violation")).toBe(true);
+    expect(report.findings.every((finding) => finding.calibration?.action === "drop")).toBe(true);
+    expect(report.findings[0]?.calibration?.reason).toContain("false positive");
   });
 
-  it("demotes a violation into a visible observation that never gates", async () => {
+  it("annotates a demote decision but the violation keeps gating identically", async () => {
     const { port } = duoPort((fingerprints) =>
       JSON.stringify({
         decisions: [{ fingerprint: fingerprints[0], action: "demote", reason: "minor nit" }],
@@ -150,10 +218,11 @@ describe("calibration pass", () => {
     const { code, report } = await reviewWith(port, {
       DELTA_PEACOCK_CALIBRATION_ENABLED: "true",
     });
-    expect(code).toBe(2); // the second violation still gates
+    expect(code).toBe(2); // both violations still gate; calibration cannot change kind or severity
     expect(report.findings).toHaveLength(2);
-    expect(report.findings.filter((finding) => finding.kind === "observation")).toHaveLength(1);
-    expect(report.calibration?.suppressed[0]?.action).toBe("demote");
+    expect(report.findings.filter((finding) => finding.kind === "observation")).toHaveLength(0);
+    const flagged = report.findings.find((finding) => finding.calibration !== undefined);
+    expect(flagged?.calibration).toEqual({ action: "demote", reason: "minor nit" });
   });
 
   it("ignores unknown fingerprints and unusable decisions", async () => {
@@ -171,7 +240,7 @@ describe("calibration pass", () => {
     });
     expect(code).toBe(2);
     expect(report.findings).toHaveLength(2);
-    expect(report.calibration?.suppressed).toHaveLength(0);
+    expect(report.findings.every((finding) => finding.calibration === undefined)).toBe(true);
   });
 
   it("treats a decisions-less object and non-object entries as kept", async () => {
@@ -183,7 +252,7 @@ describe("calibration pass", () => {
     });
     expect(code).toBe(2);
     expect(report.findings).toHaveLength(2);
-    expect(report.calibration?.suppressed).toHaveLength(0);
+    expect(report.findings.every((finding) => finding.calibration === undefined)).toBe(true);
   });
 
   it("a reply whose json holds no decisions array is a fallback", async () => {
@@ -200,10 +269,11 @@ describe("calibration pass", () => {
       JSON.stringify({ decisions: [{ fingerprint: fingerprints[0], action: "drop" }] }),
     );
     const { report } = await reviewWith(port, { DELTA_PEACOCK_CALIBRATION_ENABLED: "true" });
-    expect(report.calibration?.suppressed[0]?.reason).toBe("no reason given");
+    const flagged = report.findings.find((finding) => finding.calibration !== undefined);
+    expect(flagged?.calibration?.reason).toBe("no reason given");
   });
 
-  it("demoting an observation drops it outright", async () => {
+  it("annotating an observation keeps it visible and still non-gating", async () => {
     const withObservation: ModelPort = {
       complete(request) {
         if (isCalibration(request)) {
@@ -245,10 +315,14 @@ describe("calibration pass", () => {
       err: () => undefined,
       modelPort: withObservation,
     });
-    expect(code).toBe(0);
+    expect(code).toBe(0); // observations never gate, annotated or not
     const report = JSON.parse(readFileSync(reportPath, "utf8")) as ReviewReport;
-    expect(report.findings).toHaveLength(0);
-    expect(report.calibration?.suppressed[0]?.action).toBe("drop");
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.kind).toBe("observation");
+    expect(report.findings[0]?.calibration).toEqual({
+      action: "demote",
+      reason: "not worth a comment",
+    });
   });
 
   it("falls back to the uncalibrated set when the reply is unusable", async () => {

@@ -35,7 +35,7 @@ import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { planBudget, splitDiffByFile } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
-import { calibrate, type SuppressedFinding } from "./calibrate.js";
+import { calibrate } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
@@ -256,7 +256,6 @@ export async function runReview(
     usage,
   );
   const filtered = finalized.filtered;
-  const suppressed = finalized.suppressed;
   const baselined = finalized.baselined;
   usage = finalized.usage;
   // an in-code waiver moves a violation out of the gate but not out of the report
@@ -350,7 +349,6 @@ export async function runReview(
       ...(cachedResponse ? { cachedResponse: true as const } : {}),
       ...(budgetDegraded ? { budgetDegraded: true as const } : {}),
       ...(linters.length > 0 ? { lintersDetected: linters } : {}),
-      ...(config.calibration.enabled ? { calibration: { suppressed } } : {}),
     });
     if (config.output.report !== undefined) {
       writeFileSync(
@@ -595,16 +593,17 @@ async function executeReview(
 interface FinalizedFindings {
   kept: Finding[];
   filtered: Finding[];
-  suppressed: SuppressedFinding[];
   baselined: Finding[];
   usage: ModelUsage | undefined;
 }
 
 /**
  * The finalize stage: drop findings under the confidence floor, run the
- * optional calibration pass (which can suppress and adds its own usage), and
- * split off baselined findings that inform the report but never gate. Returns
- * the lanes the gate and report read, plus usage grown by any calibration call.
+ * optional calibration pass (advisory only — it may attach a `calibration`
+ * note to a finding but never changes kind, severity, or gate membership,
+ * ADR 0008), and split off baselined findings that inform the report but
+ * never gate. Returns the lanes the gate and report read, plus usage grown
+ * by any calibration call.
  */
 async function finalizeFindings(
   deps: ReviewDeps,
@@ -618,7 +617,6 @@ async function finalizeFindings(
   const filtered = partitioned.filtered;
   let kept = partitioned.kept;
   let usage = usageIn;
-  let suppressed: SuppressedFinding[] = [];
   if (config.calibration.enabled) {
     const ref = config.calibration.model;
     const calibrationPort = ref
@@ -626,11 +624,12 @@ async function finalizeFindings(
       : (deps.modelPort ?? buildModelPort(config, deps.env));
     const outcome = await calibrate(calibrationPort, kept, diffText);
     for (const notice of outcome.notices) deps.err(`${notice}\n`);
+    // the gate reads exactly these findings next; calibration only annotated them
     kept = outcome.findings;
-    suppressed = outcome.suppressed;
     if (outcome.usage) usage = usage ? addUsage(usage, outcome.usage) : outcome.usage;
-    if (suppressed.length > 0) {
-      deps.err(`calibration suppressed ${String(suppressed.length)} finding(s)\n`);
+    const flagged = kept.filter((finding) => finding.calibration !== undefined).length;
+    if (flagged > 0) {
+      deps.err(`calibration flagged ${String(flagged)} finding(s) for human triage\n`);
     }
   }
   if (options.writeBaseline === true) {
@@ -652,7 +651,7 @@ async function finalizeFindings(
       );
     }
   }
-  return { kept, filtered, suppressed, baselined, usage };
+  return { kept, filtered, baselined, usage };
 }
 
 function partitionFindings(findings: readonly Finding[], config: Config) {
