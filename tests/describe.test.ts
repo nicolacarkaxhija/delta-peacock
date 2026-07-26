@@ -3,7 +3,7 @@ import {
   DESCRIPTION_END,
   DESCRIPTION_START,
   upsertDescriptionSection,
-} from "../src/commands/describe.js";
+} from "../src/review/describe.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
 import { createGitLabPort } from "../src/scm/gitlab.js";

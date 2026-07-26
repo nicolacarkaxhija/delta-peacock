@@ -7,60 +7,15 @@ import { ToolError } from "../errors.js";
 import { acquireDiff, resolveTargetRef } from "../git/diff.js";
 import { buildModelPort } from "../model/build.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
-import { parseJson } from "../review/parse.js";
+import {
+  DESCRIPTION_START,
+  buildDescribeRequest,
+  parseDescribeReply,
+  upsertDescriptionSection,
+} from "../review/describe.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
 import { buildScmPort } from "../scm/build.js";
 import { isDryRun } from "../scm/publish.js";
-
-export const DESCRIPTION_START = "<!-- delta-peacock:description:start -->";
-export const DESCRIPTION_END = "<!-- delta-peacock:description:end -->";
-
-/**
- * Replaces the marker-fenced section in place, or appends one; the author's
- * own prose outside the fence is never touched.
- */
-export function upsertDescriptionSection(existing: string, section: string): string {
-  const fenced = `${DESCRIPTION_START}\n${section.trim()}\n${DESCRIPTION_END}`;
-  const start = existing.indexOf(DESCRIPTION_START);
-  const end = existing.indexOf(DESCRIPTION_END);
-  if (start !== -1 && end > start) {
-    return existing.slice(0, start) + fenced + existing.slice(end + DESCRIPTION_END.length);
-  }
-  return existing.trim() === "" ? fenced : `${existing.replace(/\s+$/, "")}\n\n${fenced}`;
-}
-
-/** Kept stable so provider-side prompt caching can hit across runs. */
-const SYSTEM = [
-  "You are delta-peacock, a code review assistant.",
-  "Summarize the change the unified diff makes for the pull request description.",
-  "Reply with one JSON object and nothing else:",
-  '{"title": "conventional, under 70 characters", "summary": "markdown"}',
-  "The summary states what changed and why it matters, in short plain prose.",
-  "Use a bullet list only when the change has clearly separable parts.",
-  "Never invent motivation the diff does not show.",
-].join("\n");
-
-interface DescribeReply {
-  title?: string;
-  summary: string;
-}
-
-function parseDescribeReply(text: string): DescribeReply {
-  const parsed = parseJson(text);
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new ToolError("model reply was not a JSON object");
-  }
-  const record = parsed as Record<string, unknown>;
-  if (typeof record["summary"] !== "string" || record["summary"].trim() === "") {
-    throw new ToolError("model reply held no usable summary");
-  }
-  return {
-    summary: record["summary"],
-    ...(typeof record["title"] === "string" && record["title"].trim() !== ""
-      ? { title: record["title"].trim() }
-      : {}),
-  };
-}
 
 function isLocalOrDry(config: Config): boolean {
   // local-provider behavior lives here; dry-run behavior defers to the shared guard
@@ -104,7 +59,7 @@ export async function runDescribe(
   const redacted = redactDiff(acquired.text, compileCustomPatterns(config.redaction.patterns), {
     strict: config.redaction.strict,
   });
-  const request = { system: SYSTEM, user: redacted.text };
+  const request = buildDescribeRequest(redacted.text);
 
   const now = deps.clock?.() ?? new Date();
   if (guardActive(config)) {
