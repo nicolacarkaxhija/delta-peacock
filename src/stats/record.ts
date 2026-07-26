@@ -34,10 +34,14 @@ export function guidelineCounts(findings: readonly Finding[]): Record<string, nu
   return counts;
 }
 
-export function appendRecord(cwd: string, relPath: string, record: StatsRecord): void {
+export async function appendRecord(
+  cwd: string,
+  relPath: string,
+  record: StatsRecord,
+): Promise<void> {
   const full = path.resolve(cwd, relPath);
   mkdirSync(path.dirname(full), { recursive: true });
-  withLock(full, () => {
+  await withLock(full, () => {
     appendFileSync(full, `${JSON.stringify(record)}\n`);
   });
 }

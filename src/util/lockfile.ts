@@ -11,8 +11,14 @@ export interface LockOptions {
   staleMs?: number;
   /** How many acquire attempts before giving up. */
   attempts?: number;
-  /** Busy-wait between attempts, in milliseconds. */
+  /** Backoff between attempts, in milliseconds. */
   spinMs?: number;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 /**
@@ -21,13 +27,15 @@ export interface LockOptions {
  * stats append records once). Two rules keep the guarantee honest: a lock left
  * behind by a crashed holder is reclaimed once it goes stale, and a writer that
  * still cannot acquire the lock skips its update rather than racing and
- * clobbering a concurrent total. Returns whether the update ran.
+ * clobbering a concurrent total. Retries back off with a real timer rather
+ * than busy-spinning the event loop, so a contended lock never blocks
+ * whatever else the process is doing. Returns whether the update ran.
  */
-export function withLock(
+export async function withLock(
   targetPath: string,
   update: () => void,
   options: LockOptions = {},
-): boolean {
+): Promise<boolean> {
   const lockPath = `${targetPath}.lock`;
   const staleMs = options.staleMs ?? STALE_MS;
   const attempts = options.attempts ?? MAX_ATTEMPTS;
@@ -47,10 +55,7 @@ export function withLock(
         /* v8 ignore next 2 -- the lock vanished between the failed claim and the stat */
         // nothing to reclaim; fall through and retry
       }
-      const waitUntil = Date.now() + spinMs;
-      while (Date.now() < waitUntil) {
-        // short spin; contention is rare and brief
-      }
+      await sleep(spinMs);
     }
   }
   // never a read-modify-write without the lock: dropping one update is safer

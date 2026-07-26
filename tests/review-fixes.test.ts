@@ -162,9 +162,7 @@ describe("cost guard concurrency", () => {
     const counter = path.join(mkdtempSync(path.join(tmpdir(), "peacock-lock-")), "spend.json");
     await Promise.all(
       Array.from({ length: 8 }, () =>
-        Promise.resolve().then(() => {
-          recordSpend(counter, "2026-07", 0.01);
-        }),
+        Promise.resolve().then(() => recordSpend(counter, "2026-07", 0.01)),
       ),
     );
     expect(readMonthSpend(counter, "2026-07")).toBeCloseTo(0.08);

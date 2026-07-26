@@ -285,7 +285,7 @@ export async function runAudit(
 
   if (usage && anyRateConfigured(config.cost)) {
     const spent = computeCost(usage, config.cost).total;
-    recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+    await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
   }
 
   return gate.failed ? 2 : 0;
