@@ -22,6 +22,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_MAX_DIFF_BYTES: "review.maxDiffBytes",
   DELTA_PEACOCK_REVIEW_CONFIDENCE_FLOOR: "review.confidenceFloor",
   DELTA_PEACOCK_REVIEW_GENERAL_PASS: "review.generalPass",
+  DELTA_PEACOCK_REVIEW_HARVEST_UNCITED: "review.harvestUncited",
   DELTA_PEACOCK_REVIEW_OBSERVATION_SEVERITY_CAP: "review.observationSeverityCap",
   DELTA_PEACOCK_REVIEW_MAX_PROPOSED_GUIDELINES: "review.maxProposedGuidelines",
   DELTA_PEACOCK_REVIEW_BASELINE_PATH: "review.baselinePath",
@@ -98,6 +99,7 @@ const NUMBER_PATHS = new Set([
 const BOOLEAN_PATHS = new Set([
   "review.fetchTarget",
   "review.generalPass",
+  "review.harvestUncited",
   "scm.commitStatus",
   "scm.comments",
   "scm.codeInsights",

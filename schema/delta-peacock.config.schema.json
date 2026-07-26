@@ -93,6 +93,10 @@
           "default": false,
           "type": "boolean"
         },
+        "harvestUncited": {
+          "default": false,
+          "type": "boolean"
+        },
         "observationSeverityCap": {
           "default": "MINOR",
           "type": "string",
