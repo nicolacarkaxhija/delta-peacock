@@ -12,6 +12,7 @@ import { renderDraft, type Draft } from "../guidelines/draft.js";
 import { parseJson } from "../review/parse.js";
 import { buildScmPort } from "../scm/build.js";
 import type { CommentSignal } from "../scm/port.js";
+import { isDryRun } from "../scm/publish.js";
 
 const FINDING_MARKER = /<!-- delta-peacock:finding:([0-9a-f]+(?:-\d+)?) -->/;
 const SEVERITY_LEAD = /^\*\*(BLOCKER|CRITICAL|MAJOR|MINOR|INFO)\*\*\s*/;
@@ -133,7 +134,7 @@ export async function runLearn(
   }
 
   const request = { system: SYSTEM, user: JSON.stringify(evidence, null, 2) };
-  if (config.scm.dryRun) {
+  if (isDryRun(config)) {
     deps.out(`dry run: ${String(evidence.length)} signal(s) collected, no model was called\n`);
     return 0;
   }

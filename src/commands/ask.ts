@@ -14,6 +14,7 @@ import type { ModelRequest } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { renderGuideline } from "../review/prompt.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
+import { isDryRun } from "../scm/publish.js";
 import { stdinReader } from "./line-reader.js";
 
 interface Turn {
@@ -172,7 +173,7 @@ export async function runAsk(
         : {}),
     };
 
-    if (config.scm.dryRun) {
+    if (isDryRun(config)) {
       deps.out("dry run: the question was prepared but no model was called\n");
       return 0;
     }
