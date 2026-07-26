@@ -235,6 +235,38 @@ export const ConfigSchema = z
         message: "ensemble.judge is required when ensemble.mode is judge",
       });
     }
+    // every openai-compatible model ref needs a real baseUrl, not only
+    // config.model: an ensemble member, its judge, or the calibration model
+    // can just as easily point at a local host with no default endpoint
+    for (const [index, member] of config.ensemble.members.entries()) {
+      if (member.provider === "openai-compatible" && member.baseUrl === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["ensemble", "members", index, "baseUrl"],
+          message: `ensemble.members[${String(index)}].baseUrl is required when its provider is openai-compatible`,
+        });
+      }
+    }
+    if (
+      config.ensemble.judge?.provider === "openai-compatible" &&
+      config.ensemble.judge.baseUrl === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ensemble", "judge", "baseUrl"],
+        message: "ensemble.judge.baseUrl is required when its provider is openai-compatible",
+      });
+    }
+    if (
+      config.calibration.model?.provider === "openai-compatible" &&
+      config.calibration.model.baseUrl === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["calibration", "model", "baseUrl"],
+        message: "calibration.model.baseUrl is required when its provider is openai-compatible",
+      });
+    }
     if (config.scm.provider !== "local") {
       if (config.scm.repository === undefined) {
         ctx.addIssue({

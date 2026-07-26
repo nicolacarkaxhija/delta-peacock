@@ -113,6 +113,64 @@ describe("config loading", () => {
     expect(problems.join("\n")).toContain("openai-compatible");
   });
 
+  it("enforces the same base-url rule for an openai-compatible ensemble member", () => {
+    const problems = problemsOf(() =>
+      loadConfig({
+        root: makeRoot(
+          [
+            "ensemble:",
+            "  enabled: true",
+            "  members:",
+            "    - provider: openai-compatible",
+            "      id: local-model",
+          ].join("\n"),
+        ),
+      }),
+    );
+    expect(problems.join("\n")).toContain("ensemble.members[0].baseUrl");
+    expect(problems.join("\n")).toContain("openai-compatible");
+  });
+
+  it("enforces the same base-url rule for an openai-compatible ensemble judge", () => {
+    const problems = problemsOf(() =>
+      loadConfig({
+        root: makeRoot(
+          [
+            "ensemble:",
+            "  enabled: true",
+            "  mode: judge",
+            "  members:",
+            "    - provider: anthropic",
+            "      id: a",
+            "  judge:",
+            "    provider: openai-compatible",
+            "    id: local-judge",
+          ].join("\n"),
+        ),
+      }),
+    );
+    expect(problems.join("\n")).toContain("ensemble.judge.baseUrl");
+    expect(problems.join("\n")).toContain("openai-compatible");
+  });
+
+  it("enforces the same base-url rule for an openai-compatible calibration model", () => {
+    const problems = problemsOf(() =>
+      loadConfig({
+        root: makeRoot(
+          [
+            "calibration:",
+            "  enabled: true",
+            "  model:",
+            "    provider: openai-compatible",
+            "    id: local-model",
+          ].join("\n"),
+        ),
+      }),
+    );
+    expect(problems.join("\n")).toContain("calibration.model.baseUrl");
+    expect(problems.join("\n")).toContain("openai-compatible");
+  });
+
   it("returns a deeply frozen config", () => {
     const config = loadConfig({ root: makeRoot() });
     expect(Object.isFrozen(config)).toBe(true);
