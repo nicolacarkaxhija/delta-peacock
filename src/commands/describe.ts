@@ -10,6 +10,7 @@ import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { parseJson } from "../review/parse.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
 import { buildScmPort } from "../scm/build.js";
+import { isDryRun } from "../scm/publish.js";
 
 export const DESCRIPTION_START = "<!-- delta-peacock:description:start -->";
 export const DESCRIPTION_END = "<!-- delta-peacock:description:end -->";
@@ -62,7 +63,8 @@ function parseDescribeReply(text: string): DescribeReply {
 }
 
 function isLocalOrDry(config: Config): boolean {
-  return config.scm.provider === "local" || config.scm.dryRun;
+  // local-provider behavior lives here; dry-run behavior defers to the shared guard
+  return config.scm.provider === "local" || isDryRun(config);
 }
 
 export async function runDescribe(

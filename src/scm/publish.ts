@@ -1,3 +1,4 @@
+import type { Config } from "../config/schema.js";
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
 import { SEVERITIES } from "../domain/severity.js";
@@ -194,15 +195,30 @@ function statusDescription(input: SummaryInput): string {
   return `passed at failOn=${input.gate.threshold}`;
 }
 
+/** The one place every command asks whether a write is suppressed; nothing else reads config.scm.dryRun directly. */
+export function isDryRun(config: Pick<Config, "scm">): boolean {
+  return config.scm.dryRun;
+}
+
 /**
  * Idempotent publication: comments carry a fingerprint marker, so re-runs
  * update what changed, delete what resolved, and never duplicate.
  */
 export async function publishReview(
   scm: ScmPort,
-  input: SummaryInput & { commitStatus: boolean; comments?: boolean; codeInsights?: boolean },
+  input: SummaryInput & {
+    commitStatus: boolean;
+    comments?: boolean;
+    codeInsights?: boolean;
+    /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
+    dryRun: boolean;
+  },
 ): Promise<PublishOutcome> {
   const outcome: PublishOutcome = { created: 0, updated: 0, deleted: 0, unchanged: 0, notices: [] };
+  if (input.dryRun) {
+    outcome.notices.push("dry run: no comments, summary or status will be posted");
+    return outcome;
+  }
   if (input.comments !== false) {
     await reconcileInlineComments(scm, input.findings, outcome);
     await upsertSummary(scm, renderSummaryBody(input));

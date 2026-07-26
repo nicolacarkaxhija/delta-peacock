@@ -44,7 +44,7 @@ import {
   type RejectedCandidate,
 } from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
-import { publishReview } from "../scm/publish.js";
+import { isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { harvestUncited } from "./harvest.js";
@@ -374,6 +374,7 @@ export async function runReview(
     commitStatus: config.scm.commitStatus,
     comments: config.scm.comments,
     codeInsights: config.scm.codeInsights,
+    dryRun: isDryRun(config),
   });
 
   if (usage && anyRateConfigured(config.cost)) {
@@ -710,6 +711,7 @@ async function publishAllClear(deps: ReviewDeps, config: Config): Promise<void> 
     filtered: 0,
     gate: evaluateGate([], config.gate.failOn),
     commitStatus: config.scm.commitStatus,
+    dryRun: isDryRun(config),
   });
 }
 
@@ -719,15 +721,14 @@ async function publishIfConfigured(
   input: Parameters<typeof publishReview>[1],
 ): Promise<void> {
   if (config.scm.provider === "local") return;
-  if (config.scm.dryRun) {
-    // the hard guarantee: in a dry run, no request of any kind goes out
-    deps.err("dry run: no comments, summary or status will be posted\n");
-    return;
-  }
+  // publishReview itself holds the hard guarantee now: a dry run trips zero
+  // adapter writes even if this caller got the plumbing wrong.
   const scm = deps.scmPort ?? buildScmPort(config, deps.env);
   const outcome = await publishReview(scm, input);
   for (const notice of outcome.notices) deps.err(`${notice}\n`);
-  deps.err(
-    `published: ${String(outcome.created)} created, ${String(outcome.updated)} updated, ${String(outcome.deleted)} resolved, ${String(outcome.unchanged)} unchanged\n`,
-  );
+  if (!input.dryRun) {
+    deps.err(
+      `published: ${String(outcome.created)} created, ${String(outcome.updated)} updated, ${String(outcome.deleted)} resolved, ${String(outcome.unchanged)} unchanged\n`,
+    );
+  }
 }
