@@ -247,6 +247,43 @@ describe("api diff fallback", () => {
     }
   });
 
+  it("surfaces a malformed --last-reviewed-commit instead of silently using the SCM API diff", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      fake.diffText = API_DIFF;
+      const repo = makeRepo();
+      write(repo, "guidelines/no-console.md", GUIDELINE);
+      commitAll(repo, "rules");
+      git(repo, "checkout", "-q", "-b", "feature");
+      write(repo, "src/app.js", "console.log('x');\n");
+      commitAll(repo, "change");
+
+      let stderr = "";
+      const code = await runCli(["review", "--last-reviewed-commit", "bad ref!"], {
+        cwd: repo,
+        env: {
+          DELTA_PEACOCK_SCM_PROVIDER: "bitbucket",
+          DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+          DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+          DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
+          BITBUCKET_TOKEN: "test-token",
+        },
+        out: () => undefined,
+        err: (text) => {
+          stderr += text;
+        },
+        modelPort: model(CITED),
+      });
+      // an invalid ref is a configuration mistake; ADR 0004 reserves the SCM
+      // API fallback for a shallow or absent local clone, not for this
+      expect(code).toBe(1);
+      expect(stderr).toContain("unsafe git ref name");
+      expect(stderr).not.toContain("using the SCM API diff instead");
+    } finally {
+      await fake.close();
+    }
+  });
+
   it("missing token for bitbucket is an actionable tool error", async () => {
     const repo = makeRepo();
     write(repo, "guidelines/no-console.md", GUIDELINE);

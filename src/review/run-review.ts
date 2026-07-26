@@ -15,6 +15,7 @@ import {
   changedFilesFromDiff,
   commitAuthor,
   filterDiffByPath,
+  LocalDiffUnavailableError,
   newLineTexts,
   resolveTargetRef,
   stagedDiff,
@@ -139,6 +140,9 @@ export async function runReview(
         resolvedTarget,
       );
     } catch (error) {
+      // ADR 0004 scopes the fallback to a shallow or absent local clone; any
+      // other failure (a malformed ref, say) is a real problem to surface
+      if (!(error instanceof LocalDiffUnavailableError)) throw error;
       acquired = await apiDiffFallback(deps, config, error);
     }
   }
