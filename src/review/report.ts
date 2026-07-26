@@ -1,12 +1,16 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { RejectedCandidate } from "./parse.js";
-import type { SuppressedFinding } from "./calibrate.js";
 
 const REJECTED_CAP = 200;
 import type { GateDecision } from "../domain/gate.js";
 import type { ModelUsage } from "../model/port.js";
 import type { ComputedCost } from "../model/usage.js";
 
+/**
+ * A finding as rendered in the report; already carries its own optional
+ * `calibration` note (from `Finding`) when the calibration pass disagreed —
+ * advisory only, never gating (ADR 0008).
+ */
 export type ReportedFinding = Finding & {
   fingerprint: string;
   /** The flagged line's text at review time; the fix command's safety anchor. */
@@ -62,8 +66,6 @@ export interface ReviewReport {
   };
   /** How many agentic context tools the model invoked. */
   toolCalls?: number;
-  /** Present when calibration ran; every suppression carries its reason. */
-  calibration?: { suppressed: SuppressedFinding[] };
   /** The review reply came from the response cache; no model was called. */
   cachedResponse?: true;
   /** The prompt exceeded the window; context was dropped or the diff batched. */
@@ -87,7 +89,6 @@ export function buildReport(input: {
   ensemble?: ReviewReport["ensemble"];
   budget?: ReviewReport["budget"];
   toolCalls?: number;
-  calibration?: ReviewReport["calibration"];
   cachedResponse?: true;
   budgetDegraded?: true;
   lintersDetected?: string[];
@@ -134,7 +135,6 @@ export function buildReport(input: {
     ...(input.ensemble ? { ensemble: input.ensemble } : {}),
     ...(input.budget ? { budget: input.budget } : {}),
     ...(input.toolCalls !== undefined ? { toolCalls: input.toolCalls } : {}),
-    ...(input.calibration ? { calibration: input.calibration } : {}),
     ...(input.cachedResponse ? { cachedResponse: input.cachedResponse } : {}),
     ...(input.budgetDegraded ? { budgetDegraded: input.budgetDegraded } : {}),
     ...(input.lintersDetected ? { lintersDetected: input.lintersDetected } : {}),
