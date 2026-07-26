@@ -11,7 +11,7 @@ import { changedFilesFromDiff } from "../git/diff.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import { parseReviewResponse } from "../review/parse.js";
-import { buildReviewPrompt } from "../review/prompt.js";
+import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 
 /**
  * Each case is self-contained: its own guidelines, its own optional files/
@@ -39,10 +39,11 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       );
     }
 
-    const request = buildReviewPrompt(guidelines, benchCase.diff, {
-      generalPass: config.review.generalPass,
-      ...(projectContext !== "" ? { projectContext } : {}),
-    });
+    const request = buildReviewPrompt(
+      guidelines,
+      benchCase.diff,
+      buildPromptOptions(config, benchCase.dir, projectContext),
+    );
     const port = deps.modelPort ?? buildModelPort(config, deps.env);
     const reply = await port.complete(request);
     const parsed = parseReviewResponse(reply.text, {
