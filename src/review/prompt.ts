@@ -1,5 +1,7 @@
+import type { Config } from "../config/schema.js";
 import type { Guideline } from "../domain/guideline.js";
 import type { ModelRequest } from "../model/port.js";
+import { detectLinters, linterInstruction } from "./linters.js";
 
 export interface PromptOptions {
   /** When on, the model may add uncited observations and propose new guidelines. */
@@ -15,6 +17,25 @@ export interface PromptOptions {
 /** Shared by every command that shows the corpus, so the block stays byte-identical. */
 export function renderGuideline(guideline: Guideline): string {
   return `### ${guideline.id} (${guideline.severity}) ${guideline.title}\n${guideline.body}`;
+}
+
+/**
+ * The prompt-shaping fields every full-tree pass (bench, audit) builds
+ * identically: general pass, output language and the linters detected at
+ * root. Kept in one place so bench results transfer to production instead of
+ * silently drifting from what a live review would ask.
+ */
+export function buildPromptOptions(
+  config: Config,
+  root: string,
+  projectContext?: string,
+): PromptOptions {
+  return {
+    generalPass: config.review.generalPass,
+    language: config.review.language,
+    linterInstruction: linterInstruction(detectLinters(root)),
+    ...(projectContext !== undefined && projectContext !== "" ? { projectContext } : {}),
+  };
 }
 
 const RESPONSE_SHAPE =
