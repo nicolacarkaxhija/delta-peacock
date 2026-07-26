@@ -16,6 +16,12 @@ export const ReviewSchema = z.strictObject({
   guidelinesRef: z.string().min(1).default("target"),
   /** Guideline packs: local paths (repo-root relative) or pinned git URLs; local guidelines win collisions. */
   packs: z.array(z.string().min(1)).default([]),
+  /**
+   * A guideline missing languages/paths in its frontmatter: lenient (default)
+   * keeps it — applying everywhere — with a notice naming the gap; strict
+   * skips the rule entirely with a warning instead.
+   */
+  frontmatterContract: z.enum(["lenient", "strict"]).default("lenient"),
   /** Fetch the target from origin before diffing so stale local refs never lie (ADR 0004). */
   fetchTarget: z.boolean().default(true),
   /** Commit last reviewed; when set and still reachable, only newer changes are reviewed. */

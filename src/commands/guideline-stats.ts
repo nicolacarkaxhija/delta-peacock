@@ -86,7 +86,10 @@ export interface GuidelineStatsOptions {
 
 export function runGuidelineStats(deps: RuntimeDeps, options: GuidelineStatsOptions): number {
   const config = loadConfig({ root: deps.cwd, env: deps.env });
-  const loaded = loadGuidelines(path.join(deps.cwd, config.review.guidelinesDir));
+  const loaded = loadGuidelines(
+    path.join(deps.cwd, config.review.guidelinesDir),
+    config.review.frontmatterContract,
+  );
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);
 
   const fires = new Map<string, number>();

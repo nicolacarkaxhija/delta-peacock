@@ -14,9 +14,13 @@ export function runGuidelinesLint(
 ): number {
   const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
   const dir = path.resolve(deps.cwd, config.review.guidelinesDir);
-  const loaded = loadGuidelinesFromFiles(readWorkingTreeGuidelines(dir));
+  const loaded = loadGuidelinesFromFiles(
+    readWorkingTreeGuidelines(dir),
+    config.review.frontmatterContract,
+  );
 
   const problems = [...loaded.problems];
+  for (const notice of loaded.notices) deps.err(`${notice}\n`);
   for (const guideline of loaded.guidelines) {
     problems.push(...guidelineProblems(guideline));
     for (const warning of guidelineWarnings(guideline)) deps.err(`warning: ${warning}\n`);

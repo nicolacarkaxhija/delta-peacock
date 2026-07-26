@@ -102,6 +102,7 @@ export async function runReview(
       config.review.guidelinesDir,
       resolvedTarget.ref,
       config.review.packs,
+      config.review.frontmatterContract,
     );
   } catch (error) {
     // bootstrapping a repo that has no guidelines directory yet is fine

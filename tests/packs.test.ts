@@ -152,7 +152,11 @@ describe("pack merge precedence", () => {
     expect(resolved.guidelines.map((g) => g.id)).toEqual(["no-dw-logger", "no-console"]);
     expect(resolved.guidelines[0]?.pack).toBe("sfcc");
     expect(resolved.guidelines[1]?.pack).toBeUndefined();
-    expect(resolved.notices).toEqual([]);
+    // neither rule scopes languages/paths, so the default lenient contract
+    // names each gap; no precedence-related notice fires here
+    expect(resolved.notices).toHaveLength(2);
+    expect(resolved.notices.join("\n")).toContain("no-console");
+    expect(resolved.notices.join("\n")).toContain("no-dw-logger");
   });
 
   it("lets a local guideline win an id collision with a notice naming the losing pack", () => {

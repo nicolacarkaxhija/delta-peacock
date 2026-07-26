@@ -211,6 +211,25 @@ describe("config loading", () => {
     expect(loadConfig({ root: makeRoot() }).review.packs).toEqual([]);
   });
 
+  it("defaults review.frontmatterContract to lenient and honors a strict override", () => {
+    expect(loadConfig({ root: makeRoot() }).review.frontmatterContract).toBe("lenient");
+    const strict = loadConfig({
+      root: makeRoot(),
+      env: { DELTA_PEACOCK_REVIEW_FRONTMATTER_CONTRACT: "strict" },
+    });
+    expect(strict.review.frontmatterContract).toBe("strict");
+  });
+
+  it("rejects an unrecognized frontmatterContract value", () => {
+    const problems = problemsOf(() =>
+      loadConfig({
+        root: makeRoot(),
+        env: { DELTA_PEACOCK_REVIEW_FRONTMATTER_CONTRACT: "loose" },
+      }),
+    );
+    expect(problems.join("\n")).toContain("review.frontmatterContract");
+  });
+
   it("passes unparseable json env values through to validation", () => {
     const problems = problemsOf(() =>
       loadConfig({ root: makeRoot(), env: { DELTA_PEACOCK_REDACTION_PATTERNS: "not json" } }),

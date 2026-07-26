@@ -4,6 +4,8 @@ import type { Guideline } from "../src/domain/guideline.js";
 import { appliesTo } from "../src/guidelines/languages.js";
 import { runGuidelinesLint } from "../src/guidelines/lint.js";
 import { resolveGuidelines } from "../src/guidelines/loader.js";
+import { runCli } from "../src/index.js";
+import type { ModelPort } from "../src/model/port.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 function guideline(overrides: Partial<Guideline> = {}): Guideline {
@@ -234,5 +236,63 @@ describe("guidelines lint", () => {
         { "review.guidelinesDir": "nowhere" },
       ),
     ).toThrow("guidelines directory not found");
+  });
+});
+
+describe("review.frontmatterContract wired into a review", () => {
+  const UNSCOPED = "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUse the logger.\n";
+
+  function repoWithChange(): string {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", UNSCOPED);
+    commitAll(repo, "rules");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/app.js", "console.log('hi');\n");
+    commitAll(repo, "change");
+    return repo;
+  }
+
+  const port: ModelPort = {
+    complete: () =>
+      Promise.resolve({
+        text: JSON.stringify({
+          findings: [
+            { guidelineId: "no-console", file: "src/app.js", line: 1, title: "t", body: "b" },
+          ],
+        }),
+      }),
+  };
+
+  it("lenient (the default) keeps the unscoped rule and notices the gap", async () => {
+    let stderr = "";
+    const code = await runCli(["review", "--fail-on", "MAJOR"], {
+      cwd: repoWithChange(),
+      env: {},
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: port,
+    });
+    expect(code).toBe(2); // the violation still gates
+    expect(stderr).toContain("no-console");
+    expect(stderr).toContain("languages");
+    expect(stderr).toContain("lenient frontmatter contract");
+  });
+
+  it("strict drops the unscoped rule with a warning, so the citing finding never fires", async () => {
+    let stderr = "";
+    const code = await runCli(["review", "--fail-on", "MAJOR"], {
+      cwd: repoWithChange(),
+      env: { DELTA_PEACOCK_REVIEW_FRONTMATTER_CONTRACT: "strict" },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: port,
+    });
+    expect(code).toBe(0); // no usable guideline left to gate on
+    expect(stderr).toContain("no-console");
+    expect(stderr).toContain("strict frontmatter contract");
   });
 });

@@ -119,8 +119,12 @@ export async function runAudit(
   options: AuditOptions = {},
 ): Promise<number> {
   const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
-  const loaded = loadGuidelines(path.join(deps.cwd, config.review.guidelinesDir));
+  const loaded = loadGuidelines(
+    path.join(deps.cwd, config.review.guidelinesDir),
+    config.review.frontmatterContract,
+  );
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);
+  for (const notice of loaded.notices) deps.err(`${notice}\n`);
   if (loaded.guidelines.length === 0) {
     throw new ToolError("audit needs guidelines; none were usable");
   }
