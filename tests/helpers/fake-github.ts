@@ -62,6 +62,10 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
       if (method !== "GET") state.writes.push({ method, url: url.pathname });
 
       const auth = request.headers.authorization;
+      if (auth === "Bearer teapot") {
+        send(response, 418, { message: "teapot" });
+        return;
+      }
       if (auth !== "Bearer test-token" && auth !== "Bearer rate-limited") {
         send(response, 401, { message: "Bad credentials" });
         return;

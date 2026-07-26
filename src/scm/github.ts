@@ -1,4 +1,3 @@
-import { ToolError } from "../errors.js";
 import type {
   CommentSignal,
   NewInlineComment,
@@ -7,6 +6,7 @@ import type {
   ScmPort,
   StatusState,
 } from "./port.js";
+import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface GitHubPortOptions {
   /** owner/repo */
@@ -29,57 +29,54 @@ interface GitHubComment {
 }
 
 export function createGitHubPort(options: GitHubPortOptions): ScmPort {
-  if (!SAFE_REPOSITORY.test(options.repository)) {
-    throw new ToolError(
-      `scm.repository must look like owner/repo, got ${JSON.stringify(options.repository)}`,
-    );
-  }
-  const base = (options.baseUrl ?? "https://api.github.com").replace(/\/$/, "");
+  assertSafeRepository(
+    options.repository,
+    SAFE_REPOSITORY,
+    (repository) => `scm.repository must look like owner/repo, got ${JSON.stringify(repository)}`,
+  );
+  const base = normalizeBaseUrl(options.baseUrl, "https://api.github.com");
   const repo = options.repository;
   const pr = String(options.pullRequest);
   let headSha: string | undefined;
 
   async function request(method: string, path: string, body?: unknown): Promise<unknown> {
-    const response = await fetch(`${base}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${options.token}`,
-        accept: "application/vnd.github+json",
-        "user-agent": "delta-peacock",
-        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    const response = await httpRequest(
+      `${base}${path}`,
+      {
+        method,
+        headers: {
+          authorization: `Bearer ${options.token}`,
+          accept: "application/vnd.github+json",
+          "user-agent": "delta-peacock",
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-    if (response.status === 401) {
-      throw new ToolError("GitHub rejected the credentials; check GITHUB_TOKEN");
-    }
-    if (response.status === 403) {
-      const remaining = response.headers.get("x-ratelimit-remaining");
-      throw new ToolError(
-        remaining === "0"
-          ? "GitHub rate limit exhausted; retry after the limit resets"
-          : "GitHub denied the request (403); the token may lack repository permissions",
-      );
-    }
-    if (!response.ok) {
-      throw new ToolError(`GitHub responded ${String(response.status)} to ${method} ${path}`);
-    }
+      [
+        { status: 401, toMessage: () => "GitHub rejected the credentials; check GITHUB_TOKEN" },
+        {
+          status: 403,
+          toMessage: (response) =>
+            response.headers.get("x-ratelimit-remaining") === "0"
+              ? "GitHub rate limit exhausted; retry after the limit resets"
+              : "GitHub denied the request (403); the token may lack repository permissions",
+        },
+      ],
+      (status) => `GitHub responded ${String(status)} to ${method} ${path}`,
+    );
     if (response.status === 204) return undefined;
     return response.json();
   }
 
   async function paginate(path: string): Promise<GitHubComment[]> {
-    const all: GitHubComment[] = [];
-    for (let page = 1; ; page += 1) {
+    return collectAllPages(1, async (page) => {
       const separator = path.includes("?") ? "&" : "?";
       const batch = (await request(
         "GET",
         `${path}${separator}per_page=100&page=${String(page)}`,
       )) as GitHubComment[];
-      all.push(...batch);
-      if (batch.length === 0) break;
-    }
-    return all;
+      return { items: batch, next: batch.length === 0 ? undefined : page + 1 };
+    });
   }
 
   async function resolveHeadSha(): Promise<string> {
@@ -175,16 +172,18 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
       });
     },
     async fetchPullRequestDiff(): Promise<string> {
-      const response = await fetch(`${base}/repos/${repo}/pulls/${pr}`, {
-        headers: {
-          authorization: `Bearer ${options.token}`,
-          accept: "application/vnd.github.diff",
-          "user-agent": "delta-peacock",
+      const response = await httpRequest(
+        `${base}/repos/${repo}/pulls/${pr}`,
+        {
+          headers: {
+            authorization: `Bearer ${options.token}`,
+            accept: "application/vnd.github.diff",
+            "user-agent": "delta-peacock",
+          },
         },
-      });
-      if (!response.ok) {
-        throw new ToolError(`GitHub responded ${String(response.status)} to the diff request`);
-      }
+        [],
+        (status) => `GitHub responded ${String(status)} to the diff request`,
+      );
       return response.text();
     },
   };

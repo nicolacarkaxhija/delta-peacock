@@ -59,4 +59,13 @@ describe("github adapter errors", () => {
       await fake.close();
     }
   });
+
+  it("falls back to a generic error naming the status for anything else unexpected", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      await expect(portAgainst(fake.baseUrl, "teapot").listInlineComments()).rejects.toThrow(/418/);
+    } finally {
+      await fake.close();
+    }
+  });
 });

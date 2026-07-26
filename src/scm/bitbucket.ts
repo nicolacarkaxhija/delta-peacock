@@ -1,4 +1,3 @@
-import { ToolError } from "../errors.js";
 import type {
   CommentSignal,
   InsightReport,
@@ -8,6 +7,7 @@ import type {
   ScmPort,
   StatusState,
 } from "./port.js";
+import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface BitbucketPortOptions {
   /** workspace/repo */
@@ -40,49 +40,55 @@ const STATUS_STATES: Record<StatusState, string> = {
 };
 
 export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
-  if (!SAFE_REPOSITORY.test(options.repository)) {
-    throw new ToolError(
-      `scm.repository must look like workspace/repo, got ${JSON.stringify(options.repository)}`,
-    );
-  }
-  const base = (options.baseUrl ?? "https://api.bitbucket.org/2.0").replace(/\/$/, "");
+  assertSafeRepository(
+    options.repository,
+    SAFE_REPOSITORY,
+    (repository) =>
+      `scm.repository must look like workspace/repo, got ${JSON.stringify(repository)}`,
+  );
+  const base = normalizeBaseUrl(options.baseUrl, "https://api.bitbucket.org/2.0");
   const repo = options.repository;
   const pr = String(options.pullRequest);
   let sourceSha: string | undefined;
 
   async function request(method: string, url: string, body?: unknown): Promise<Response> {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        authorization: `Bearer ${options.token}`,
-        accept: "application/json",
-        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    return httpRequest(
+      url,
+      {
+        method,
+        headers: {
+          authorization: `Bearer ${options.token}`,
+          accept: "application/json",
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-    if (response.status === 401) {
-      throw new ToolError("Bitbucket rejected the credentials; check BITBUCKET_TOKEN");
-    }
-    if (response.status === 403) {
-      throw new ToolError("Bitbucket denied the request (403); the token may lack permissions");
-    }
-    if (response.status === 429) {
-      throw new ToolError("Bitbucket rate limit exhausted; retry after the limit resets");
-    }
-    if (!response.ok) {
-      throw new ToolError(`Bitbucket responded ${String(response.status)} to ${method} ${url}`);
-    }
-    return response;
+      [
+        {
+          status: 401,
+          toMessage: () => "Bitbucket rejected the credentials; check BITBUCKET_TOKEN",
+        },
+        {
+          status: 403,
+          toMessage: () => "Bitbucket denied the request (403); the token may lack permissions",
+        },
+        {
+          status: 429,
+          toMessage: () => "Bitbucket rate limit exhausted; retry after the limit resets",
+        },
+      ],
+      (status) => `Bitbucket responded ${String(status)} to ${method} ${url}`,
+    );
   }
 
   async function listComments(): Promise<BitbucketComment[]> {
-    const all: BitbucketComment[] = [];
-    let url: string | undefined = `${base}/repositories/${repo}/pullrequests/${pr}/comments`;
-    while (url !== undefined) {
-      const page = (await (await request("GET", url)).json()) as Page<BitbucketComment>;
-      all.push(...page.values);
-      url = page.next;
-    }
+    const all = await collectAllPages(
+      `${base}/repositories/${repo}/pullrequests/${pr}/comments`,
+      async (url) => {
+        const page = (await (await request("GET", url)).json()) as Page<BitbucketComment>;
+        return { items: page.values, next: page.next };
+      },
+    );
     return all.filter((comment) => comment.deleted !== true);
   }
 
