@@ -26,7 +26,7 @@ import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import type { ModelRequest, ModelUsage } from "../model/port.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
-import { checkBudget, guardActive } from "../cost/guard.js";
+import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
@@ -184,7 +184,7 @@ export async function runReview(
 
   const now = deps.clock?.() ?? new Date();
   if (guardActive(config)) {
-    const decision = await checkBudget(config, request, now, { batches: diffBatches.length });
+    const decision = await checkCostGuard(config, request, now, { batches: diffBatches.length });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);

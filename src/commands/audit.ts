@@ -3,7 +3,7 @@ import path from "node:path";
 import picomatch from "picomatch";
 import { loadConfig } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
-import { checkBudget, guardActive } from "../cost/guard.js";
+import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Finding } from "../domain/finding.js";
@@ -164,7 +164,7 @@ export async function runAudit(
       system: requests.map((entry) => entry.request.system).join("\n"),
       user: requests.map((entry) => entry.request.user).join("\n"),
     };
-    const decision = await checkBudget(config, combined, now);
+    const decision = await checkCostGuard(config, combined, now);
     for (const notice of decision.notices) deps.err(`${notice}\n`);
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);

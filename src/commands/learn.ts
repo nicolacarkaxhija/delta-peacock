@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
-import { checkBudget, guardActive } from "../cost/guard.js";
+import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
 import { SEVERITIES, type Severity } from "../domain/severity.js";
@@ -140,7 +140,7 @@ export async function runLearn(
   }
   const now = deps.clock?.() ?? new Date();
   if (guardActive(config)) {
-    const decision = await checkBudget(config, request, now);
+    const decision = await checkCostGuard(config, request, now);
     for (const notice of decision.notices) deps.err(`${notice}\n`);
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);

@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
-import { guidelineProblems, guidelineWarnings } from "./checks.js";
+import { guidelineProblems, guidelineWarnings } from "./validate.js";
 import { loadGuidelinesFromFiles, markdownFilesUnder } from "./loader.js";
 import { PACK_MANIFEST_NAME } from "./packs.js";
 

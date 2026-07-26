@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config/loader.js";
 import { costExplorerMonthToDate } from "../src/cost/cost-explorer.js";
 import { monthKey, readMonthSpend, recordSpend } from "../src/cost/counter.js";
-import { checkBudget } from "../src/cost/guard.js";
+import { checkCostGuard } from "../src/cost/guard.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
@@ -104,7 +104,7 @@ describe("per-review cap", () => {
   it("multiplies the estimate by the ensemble call count", async () => {
     const repo = makeScenario();
     // a cap generous for one call but too small for three members plus a judge
-    const single = await checkBudget(
+    const single = await checkCostGuard(
       loadConfig({
         root: repo,
         env: {
@@ -115,7 +115,7 @@ describe("per-review cap", () => {
       { system: "s", user: "u" },
       new Date(),
     );
-    const ensembled = await checkBudget(
+    const ensembled = await checkCostGuard(
       loadConfig({
         root: repo,
         env: {
@@ -150,8 +150,8 @@ describe("per-review cap", () => {
     const request = { system: "s", user: "u" };
     // one call fits the cap; the same diff split into five batches does not, and
     // the guard must see the five before any model call is made
-    const whole = await checkBudget(config, request, new Date(), { batches: 1 });
-    const batched = await checkBudget(config, request, new Date(), { batches: 5 });
+    const whole = await checkCostGuard(config, request, new Date(), { batches: 1 });
+    const batched = await checkCostGuard(config, request, new Date(), { batches: 5 });
     expect(whole.allowed).toBe(true);
     expect(batched.allowed).toBe(false);
     expect(batched.estimated).toBeGreaterThan(whole.estimated);
@@ -247,7 +247,7 @@ describe("cost explorer source", () => {
         DELTA_PEACOCK_COST_SPEND_SOURCE: "aws-cost-explorer",
       },
     });
-    const decision = await checkBudget(config, { system: "s", user: "u" }, new Date(), {
+    const decision = await checkCostGuard(config, { system: "s", user: "u" }, new Date(), {
       costExplorerSend: () =>
         Promise.resolve({ ResultsByTime: [{ Total: { UnblendedCost: { Amount: "12.34" } } }] }),
     });
@@ -264,7 +264,7 @@ describe("cost explorer source", () => {
 
   it("counts union ensembles without a judge call", async () => {
     const repo = makeScenario();
-    const decision = await checkBudget(
+    const decision = await checkCostGuard(
       loadConfig({
         root: repo,
         env: {
@@ -280,7 +280,7 @@ describe("cost explorer source", () => {
       { system: "s", user: "u" },
       new Date(),
     );
-    const single = await checkBudget(
+    const single = await checkCostGuard(
       loadConfig({
         root: repo,
         env: {
@@ -313,7 +313,7 @@ describe("cost explorer source", () => {
         DELTA_PEACOCK_COST_COUNTER_PATH: counter,
       },
     });
-    const decision = await checkBudget(config, { system: "s", user: "u" }, new Date(), {
+    const decision = await checkCostGuard(config, { system: "s", user: "u" }, new Date(), {
       costExplorerSend: () => Promise.reject(new Error("no credentials")),
     });
     expect(decision.allowed).toBe(true);
