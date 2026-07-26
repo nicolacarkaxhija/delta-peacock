@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { batchFiles, fileAsDiff } from "../src/commands/audit.js";
+import { batchFiles, fileAsDiff } from "../src/review/tree-scan.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
