@@ -64,7 +64,9 @@ export function buildModelPortFor(
         baseUrl: ref.baseUrl ?? OPENROUTER_BASE_URL,
       });
     case "openai-compatible": {
-      // the schema's cross-field rule guarantees the base url is present
+      // the schema's cross-field rules guarantee the base url is present for
+      // every openai-compatible ref this function ever receives: config.model,
+      // an ensemble member or judge, and the calibration model alike
       const baseUrl = ref.baseUrl ?? "";
       return createOpenAiishPort({
         // many local hosts accept any key; default keeps them zero-config
