@@ -29,11 +29,15 @@ export function readMonthSpend(counterPath: string, month: string): number {
   return readAll(counterPath)[month] ?? 0;
 }
 
-export function recordSpend(counterPath: string, month: string, amount: number): void {
+export async function recordSpend(
+  counterPath: string,
+  month: string,
+  amount: number,
+): Promise<void> {
   mkdirSync(path.dirname(counterPath), { recursive: true });
   // read-modify-write under a best-effort lock; under extreme contention a
   // writer skips rather than clobber a concurrent total (see withLock)
-  withLock(counterPath, () => {
+  await withLock(counterPath, () => {
     const all = readAll(counterPath);
     all[month] = (all[month] ?? 0) + amount;
     writeFileSync(counterPath, `${JSON.stringify(all, null, 2)}\n`);

@@ -196,7 +196,7 @@ export async function runAsk(
     }
     if (reply.usage && anyRateConfigured(config.cost)) {
       const spent = computeCost(reply.usage, config.cost).total;
-      recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+      await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
     }
     deps.out(`${reply.text.trim()}\n`);
     transcript.push({ question, answer: reply.text.trim() });

@@ -125,7 +125,7 @@ export function priceEmbeddings(
       const reply = await port.embed(texts);
       const tokens = reply.tokens ?? Math.ceil(texts.join("").length / 4);
       const spent = (tokens / 1_000_000) * config.cost.rateEmbedPer1M;
-      recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(clock()), spent);
+      await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(clock()), spent);
       return reply;
     },
   };

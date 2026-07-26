@@ -159,7 +159,7 @@ export async function runLearn(
   }
   if (reply.usage && anyRateConfigured(config.cost)) {
     const spent = computeCost(reply.usage, config.cost).total;
-    recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+    await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
   }
 
   const notices: string[] = [];

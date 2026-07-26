@@ -67,7 +67,7 @@ async function backfill(deps: RuntimeDeps, cwd: string, statsPath: string): Prom
     (deps.clock?.() ?? new Date()).toISOString(),
     marked,
   );
-  appendRecord(cwd, statsPath, record);
+  await appendRecord(cwd, statsPath, record);
   const total = Object.values(record.byGuideline).reduce((sum, count) => sum + count, 0);
   deps.out(`backfilled ${String(total)} finding(s) from this pull request into ${statsPath}\n`);
   return 0;

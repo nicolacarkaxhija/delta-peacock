@@ -129,7 +129,7 @@ export async function runDescribe(
 
   if (reply.usage && anyRateConfigured(config.cost)) {
     const spent = computeCost(reply.usage, config.cost).total;
-    recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+    await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
   }
 
   if (isLocalOrDry(config)) {

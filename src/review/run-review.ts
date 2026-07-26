@@ -383,12 +383,12 @@ export async function runReview(
 
   if (usage && anyRateConfigured(config.cost)) {
     const spent = computeCost(usage, config.cost).total;
-    recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+    await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
   }
 
   if (config.stats.enabled) {
     // the recorded findings are what survived to the gate, not what was baselined
-    appendRecord(deps.cwd, config.stats.path, {
+    await appendRecord(deps.cwd, config.stats.path, {
       at: now.toISOString(),
       author: commitAuthor(deps.cwd, "HEAD"),
       addedLines: addedLineCount(diff),

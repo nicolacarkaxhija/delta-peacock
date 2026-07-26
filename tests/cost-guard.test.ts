@@ -189,7 +189,7 @@ describe("monthly cap and the counter", () => {
   it("blocks when month-to-date plus the estimate exceeds the cap, and a new month unblocks", async () => {
     const repo = makeScenario();
     const counter = counterFile();
-    recordSpend(counter, monthKey(JULY()), 0.99);
+    await recordSpend(counter, monthKey(JULY()), 0.99);
     const env = {
       DELTA_PEACOCK_COST_MONTHLY_CAP: "1",
       DELTA_PEACOCK_COST_COUNTER_PATH: counter,
@@ -214,11 +214,11 @@ describe("monthly cap and the counter", () => {
     expect(readMonthSpend(counter, monthKey(JULY()))).toBeCloseTo(perReview * 2);
   });
 
-  it("survives a corrupt counter file", () => {
+  it("survives a corrupt counter file", async () => {
     const counter = counterFile();
     writeFileSync(counter, "{nope");
     expect(readMonthSpend(counter, "2026-07")).toBe(0);
-    recordSpend(counter, "2026-07", 0.5);
+    await recordSpend(counter, "2026-07", 0.5);
     expect(readMonthSpend(counter, "2026-07")).toBeCloseTo(0.5);
   });
 });
