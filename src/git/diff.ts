@@ -2,6 +2,19 @@ import picomatch from "picomatch";
 import { ToolError } from "../errors.js";
 import { runGit } from "./git.js";
 
+/**
+ * Local git could not produce a diff because the target is unreachable here
+ * (a shallow or absent clone). ADR 0004 scopes the SCM-API fallback to
+ * exactly this; a caller must not treat any other failure (a malformed ref,
+ * say) the same way.
+ */
+export class LocalDiffUnavailableError extends ToolError {
+  constructor(message: string) {
+    super(message);
+    this.name = "LocalDiffUnavailableError";
+  }
+}
+
 /** Conservative ref shape: blocks option injection and git-level flag smuggling. */
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 
@@ -49,10 +62,59 @@ function targetUnchangedSince(cwd: string, targetRef: string, anchor: string): b
   }
 }
 
-function hasOriginRemote(cwd: string): boolean {
+function listRemotes(cwd: string): string[] {
   return runGit(cwd, ["remote"])
     .split("\n")
-    .some((line) => line.trim() === "origin");
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+}
+
+/** The branch HEAD is on, or undefined for a detached HEAD. */
+function currentBranch(cwd: string): string | undefined {
+  try {
+    const branch = runGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    return branch === "HEAD" ? undefined : branch;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The remote this branch tracks, or undefined when no upstream is configured. */
+function trackedRemote(cwd: string, branch: string): string | undefined {
+  try {
+    const remote = runGit(cwd, [
+      "for-each-ref",
+      "--format=%(upstream:remotename)",
+      `refs/heads/${branch}`,
+    ]).trim();
+    return remote === "" ? undefined : remote;
+  } catch {
+    return undefined;
+  }
+}
+
+interface RemoteResolution {
+  /** The remote to fetch from; undefined means none could be chosen. */
+  remote?: string;
+  /** True when remotes exist but none could be chosen unambiguously. */
+  ambiguous: boolean;
+  remotes: string[];
+}
+
+/**
+ * The remote ADR 0004's fetch should use: the current branch's own upstream
+ * first (correct even when it isn't named "origin"), else the sole remote.
+ * Zero remotes is a plain standalone repo, not worth a warning; two or more
+ * with no tracked upstream is genuinely ambiguous and is reported as such.
+ */
+function resolveFetchRemote(cwd: string): RemoteResolution {
+  const remotes = listRemotes(cwd);
+  const branch = currentBranch(cwd);
+  const tracked = branch !== undefined ? trackedRemote(cwd, branch) : undefined;
+  if (tracked !== undefined) return { remote: tracked, ambiguous: false, remotes };
+  const sole = remotes.length === 1 ? remotes[0] : undefined;
+  if (sole !== undefined) return { remote: sole, ambiguous: false, remotes };
+  return { ambiguous: remotes.length > 1, remotes };
 }
 
 export interface ResolvedTarget {
@@ -60,7 +122,7 @@ export interface ResolvedTarget {
   notices: string[];
 }
 
-/** Prefer a freshly fetched origin/{target}; fall back to the local ref with a notice. */
+/** Prefer a freshly fetched {remote}/{target}; fall back to the local ref with a notice. */
 export function resolveTargetRef(
   cwd: string,
   target: string,
@@ -68,18 +130,26 @@ export function resolveTargetRef(
 ): ResolvedTarget {
   assertSafeRef(target);
   const notices: string[] = [];
-  if (fetchTarget && hasOriginRemote(cwd)) {
-    try {
-      runGit(cwd, ["fetch", "--quiet", "origin", target]);
-    } catch (error) {
+  if (fetchTarget) {
+    const resolution = resolveFetchRemote(cwd);
+    if (resolution.remote !== undefined) {
+      const remote = resolution.remote;
+      try {
+        runGit(cwd, ["fetch", "--quiet", remote, target]);
+      } catch (error) {
+        notices.push(
+          `could not fetch ${remote}/${target} (${String((error as Error).message.split("\n")[0])}); using local refs`,
+        );
+      }
+      if (refExists(cwd, `${remote}/${target}`)) {
+        return { ref: `${remote}/${target}`, notices };
+      }
+      notices.push(`${remote}/${target} not found; using local ${target}`);
+    } else if (resolution.ambiguous) {
       notices.push(
-        `could not fetch origin/${target} (${String((error as Error).message.split("\n")[0])}); using local refs`,
+        `no single usable remote (${resolution.remotes.join(", ")}) and this branch tracks none of them; skipping the ADR-required fetch and using local ${target}`,
       );
     }
-    if (refExists(cwd, `origin/${target}`)) {
-      return { ref: `origin/${target}`, notices };
-    }
-    notices.push(`origin/${target} not found; using local ${target}`);
   }
   return { ref: target, notices };
 }
@@ -203,30 +273,41 @@ export function acquireDiff(
   // when the caller resolved the target itself it already surfaced those notices
   const notices = preResolved ? [] : [...resolved.notices];
 
+  // validated up front, outside the git-failure boundary below: a malformed
+  // anchor is a configuration mistake, never a shallow-clone symptom
+  const anchor = request.lastReviewedCommit;
+  if (anchor !== undefined) assertSafeRef(anchor);
+
   let mode: "incremental" | "full" = "full";
   let text: string;
-  const anchor = request.lastReviewedCommit;
-  if (anchor !== undefined) {
-    assertSafeRef(anchor);
-    if (!refExists(cwd, anchor) || !isAncestorOfHead(cwd, anchor)) {
-      notices.push(
-        `last reviewed commit ${anchor.slice(0, 12)} is not reachable from HEAD (rebase?); reviewing the full branch`,
-      );
-      text = mergeBaseDiff(cwd, ref);
-    } else if (!targetUnchangedSince(cwd, ref, anchor)) {
-      // the branch pulled target commits in after the anchor; a plain
-      // anchor..HEAD diff would review target-only changes (ADR 0004)
-      notices.push(
-        `the target moved into this branch since ${anchor.slice(0, 12)}; reviewing the full branch`,
-      );
-      text = mergeBaseDiff(cwd, ref);
+  try {
+    if (anchor !== undefined) {
+      if (!refExists(cwd, anchor) || !isAncestorOfHead(cwd, anchor)) {
+        notices.push(
+          `last reviewed commit ${anchor.slice(0, 12)} is not reachable from HEAD (rebase?); reviewing the full branch`,
+        );
+        text = mergeBaseDiff(cwd, ref);
+      } else if (!targetUnchangedSince(cwd, ref, anchor)) {
+        // the branch pulled target commits in after the anchor; a plain
+        // anchor..HEAD diff would review target-only changes (ADR 0004)
+        notices.push(
+          `the target moved into this branch since ${anchor.slice(0, 12)}; reviewing the full branch`,
+        );
+        text = mergeBaseDiff(cwd, ref);
+      } else {
+        mode = "incremental";
+        notices.push(`incremental review of changes since ${anchor.slice(0, 12)}`);
+        text = runGit(cwd, ["diff", "--no-color", `${anchor}..HEAD`, "--"]);
+      }
     } else {
-      mode = "incremental";
-      notices.push(`incremental review of changes since ${anchor.slice(0, 12)}`);
-      text = runGit(cwd, ["diff", "--no-color", `${anchor}..HEAD`, "--"]);
+      text = mergeBaseDiff(cwd, ref);
     }
-  } else {
-    text = mergeBaseDiff(cwd, ref);
+  } catch (error) {
+    // the only git failure possible here, past the validation above, is the
+    // target being unreachable in this clone (shallow or absent) — ADR
+    // 0004's fallback condition, so it is the only one wrapped for a caller
+    // to recognize and reroute to the SCM API diff
+    throw new LocalDiffUnavailableError(error instanceof Error ? error.message : String(error));
   }
 
   text = filterDiffByPath(text, request.include, request.exclude);

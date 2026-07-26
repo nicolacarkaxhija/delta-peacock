@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { acquireDiff, filterDiffByPath, type DiffRequest } from "../src/git/diff.js";
+import {
+  acquireDiff,
+  filterDiffByPath,
+  resolveTargetRef,
+  type DiffRequest,
+} from "../src/git/diff.js";
 import { cloneRepo, commitAll, git, headSha, makeRepo, write } from "./helpers/git.js";
 
 function request(overrides: Partial<DiffRequest> = {}): DiffRequest {
@@ -64,8 +69,7 @@ describe("target fetching", () => {
     expect(acquired.text).toContain("f.txt");
   });
 
-  it("notes when the requested target exists on no remote", async () => {
-    const { resolveTargetRef } = await import("../src/git/diff.js");
+  it("notes when the requested target exists on no remote", () => {
     const clone = cloneRepo(makeRepo());
     const resolved = resolveTargetRef(clone, "develop", true);
     expect(resolved.ref).toBe("develop");
@@ -81,6 +85,34 @@ describe("target fetching", () => {
     expect(acquired.targetRef).toBe("main");
     expect(acquired.text).toContain("f.txt");
     expect(acquired.notices).toEqual([]);
+  });
+
+  it("fetches from the branch's tracked remote even when it is not named origin", () => {
+    const origin = makeRepo();
+    const clone = cloneRepo(origin);
+    git(clone, "remote", "rename", "origin", "upstream");
+    // origin moves on after the rename, so a stale local main would miss it
+    write(origin, "landed.txt", "landed on main after the clone\n");
+    commitAll(origin, "target moves on");
+
+    const resolved = resolveTargetRef(clone, "main", true);
+    expect(resolved.ref).toBe("upstream/main");
+  });
+
+  it("warns and skips the fetch when several remotes exist and none is tracked", () => {
+    const origin = makeRepo();
+    const clone = cloneRepo(origin);
+    git(clone, "remote", "rename", "origin", "upstream");
+    git(clone, "remote", "add", "other", origin);
+    // a freshly created branch tracks nothing, so neither remote is preferred
+    git(clone, "checkout", "-q", "-b", "feature");
+    write(clone, "f.txt", "x\n");
+    commitAll(clone, "f");
+
+    const resolved = resolveTargetRef(clone, "main", true);
+    expect(resolved.ref).toBe("main");
+    expect(resolved.notices.join("\n")).toContain("no single usable remote");
+    expect(resolved.notices.join("\n")).toContain("skipping");
   });
 });
 
