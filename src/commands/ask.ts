@@ -115,6 +115,7 @@ export async function runAsk(
       config.review.guidelinesDir,
       resolvedTarget.ref,
       config.review.packs,
+      config.review.frontmatterContract,
     );
     for (const notice of loaded.notices) deps.err(`${notice}\n`);
     corpus = loaded.guidelines;

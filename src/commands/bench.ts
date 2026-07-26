@@ -23,6 +23,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
     const guidelines = loadGuidelinesFromFiles(
       readWorkingTreeGuidelines(path.join(benchCase.dir, "guidelines")),
+      config.review.frontmatterContract,
     ).guidelines;
 
     const filesRoot = path.join(benchCase.dir, "files");

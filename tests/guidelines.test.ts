@@ -95,3 +95,58 @@ describe("guidelines loader", () => {
     expect(() => loadGuidelines(path.join(makeDir(), "absent"))).toThrow(ToolError);
   });
 });
+
+describe("frontmatter contract", () => {
+  it("lenient (the default) keeps a guideline missing languages/paths and names the gap", () => {
+    const dir = makeDir();
+    write(dir, "no-console.md", VALID);
+    const { guidelines, problems, notices } = loadGuidelines(dir);
+    expect(problems).toEqual([]);
+    expect(guidelines).toHaveLength(1);
+    const joined = notices.join("\n");
+    expect(joined).toContain("no-console");
+    expect(joined).toContain("languages");
+    expect(joined).toContain("paths");
+  });
+
+  it("passing lenient explicitly behaves the same as the default", () => {
+    const dir = makeDir();
+    write(dir, "no-console.md", VALID);
+    const defaulted = loadGuidelines(dir);
+    const explicit = loadGuidelines(dir, "lenient");
+    expect(explicit.guidelines).toEqual(defaulted.guidelines);
+    expect(explicit.notices).toEqual(defaulted.notices);
+  });
+
+  it("strict drops a guideline missing languages/paths with a warning naming the gap", () => {
+    const dir = makeDir();
+    write(dir, "no-console.md", VALID);
+    const { guidelines, problems } = loadGuidelines(dir, "strict");
+    expect(guidelines).toEqual([]);
+    const joined = problems.join("\n");
+    expect(joined).toContain("no-console");
+    expect(joined).toContain("languages");
+    expect(joined).toContain("paths");
+    expect(joined).toContain("strict");
+  });
+
+  it("emits no notice, in either mode, once languages and paths are both present", () => {
+    const dir = makeDir();
+    write(
+      dir,
+      "scoped.md",
+      '---\nid: scoped\nseverity: MINOR\nlanguages: [typescript]\npaths: ["src/**"]\n---\nbody\n',
+    );
+    expect(loadGuidelines(dir).notices).toEqual([]);
+    const strict = loadGuidelines(dir, "strict");
+    expect(strict.guidelines).toHaveLength(1);
+    expect(strict.problems).toEqual([]);
+  });
+
+  it("still rejects a malformed languages/paths shape in either mode, not just a missing one", () => {
+    const dir = makeDir();
+    write(dir, "bad.md", "---\nid: bad\nseverity: MAJOR\nlanguages: python\n---\nbody\n");
+    expect(loadGuidelines(dir).problems.join("\n")).toContain('"languages"');
+    expect(loadGuidelines(dir, "strict").problems.join("\n")).toContain('"languages"');
+  });
+});

@@ -15,6 +15,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_GUIDELINES_DIR: "review.guidelinesDir",
   DELTA_PEACOCK_REVIEW_GUIDELINES_REF: "review.guidelinesRef",
   DELTA_PEACOCK_REVIEW_PACKS: "review.packs",
+  DELTA_PEACOCK_REVIEW_FRONTMATTER_CONTRACT: "review.frontmatterContract",
   DELTA_PEACOCK_REVIEW_FETCH_TARGET: "review.fetchTarget",
   DELTA_PEACOCK_REVIEW_LAST_REVIEWED_COMMIT: "review.lastReviewedCommit",
   DELTA_PEACOCK_REVIEW_INCLUDE: "review.include",

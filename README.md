@@ -95,7 +95,7 @@ gate: failOn=MAJOR FAILED (2 at or above threshold)   # exit code 2
 
 ## How it works
 
-**Guidelines are the contract.** A guideline is a markdown file with a small frontmatter header, versioned inside the repo it governs:
+**Guidelines are the contract.** A guideline is a markdown file with a small frontmatter header, versioned inside the repo it governs. `id` and `severity` are always required; `languages` and `paths` scope the rule to matching changed files and are optional — omit either and it defaults to matching everything:
 
 ```markdown
 ---
@@ -109,6 +109,8 @@ paths: ["src/**"]
 
 Credentials, tokens and API keys must come from the environment, never a literal in source.
 ```
+
+**`review.frontmatterContract`** governs what happens when `languages` or `paths` is missing. `lenient` (the default) keeps the rule — applying it everywhere — and prints a notice naming the rule and the missing field(s), so an unscoped rule is seen rather than silently misfiring. `strict` skips the rule entirely with a warning instead, matching the older, stricter contract some teams migrate from.
 
 **Tamper resistance.** By default the corpus is read from the **merge target**, so a pull request cannot weaken the rules that judge it. Language and path scoping keep each rule to the files it governs, and a violation citing a guideline whose scope excludes the flagged file is dropped deterministically.
 

@@ -14,12 +14,25 @@ export interface GuidelineFile {
   content: string;
 }
 
+/**
+ * How a guideline missing `languages` or `paths` in its frontmatter is
+ * treated. `lenient` (the default) is the historical behavior: the field
+ * defaults to `[]` (applies everywhere) and a notice names the rule and the
+ * gap, so an author sees it instead of it defaulting silently. `strict` is
+ * the old Python reviewer's contract: such a rule is skipped entirely, with
+ * a warning, rather than risk misfiring on files its author never scoped it
+ * to.
+ */
+export type FrontmatterContract = "lenient" | "strict";
+
 export interface LoadedGuidelines {
   guidelines: Guideline[];
   /** Human-readable notes about files that could not become guidelines. */
   problems: string[];
   /** Guidelines parsed fine but switched off via enabled: false. */
   disabled: number;
+  /** Lenient-mode notices: a guideline kept despite a missing scoping field. */
+  notices: string[];
 }
 
 /** Linear-time frontmatter split; guideline files are untrusted input. */
@@ -49,9 +62,14 @@ function stringList(value: unknown): string[] | undefined {
   return undefined;
 }
 
-type ParsedGuideline = { guideline: Guideline } | { problem: string } | { disabled: true };
+type ParsedGuideline =
+  { guideline: Guideline; notice?: string } | { problem: string } | { disabled: true };
 
-export function parseGuidelineContent(content: string, displayPath: string): ParsedGuideline {
+export function parseGuidelineContent(
+  content: string,
+  displayPath: string,
+  contract: FrontmatterContract = "lenient",
+): ParsedGuideline {
   const split = splitFrontmatter(content);
   if (split === undefined) return { problem: `${displayPath}: no frontmatter header` };
   const { frontmatter, body } = split;
@@ -77,11 +95,13 @@ export function parseGuidelineContent(content: string, displayPath: string): Par
   if (record["enabled"] !== undefined && typeof record["enabled"] !== "boolean") {
     return { problem: `${displayPath}: "enabled" must be true or false` };
   }
-  const languages = stringList(record["languages"]);
+  const languagesRaw = record["languages"];
+  const languages = stringList(languagesRaw);
   if (languages === undefined) {
     return { problem: `${displayPath}: "languages" must be a list of language names` };
   }
-  const paths = stringList(record["paths"]);
+  const pathsRaw = record["paths"];
+  const paths = stringList(pathsRaw);
   if (paths === undefined) {
     return { problem: `${displayPath}: "paths" must be a list of path globs` };
   }
@@ -89,27 +109,50 @@ export function parseGuidelineContent(content: string, displayPath: string): Par
   if (tags === undefined) {
     return { problem: `${displayPath}: "tags" must be a list of strings` };
   }
+  const trimmedId = id.trim();
+  // only an absent field counts as a contract gap; an explicit [] is a
+  // deliberate "matches everything" choice the author already made
+  const missingFields = [
+    ...(languagesRaw === undefined ? ["languages"] : []),
+    ...(pathsRaw === undefined ? ["paths"] : []),
+  ];
+  if (missingFields.length > 0 && contract === "strict") {
+    return {
+      problem:
+        `${displayPath}: guideline "${trimmedId}" is missing required frontmatter field(s) ` +
+        `${missingFields.join(", ")}; skipping the rule (strict frontmatter contract)`,
+    };
+  }
+  const guideline: Guideline = {
+    id: trimmedId,
+    severity: severity as Severity,
+    title: deriveTitle(record, body, displayPath),
+    body: body.trim(),
+    sourcePath: displayPath,
+    languages,
+    paths,
+    tags,
+  };
+  if (missingFields.length === 0) return { guideline };
   return {
-    guideline: {
-      id: id.trim(),
-      severity: severity as Severity,
-      title: deriveTitle(record, body, displayPath),
-      body: body.trim(),
-      sourcePath: displayPath,
-      languages,
-      paths,
-      tags,
-    },
+    guideline,
+    notice:
+      `${displayPath}: guideline "${trimmedId}" is missing frontmatter field(s) ` +
+      `${missingFields.join(", ")}; applying it to every changed file (lenient frontmatter contract)`,
   };
 }
 
-export function loadGuidelinesFromFiles(files: readonly GuidelineFile[]): LoadedGuidelines {
+export function loadGuidelinesFromFiles(
+  files: readonly GuidelineFile[],
+  contract: FrontmatterContract = "lenient",
+): LoadedGuidelines {
   const guidelines: Guideline[] = [];
   const problems: string[] = [];
+  const notices: string[] = [];
   let disabled = 0;
   const seen = new Map<string, string>();
   for (const file of files) {
-    const parsed = parseGuidelineContent(file.content, file.displayPath);
+    const parsed = parseGuidelineContent(file.content, file.displayPath, contract);
     if ("problem" in parsed) {
       problems.push(parsed.problem);
       continue;
@@ -118,7 +161,8 @@ export function loadGuidelinesFromFiles(files: readonly GuidelineFile[]): Loaded
       disabled += 1;
       continue;
     }
-    const { guideline } = parsed;
+    const { guideline, notice } = parsed;
+    if (notice !== undefined) notices.push(notice);
     const previous = seen.get(guideline.id);
     if (previous !== undefined) {
       problems.push(
@@ -129,7 +173,7 @@ export function loadGuidelinesFromFiles(files: readonly GuidelineFile[]): Loaded
     seen.set(guideline.id, guideline.sourcePath);
     guidelines.push(guideline);
   }
-  return { guidelines, problems, disabled };
+  return { guidelines, problems, disabled, notices };
 }
 
 export function markdownFilesUnder(dir: string): string[] {
@@ -171,8 +215,11 @@ export function readGitRefGuidelines(
   }));
 }
 
-export function loadGuidelines(dir: string): LoadedGuidelines {
-  return loadGuidelinesFromFiles(readWorkingTreeGuidelines(dir));
+export function loadGuidelines(
+  dir: string,
+  contract: FrontmatterContract = "lenient",
+): LoadedGuidelines {
+  return loadGuidelinesFromFiles(readWorkingTreeGuidelines(dir), contract);
 }
 
 export interface ResolvedGuidelines extends LoadedGuidelines {
@@ -192,15 +239,13 @@ function resolveLocalGuidelines(
   guidelinesRef: string,
   guidelinesDir: string,
   targetRef: string,
+  contract: FrontmatterContract,
 ): ResolvedGuidelines {
   const notices: string[] = [];
   if (guidelinesRef === "local") {
     const dir = path.resolve(cwd, guidelinesDir);
-    return {
-      ...loadGuidelinesFromFiles(readWorkingTreeGuidelines(dir)),
-      origin: `local:${dir}`,
-      notices,
-    };
+    const loaded = loadGuidelinesFromFiles(readWorkingTreeGuidelines(dir), contract);
+    return { ...loaded, origin: `local:${dir}`, notices: [...loaded.notices, ...notices] };
   }
   if (guidelinesRef !== "source") {
     const ref = guidelinesRef === "target" ? targetRef : guidelinesRef;
@@ -216,7 +261,8 @@ function resolveLocalGuidelines(
       );
     }
     if (files !== undefined) {
-      return { ...loadGuidelinesFromFiles(files), origin: ref, notices };
+      const loaded = loadGuidelinesFromFiles(files, contract);
+      return { ...loaded, origin: ref, notices: [...loaded.notices, ...notices] };
     }
     if (guidelinesRef !== "target") {
       // an explicitly pinned ref must not silently fall back to PR-controlled content
@@ -231,7 +277,8 @@ function resolveLocalGuidelines(
     }
   }
   const files = readWorkingTreeGuidelines(path.resolve(cwd, guidelinesDir));
-  return { ...loadGuidelinesFromFiles(files), origin: "working tree", notices };
+  const loaded = loadGuidelinesFromFiles(files, contract);
+  return { ...loaded, origin: "working tree", notices: [...loaded.notices, ...notices] };
 }
 
 /**
@@ -247,13 +294,14 @@ export function resolveGuidelines(
   guidelinesDir: string,
   targetRef: string,
   packs: readonly string[] = [],
+  contract: FrontmatterContract = "lenient",
 ): ResolvedGuidelines {
   if (packs.length === 0) {
-    return resolveLocalGuidelines(cwd, guidelinesRef, guidelinesDir, targetRef);
+    return resolveLocalGuidelines(cwd, guidelinesRef, guidelinesDir, targetRef, contract);
   }
   let local: ResolvedGuidelines;
   try {
-    local = resolveLocalGuidelines(cwd, guidelinesRef, guidelinesDir, targetRef);
+    local = resolveLocalGuidelines(cwd, guidelinesRef, guidelinesDir, targetRef, contract);
   } catch (error) {
     // a packs-only setup has no local corpus at all; every other failure
     // (unreachable ref, empty pin) keeps its tamper-resistant loudness
@@ -278,9 +326,10 @@ export function resolveGuidelines(
   const fromPacks = new Map<string, Guideline & { pack: string }>();
   for (const spec of packs) {
     const pack = resolvePack(cwd, spec);
-    const loaded = loadGuidelinesFromFiles(pack.files);
+    const loaded = loadGuidelinesFromFiles(pack.files, contract);
     problems.push(...loaded.problems);
     disabled += loaded.disabled;
+    notices.push(...loaded.notices);
     for (const guideline of loaded.guidelines) {
       const previous = fromPacks.get(guideline.id);
       if (previous !== undefined) {

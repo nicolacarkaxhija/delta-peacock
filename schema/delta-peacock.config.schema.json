@@ -55,6 +55,14 @@
             "minLength": 1
           }
         },
+        "frontmatterContract": {
+          "default": "lenient",
+          "type": "string",
+          "enum": [
+            "lenient",
+            "strict"
+          ]
+        },
         "fetchTarget": {
           "default": true,
           "type": "boolean"

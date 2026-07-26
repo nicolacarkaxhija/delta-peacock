@@ -246,9 +246,16 @@ describe("review degradation end to end", () => {
     write(
       repo,
       "guidelines/huge.md",
-      `---\nid: huge\nseverity: MAJOR\n---\n# Huge\n\n${"word ".repeat(2000)}\n`,
+      `---\nid: huge\nseverity: MAJOR\nlanguages: [javascript]\npaths: ["src/**"]\n---\n# Huge\n\n${"word ".repeat(2000)}\n`,
     );
-    write(repo, "guidelines/fine.md", GUIDELINE);
+    // fully scoped, unlike the shared GUIDELINE fixture, so it draws no
+    // frontmatter-contract notice of its own: this test is only about the
+    // oversized-guideline warning, not the unrelated fine.md
+    write(
+      repo,
+      "guidelines/fine.md",
+      '---\nid: no-console\nseverity: MAJOR\nlanguages: [javascript]\npaths: ["src/**"]\n---\n# No console\n\nUse the logger.\n',
+    );
     commitAll(repo, "rules");
     let stderr = "";
     const code = await runCli(["guidelines", "lint"], {
