@@ -21,7 +21,9 @@ export interface GuidelineFile {
  * gap, so an author sees it instead of it defaulting silently. `strict` is
  * the old Python reviewer's contract: such a rule is skipped entirely, with
  * a warning, rather than risk misfiring on files its author never scoped it
- * to.
+ * to. Either way, the singular `language` key (that same old reviewer's
+ * field name) satisfies the scoping requirement exactly like `languages`
+ * does; only a guideline supplying neither counts as missing it.
  */
 export type FrontmatterContract = "lenient" | "strict";
 
@@ -62,8 +64,19 @@ function stringList(value: unknown): string[] | undefined {
   return undefined;
 }
 
+/**
+ * The singular `language` alias may be written as one bare name or as a
+ * list, unlike `languages`, which is always a list. A single string is the
+ * one shape `stringList` does not already accept, so it is normalized here
+ * before falling back to the same list validation.
+ */
+function stringOrStringList(value: unknown): string[] | undefined {
+  if (typeof value === "string") return [value];
+  return stringList(value);
+}
+
 type ParsedGuideline =
-  { guideline: Guideline; notice?: string } | { problem: string } | { disabled: true };
+  { guideline: Guideline; notices?: string[] } | { problem: string } | { disabled: true };
 
 export function parseGuidelineContent(
   content: string,
@@ -95,10 +108,29 @@ export function parseGuidelineContent(
   if (record["enabled"] !== undefined && typeof record["enabled"] !== "boolean") {
     return { problem: `${displayPath}: "enabled" must be true or false` };
   }
+  const trimmedId = id.trim();
+  const notices: string[] = [];
+  // `language` (singular) is an earlier reviewer's frontmatter field, kept
+  // as an alias so a migrated corpus works unchanged; `languages` wins when
+  // a file somehow carries both, and either one satisfies the scoping
+  // requirement below -- only a file with neither is missing it.
   const languagesRaw = record["languages"];
-  const languages = stringList(languagesRaw);
+  const languageRaw = record["language"];
+  if (languagesRaw !== undefined && languageRaw !== undefined) {
+    notices.push(
+      `${displayPath}: guideline "${trimmedId}" specifies both "language" and "languages"; ` +
+        `using "languages"`,
+    );
+  }
+  const languages =
+    languagesRaw !== undefined ? stringList(languagesRaw) : stringOrStringList(languageRaw);
   if (languages === undefined) {
-    return { problem: `${displayPath}: "languages" must be a list of language names` };
+    return {
+      problem:
+        languagesRaw !== undefined
+          ? `${displayPath}: "languages" must be a list of language names`
+          : `${displayPath}: "language" must be a string or a list of language names`,
+    };
   }
   const pathsRaw = record["paths"];
   const paths = stringList(pathsRaw);
@@ -109,11 +141,11 @@ export function parseGuidelineContent(
   if (tags === undefined) {
     return { problem: `${displayPath}: "tags" must be a list of strings` };
   }
-  const trimmedId = id.trim();
-  // only an absent field counts as a contract gap; an explicit [] is a
-  // deliberate "matches everything" choice the author already made
+  // only a field absent under both its names counts as a contract gap; an
+  // explicit [] (under either name) is a deliberate "matches everything"
+  // choice the author already made
   const missingFields = [
-    ...(languagesRaw === undefined ? ["languages"] : []),
+    ...(languagesRaw === undefined && languageRaw === undefined ? ["languages"] : []),
     ...(pathsRaw === undefined ? ["paths"] : []),
   ];
   if (missingFields.length > 0 && contract === "strict") {
@@ -133,13 +165,13 @@ export function parseGuidelineContent(
     paths,
     tags,
   };
-  if (missingFields.length === 0) return { guideline };
-  return {
-    guideline,
-    notice:
+  if (missingFields.length > 0) {
+    notices.push(
       `${displayPath}: guideline "${trimmedId}" is missing frontmatter field(s) ` +
-      `${missingFields.join(", ")}; applying it to every changed file (lenient frontmatter contract)`,
-  };
+        `${missingFields.join(", ")}; applying it to every changed file (lenient frontmatter contract)`,
+    );
+  }
+  return notices.length === 0 ? { guideline } : { guideline, notices };
 }
 
 export function loadGuidelinesFromFiles(
@@ -161,8 +193,8 @@ export function loadGuidelinesFromFiles(
       disabled += 1;
       continue;
     }
-    const { guideline, notice } = parsed;
-    if (notice !== undefined) notices.push(notice);
+    const { guideline, notices: guidelineNotices } = parsed;
+    if (guidelineNotices !== undefined) notices.push(...guidelineNotices);
     const previous = seen.get(guideline.id);
     if (previous !== undefined) {
       problems.push(
