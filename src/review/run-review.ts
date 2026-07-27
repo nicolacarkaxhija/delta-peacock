@@ -2,8 +2,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import type { ToolSet } from "ai";
 import type { Config } from "../config/schema.js";
-import { buildContextProvider } from "../context/build.js";
-import { capToTokenBudget } from "../context/port.js";
+import { attachContextTools, resolveContext } from "../context/build.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Finding } from "../domain/finding.js";
 import type { Guideline } from "../domain/guideline.js";
@@ -446,18 +445,19 @@ async function assembleReview(
     deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted before the model call\n`);
   }
 
-  const contextProvider = buildContextProvider(config, {
-    credentials: deps.credentials,
-    ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
-    ...(deps.clock ? { clock: deps.clock } : {}),
-  });
   const contextInput = { cwd: deps.cwd, diff: redacted.text, changedFiles: [...changedFiles] };
-  const projectContext = capToTokenBudget(
-    await contextProvider.systemContext(contextInput),
-    config.context.maxTokens,
+  const resolvedContext = await resolveContext(
+    config,
+    {
+      credentials: deps.credentials,
+      ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
+      ...(deps.clock ? { clock: deps.clock } : {}),
+    },
+    contextInput,
   );
-  for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
-  const contextTools = contextProvider.tools?.(contextInput);
+  for (const notice of resolvedContext.notices) deps.err(`${notice}\n`);
+  const projectContext = resolvedContext.projectContext;
+  const contextTools = resolvedContext.tools;
 
   const linters = detectLinters(deps.cwd);
   if (linters.length > 0) deps.err(`linters detected (not duplicated): ${linters.join(", ")}\n`);
@@ -497,12 +497,11 @@ async function assembleReview(
   for (const notice of batches.notices) deps.err(`${notice}\n`);
   const { diffBatches, batchContexts, degraded: budgetDegraded } = batches;
 
-  const request = {
-    ...promptOf(diffBatches[0] ?? redacted.text, batchContexts[0] ?? ""),
-    ...(contextTools !== undefined
-      ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
-      : {}),
-  };
+  const request = attachContextTools(
+    promptOf(diffBatches[0] ?? redacted.text, batchContexts[0] ?? ""),
+    contextTools,
+    config.context.maxToolRounds,
+  );
   const parseOptions = {
     guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),
     generalPass: config.review.generalPass,
@@ -587,12 +586,11 @@ async function executeReview(
     // every batch carries its own (already-budgeted) context and the same
     // tools: agentic/repo_map/rag are not a whole-diff privilege, so a batch
     // is never the one place they silently stop running
-    const batchRequest = {
-      ...promptOf(batchDiff, batchContexts[index] ?? ""),
-      ...(contextTools !== undefined
-        ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
-        : {}),
-    };
+    const batchRequest = attachContextTools(
+      promptOf(batchDiff, batchContexts[index] ?? ""),
+      contextTools,
+      config.context.maxToolRounds,
+    );
     let reply;
     try {
       reply = await modelPort.complete(batchRequest);

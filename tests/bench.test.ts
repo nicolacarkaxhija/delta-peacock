@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { loadCases, runBench } from "../src/bench/harness.js";
 import { overlapMatrix, scoreFindings } from "../src/bench/scoring.js";
 import { runCli } from "../src/index.js";
-import type { ModelPort } from "../src/model/port.js";
+import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import { makeRepo } from "./helpers/git.js";
 
 const CASES_DIR = fileURLToPath(new URL("../bench/cases", import.meta.url));
@@ -290,5 +290,57 @@ describe("bench command discriminates context strategies", () => {
     };
     expect(outcome.cases).toHaveLength(loadCases(CASES_DIR).length);
     expect(outcome.aggregate).toBeDefined();
+  });
+});
+
+describe("bench wires context tools like a real review does", () => {
+  function capture(): { requests: ModelRequest[]; port: ModelPort } {
+    const requests: ModelRequest[] = [];
+    return {
+      requests,
+      port: {
+        complete(request) {
+          requests.push(request);
+          return Promise.resolve({ text: '{"findings": []}' });
+        },
+      },
+    };
+  }
+
+  it("attaches the agentic provider's tools and maxToolRounds, so the model can read case files", async () => {
+    const { requests, port } = capture();
+    const code = await runCli(["bench", "--cases", CASES_DIR, "--context", "agentic"], {
+      cwd: makeRepo(),
+      env: { DELTA_PEACOCK_CONTEXT_MAX_TOOL_ROUNDS: "3" },
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: port,
+    });
+    expect(code).toBe(0);
+    // only cases with a files/ directory give the agentic provider anything
+    // to scan; several of the seeded cases do
+    const withTools = requests.find((request) => request.tools !== undefined);
+    expect(withTools).toBeDefined();
+    expect(Object.keys(withTools?.tools ?? {})).toEqual([
+      "get_definition",
+      "find_references",
+      "read_file_range",
+      "search",
+    ]);
+    expect(withTools?.maxToolRounds).toBe(3);
+  });
+
+  it("attaches no tools for --context none", async () => {
+    const { requests, port } = capture();
+    const code = await runCli(["bench", "--cases", CASES_DIR, "--context", "none"], {
+      cwd: makeRepo(),
+      env: {},
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: port,
+    });
+    expect(code).toBe(0);
+    expect(requests.length).toBeGreaterThan(0);
+    expect(requests.every((request) => request.tools === undefined)).toBe(true);
   });
 });

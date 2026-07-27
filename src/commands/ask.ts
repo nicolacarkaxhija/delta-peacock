@@ -1,5 +1,4 @@
-import { buildContextProvider } from "../context/build.js";
-import { capToTokenBudget } from "../context/port.js";
+import { attachContextTools, resolveContext } from "../context/build.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
@@ -80,18 +79,19 @@ export async function runAsk(
       ? corpus.filter((guideline) => appliesTo(guideline, changedFiles))
       : corpus;
 
-  const contextProvider = buildContextProvider(config, {
-    credentials: deps.credentials,
-    ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
-    ...(deps.clock ? { clock: deps.clock } : {}),
-  });
   const contextInput = { cwd: deps.cwd, diff: redacted.text, changedFiles };
-  const projectContext = capToTokenBudget(
-    await contextProvider.systemContext(contextInput),
-    config.context.maxTokens,
+  const resolvedContext = await resolveContext(
+    config,
+    {
+      credentials: deps.credentials,
+      ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
+      ...(deps.clock ? { clock: deps.clock } : {}),
+    },
+    contextInput,
   );
-  for (const notice of contextProvider.notices?.() ?? []) deps.err(`${notice}\n`);
-  const contextTools = contextProvider.tools?.(contextInput);
+  for (const notice of resolvedContext.notices) deps.err(`${notice}\n`);
+  const projectContext = resolvedContext.projectContext;
+  const contextTools = resolvedContext.tools;
 
   const system = buildAskSystem(guidelines, projectContext);
   const modelPort = deps.modelPort ?? buildModelPort(config, deps.credentials);
@@ -118,13 +118,11 @@ export async function runAsk(
   }
 
   while (question !== undefined && question !== "" && question !== ".exit") {
-    const request: ModelRequest = {
-      system,
-      user: buildAskUser(redacted.text, transcript, question),
-      ...(contextTools !== undefined
-        ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
-        : {}),
-    };
+    const request: ModelRequest = attachContextTools(
+      { system, user: buildAskUser(redacted.text, transcript, question) },
+      contextTools,
+      config.context.maxToolRounds,
+    );
 
     if (isDryRun(config)) {
       deps.out("dry run: the question was prepared but no model was called\n");
