@@ -47,6 +47,15 @@ export const ReviewSchema = z.strictObject({
   language: z.string().min(2).default("en"),
   /** Target token window the assembled prompt should fit inside. */
   windowTokens: z.number().int().positive().default(100_000),
+  /**
+   * Attention budget: a batch never reviews more files than this, however
+   * much of the window remains unused. Per-file recall degrades with how
+   * many files share a batch long before the token window binds, so fitting
+   * the window is necessary but not sufficient.
+   */
+  maxFilesPerBatch: z.number().int().positive().default(25),
+  /** Attention budget: a batch never reviews more (approximate) tokens than this, independent of windowTokens. */
+  maxTokensPerBatch: z.number().int().positive().default(30_000),
 });
 
 export const GateSchema = z.strictObject({

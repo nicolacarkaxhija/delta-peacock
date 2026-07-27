@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { approximateTokens } from "../src/context/port.js";
 import { chunkSource } from "../src/context/chunk.js";
+import { changedFilesFromDiff } from "../src/git/diff.js";
 import { planBatches, planBudget, splitDiffByFile } from "../src/review/budget.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
@@ -143,6 +145,9 @@ describe("planBatches", () => {
   const prefix = "p".repeat(40); // 10 tokens
   const context = "c".repeat(200); // 50 tokens
   const windowTokens = 100;
+  // generous enough that it never binds: these cases are about window-driven
+  // packing, not the attention budget, which gets its own describe block below
+  const slackAttentionBudget = { maxFiles: 1000, maxTokens: 1_000_000 };
 
   function fileDiff(name: string, contentLen: number): string {
     return `diff --git a/${name}.js b/${name}.js\n@@ -0,0 +1 @@\n+${"a".repeat(contentLen)}\n`;
@@ -156,7 +161,7 @@ describe("planBatches", () => {
     const whole = planBudget({ prefix, context, diff, windowTokens });
     expect(whole.batchDiff).toBe(true); // sanity: this fixture does need batching
 
-    const plan = planBatches(whole, diff, context, prefix, windowTokens);
+    const plan = planBatches(whole, diff, context, prefix, windowTokens, slackAttentionBudget);
 
     // budget-driven, not a fixed/small count: 10 small files pack two-per-batch
     // plus the oversized file riding alone
@@ -196,7 +201,7 @@ describe("planBatches", () => {
     const whole = planBudget({ prefix, context, diff, windowTokens });
     expect(whole.batchDiff).toBe(true);
 
-    const plan = planBatches(whole, diff, context, prefix, windowTokens);
+    const plan = planBatches(whole, diff, context, prefix, windowTokens, slackAttentionBudget);
     expect(plan.diffBatches.length).toBeGreaterThan(1);
     expect(plan.notices).toEqual([]);
     expect(plan.degraded).toBe(false);
@@ -210,11 +215,53 @@ describe("planBatches", () => {
       context,
       prefix,
       windowTokens,
+      slackAttentionBudget,
     );
     expect(plan.diffBatches).toEqual(["diff"]);
     expect(plan.batchContexts).toEqual([context]);
     expect(plan.degraded).toBe(false);
     expect(plan.notices).toEqual([]);
+  });
+});
+
+describe("planBatches — attention budget", () => {
+  // a window this large would never force batching on its own; fitting the
+  // window is necessary but not sufficient -- attention degrades with file
+  // count long before the token limit binds, so the batch itself needs a cap
+  const prefix = "p".repeat(40); // 10 tokens
+  const context = "c".repeat(200); // 50 tokens
+  const windowTokens = 100_000;
+  const attentionBudget = { maxFiles: 25, maxTokens: 30_000 };
+
+  function fileDiff(name: string): string {
+    return `diff --git a/${name}.js b/${name}.js\n@@ -0,0 +1 @@\n+${"a".repeat(16)}\n`;
+  }
+
+  it("splits many small files into attention-sized batches even though the whole diff fits the window", () => {
+    const fileCount = 60; // past the 25-file cap, nowhere near the 100k window
+    const diff = Array.from({ length: fileCount }, (_, i) => fileDiff(`f${String(i)}`)).join("");
+    const whole = planBudget({ prefix, context, diff, windowTokens });
+    // sanity: the window alone has no reason to batch this diff
+    expect(whole.batchDiff).toBe(false);
+
+    const plan = planBatches(whole, diff, context, prefix, windowTokens, attentionBudget);
+
+    // the attention cap, not the window, drives the split
+    expect(plan.diffBatches.length).toBeGreaterThan(1);
+    for (const batchDiff of plan.diffBatches) {
+      expect(changedFilesFromDiff(batchDiff).length).toBeLessThanOrEqual(attentionBudget.maxFiles);
+      expect(approximateTokens(batchDiff)).toBeLessThanOrEqual(attentionBudget.maxTokens);
+    }
+    // every file survives the split exactly once -- none dropped, none duplicated
+    const allFiles = plan.diffBatches.flatMap((batchDiff) => changedFilesFromDiff(batchDiff));
+    expect(allFiles.length).toBe(fileCount);
+    expect(new Set(allFiles).size).toBe(fileCount);
+
+    // the window had room to spare, so splitting for attention alone is not degradation
+    expect(plan.degraded).toBe(false);
+    for (const batchContext of plan.batchContexts) expect(batchContext).toBe(context);
+    // the notice should name the attention budget, not a window that never bound
+    expect(plan.notices.join("\n")).toContain("attention budget");
   });
 });
 
