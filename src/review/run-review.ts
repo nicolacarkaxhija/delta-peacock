@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import type { ToolSet } from "ai";
 import type { Config } from "../config/schema.js";
 import { buildContextProvider } from "../context/build.js";
 import { capToTokenBudget } from "../context/port.js";
@@ -31,7 +32,7 @@ import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
-import { planBudget, splitDiffByFile } from "./budget.js";
+import { planBudget, splitDiffByFile, type BudgetPlan } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate } from "./calibrate.js";
@@ -176,7 +177,8 @@ export async function runReview(
     redacted,
     request,
     diffBatches,
-    effectiveContext,
+    batchContexts,
+    contextTools,
     parseOptions,
     promptOf,
     budgetDegraded,
@@ -221,7 +223,8 @@ export async function runReview(
     config,
     request,
     diffBatches,
-    effectiveContext,
+    batchContexts,
+    contextTools,
     parseOptions,
     promptOf,
   );
@@ -409,11 +412,54 @@ interface AssembledReview {
   redacted: RedactedDiff;
   request: ModelRequest;
   diffBatches: string[];
-  effectiveContext: string;
+  /** The context text resolved for each entry of diffBatches, "" where dropped. */
+  batchContexts: string[];
+  /** On-demand tools every batch should carry; undefined means the strategy offers none. */
+  contextTools: ToolSet | undefined;
   parseOptions: ParseOptions;
   promptOf: (diffText: string, context: string) => ModelRequest;
   budgetDegraded: boolean;
   linters: string[];
+}
+
+/**
+ * Once the whole diff cannot fit even without context, splits it into
+ * file-boundary batches and re-weighs context against each one alone: a
+ * batch this small can often afford what the whole diff could not, so
+ * agentic/repo_map/rag are not abandoned just because *something* had to be
+ * batched. A batch that still cannot afford context, even alone, is named in
+ * a notice rather than silently dropped.
+ */
+function planBatches(
+  deps: ReviewDeps,
+  whole: BudgetPlan,
+  diff: string,
+  projectContext: string,
+  prefix: string,
+  windowTokens: number,
+): { diffBatches: string[]; batchContexts: string[] } {
+  if (!whole.batchDiff) {
+    return { diffBatches: [diff], batchContexts: [whole.dropContext ? "" : projectContext] };
+  }
+  const diffBatches = splitDiffByFile(diff, windowTokens);
+  const batchContexts = diffBatches.map((batchDiff, index) => {
+    const batchPlan = planBudget({
+      prefix,
+      context: projectContext,
+      diff: batchDiff,
+      windowTokens,
+    });
+    if (!batchPlan.batchDiff) return batchPlan.dropContext ? "" : projectContext;
+    // this one batch, alone, still exceeds the window even without context:
+    // named so a human can see which files paid the cost, instead of a
+    // blanket drop that reads the same whether one batch or all of them did
+    const files = changedFilesFromDiff(batchDiff).join(", ") || "unnamed files";
+    deps.err(
+      `budget: batch ${String(index + 1)}/${String(diffBatches.length)} (${files}) exceeds the window even without cross-file context; reviewing it without context\n`,
+    );
+    return "";
+  });
+  return { diffBatches, batchContexts };
 }
 
 /**
@@ -461,22 +507,30 @@ async function assembleReview(
       ...(context !== "" ? { projectContext: context } : {}),
     });
   // one place weighs prefix + context + diff against the window and degrades
+  const prefix = promptOf("", "").system;
   const plan = planBudget({
-    prefix: promptOf("", "").system,
+    prefix,
     context: projectContext,
     diff: redacted.text,
     windowTokens: config.review.windowTokens,
   });
   for (const notice of plan.notices) deps.err(`${notice}\n`);
-  const effectiveContext = plan.dropContext ? "" : projectContext;
-  const diffBatches =
-    plan.batchDiff && contextTools === undefined
-      ? splitDiffByFile(redacted.text, config.review.windowTokens)
-      : [redacted.text];
+  // splitting (when needed) happens regardless of contextTools: agentic tools
+  // do not shrink the diff itself, so a batch too big to afford context whole
+  // is still too big to afford context with tools bolted on. Each batch then
+  // gets its own context decision instead of one drop-for-everyone verdict.
+  const { diffBatches, batchContexts } = planBatches(
+    deps,
+    plan,
+    redacted.text,
+    projectContext,
+    prefix,
+    config.review.windowTokens,
+  );
   const budgetDegraded = plan.dropContext || plan.batchDiff;
 
   const request = {
-    ...promptOf(redacted.text, effectiveContext),
+    ...promptOf(diffBatches[0] ?? redacted.text, batchContexts[0] ?? ""),
     ...(contextTools !== undefined
       ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
       : {}),
@@ -490,7 +544,8 @@ async function assembleReview(
     redacted,
     request,
     diffBatches,
-    effectiveContext,
+    batchContexts,
+    contextTools,
     parseOptions,
     promptOf,
     budgetDegraded,
@@ -518,7 +573,8 @@ async function executeReview(
   config: Config,
   request: ModelRequest,
   diffBatches: readonly string[],
-  effectiveContext: string,
+  batchContexts: readonly string[],
+  contextTools: ToolSet | undefined,
   parseOptions: ParseOptions,
   promptOf: (diffText: string, context: string) => ModelRequest,
 ): Promise<ExecuteResult> {
@@ -555,9 +611,16 @@ async function executeReview(
   let batchAdjusted = 0;
   let batchMalformed = 0;
   const batchRejected: RejectedCandidate[] = [];
-  for (const batchDiff of diffBatches) {
-    const batchRequest =
-      diffBatches.length === 1 ? request : { ...promptOf(batchDiff, effectiveContext) };
+  for (const [index, batchDiff] of diffBatches.entries()) {
+    // every batch carries its own (already-budgeted) context and the same
+    // tools: agentic/repo_map/rag are not a whole-diff privilege, so a batch
+    // is never the one place they silently stop running
+    const batchRequest = {
+      ...promptOf(batchDiff, batchContexts[index] ?? ""),
+      ...(contextTools !== undefined
+        ? { tools: contextTools, maxToolRounds: config.context.maxToolRounds }
+        : {}),
+    };
     let reply;
     try {
       reply = await modelPort.complete(batchRequest);
