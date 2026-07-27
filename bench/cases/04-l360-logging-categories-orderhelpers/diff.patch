@@ -1,0 +1,442 @@
+diff --git a/cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js b/cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js
+index 490319e015..72ec3b8cbb 100644
+--- a/cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js
++++ b/cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js
+@@ -176,21 +176,18 @@ function fillinOrderCustomAttributes(order) {
+ }
+ 
+ /**
+- * @description Get the amount of the employee discount applied to the order WHEN IT HAS BEEN PLACED.
+- * @param {dw.order.LineItemCtnr} lineItemContainer - current user's basket/order.
+- * @returns {number} - amount of the employee discount applied to the order, or 0 if not applied
++ * @description Get applied employee discount by collecting and summing matching price adjustments.
++ * @param {dw.order.LineItemCtnr} lineItemContainer - basket or order to inspect.
++ * @param {Function} getEmployeePriceAdjustments - function that returns relevant employee price adjustments for a product line item.
++ * @returns {number} summed absolute discount value, or 0 when no matching adjustments are found.
+  */
+-
+-orderHelpers.getAppliedEmployeeDiscount = function (lineItemContainer) {
+-    const productLineItems = lineItemContainer ? lineItemContainer.getProductLineItems() : null;
++function getAppliedEmployeeDiscountByGetter(lineItemContainer, getEmployeePriceAdjustments) {
++    const productLineItems = lineItemContainer.getProductLineItems();
+ 
+     if (empty(productLineItems)) {
+         return 0;
+     }
+ 
+-    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
+-    const getEmployeePriceAdjustments = productLineItemHelpers.getEmployeePriceAdjustments;
+-
+     const priceAdjustments = productLineItems
+         .toArray()
+         .reduce((acc, pli) => acc.concat(getEmployeePriceAdjustments(pli)), []);
+@@ -201,123 +198,317 @@ orderHelpers.getAppliedEmployeeDiscount = function (lineItemContainer) {
+     );
+ 
+     return appliedEmployeeDiscount;
++}
++
++/**
++ * @description Get the amount of the regular employee discount applied to the order WHEN IT HAS BEEN PLACED.
++ * @param {dw.order.LineItemCtnr} lineItemContainer - current user's basket/order.
++ * @returns {number} - amount of the regular employee discount applied to the order, or 0 if not applied
++ */
++orderHelpers.getRegularAppliedEmployeeDiscount = function (lineItemContainer) {
++    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
++
++    return getAppliedEmployeeDiscountByGetter(lineItemContainer, productLineItemHelpers.getEmployeeRegularPriceAdjustments);
+ };
+ 
+ /**
+- * @note Do not use the allowance values from this method out of the checkout and order confirmation context:
+- * as the employee allowance values change over time, the values returned by this method may result outdated (e.g. on order details page).
+- *
+- * @description Get employee allowance values - before and after discount application - for the current basket/order.
++ * @description Get the amount of the 1774 employee discount applied to the order WHEN IT HAS BEEN PLACED.
+  * @param {dw.order.LineItemCtnr} lineItemContainer - current user's basket/order.
+- * @returns {object|null} employee allowance values if the allowance is capped and a discount is applied, null otherwise.
++ * @returns {number} - amount of the 1774 employee discount applied to the order, or 0 if not applied
+  */
++orderHelpers.get1774AppliedEmployeeDiscount = function (lineItemContainer) {
++    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
++
++    return getAppliedEmployeeDiscountByGetter(lineItemContainer, productLineItemHelpers.getEmployee1774PriceAdjustments);
++};
+ 
+-orderHelpers.getDisplayEmployeeAllowance = function (lineItemContainer) {
+-    const customerNo = lineItemContainer ? lineItemContainer.getCustomerNo() : '';
++/**
++ * @description Get the amount of all employee discounts (regular + 1774) applied to the order WHEN IT HAS BEEN PLACED.
++ * @param {dw.order.LineItemCtnr} lineItemContainer - current user's basket/order.
++ * @returns {number} - amount of all employee discounts applied to the order, or 0 if not applied
++ */
++orderHelpers.getAppliedEmployeeDiscount = function (lineItemContainer) {
++    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
++
++    return getAppliedEmployeeDiscountByGetter(lineItemContainer, productLineItemHelpers.getEmployeePriceAdjustments);
++};
++
++/**
++ * @description Build allowance values for display before/after discount application.
++ * Mirrors the cart helper allowance calculation logic.
++ * @param {number} remainingAnnualDiscount - remaining allowance before order placement.
++ * @param {number} appliedDiscount - discount amount currently applied in line-item container.
++ * @param {number} requestedDiscount - discount amount requested by line-item container content.
++ * @returns {{beforeOrder: number, drawdown: number, afterOrder?: number}}
++ * formatted allowance values for UI consumption.
++ */
++function calculateAllowance(remainingAnnualDiscount, appliedDiscount, requestedDiscount) {
++    const allowances = {
++        beforeOrder: remainingAnnualDiscount
++    };
++
++    if (appliedDiscount > 0) {
++        allowances.drawdown = appliedDiscount;
++
++        const allowanceAfterOrder = remainingAnnualDiscount - appliedDiscount;
++
++        allowances.afterOrder = allowanceAfterOrder;
++
++        return allowances;
++    }
++
++    allowances.drawdown = requestedDiscount;
++
++    return allowances;
++}
++
++/**
++ * @description Get regular employee allowance values for order or basket rendering.
++ * @param {dw.order.LineItemCtnr} targetLineItemContainer - basket or order to evaluate.
++ * @returns {object|null} regular allowance object, or null when no regular allowance data is applicable.
++ */
++orderHelpers.getDisplayRegularEmployeeAllowance = function (targetLineItemContainer) {
+     const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
++    const customerNo = targetLineItemContainer ? targetLineItemContainer.getCustomerNo() : '';
+     const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
+ 
+     if (!employee || employee.unlimitedDiscount) {
+         return null;
+     }
+ 
+-    const appliedDiscount = orderHelpers.getAppliedEmployeeDiscount(lineItemContainer);
++    const regularAppliedDiscount = orderHelpers.getRegularAppliedEmployeeDiscount(targetLineItemContainer);
+ 
+-    if (appliedDiscount <= 0) {
++    if (regularAppliedDiscount <= 0) {
+         return null;
+     }
+ 
+     const Order = require('dw/order/Order');
+-    const isOrder = lineItemContainer instanceof Order;
++    const isOrder = targetLineItemContainer instanceof Order;
+     const isConfirmedOrder =
+-        isOrder && lineItemContainer.getConfirmationStatus().getValue() === Order.CONFIRMATION_STATUS_CONFIRMED;
+-
+-    if (isConfirmedOrder) {
+-        // ORDER CONFIRMATION PAGE
+-        // remainingAnnualDiscount has already been decreased by the applied discount
+-        return {
+-            beforeOrder: employee.remainingAnnualDiscount + appliedDiscount,
+-            drawdown: appliedDiscount,
+-            afterOrder: employee.remainingAnnualDiscount,
+-            isPartner: employee.isExternal
+-        };
+-    } else {
+-        // CHECKOUT PAGE
+-        // remainingAnnualDiscount has not been decreased yet by the applied discount
+-        return {
+-            beforeOrder: employee.remainingAnnualDiscount,
+-            drawdown: appliedDiscount,
+-            afterOrder: employee.remainingAnnualDiscount - appliedDiscount,
+-            isPartner: employee.isExternal
+-        };
++        isOrder && targetLineItemContainer.getConfirmationStatus().getValue() === Order.CONFIRMATION_STATUS_CONFIRMED;
++
++    const remainingRegularAllowance = employee.remainingAnnualDiscount;
++    const regularAllowanceBeforeOrder = isConfirmedOrder
++        ? remainingRegularAllowance + regularAppliedDiscount
++        : remainingRegularAllowance;
++    const regularAllowance = calculateAllowance(regularAllowanceBeforeOrder, regularAppliedDiscount, regularAppliedDiscount);
++
++    return {
++        isPartner: employee.isExternal,
++        isEmployeeDiscountApplied: regularAppliedDiscount > 0,
++        allowanceRegular: regularAllowance,
++        allowance1774: null
++    };
++};
++
++/**
++ * @description Get 1774 employee allowance values for order or basket rendering.
++ * @param {dw.order.LineItemCtnr} targetLineItemContainer - basket or order to evaluate.
++ * @returns {object|null} 1774 allowance object, or null when no 1774 allowance data is applicable.
++ */
++orderHelpers.getDisplay1774EmployeeAllowance = function (targetLineItemContainer) {
++    const siteHelpers = require('*/cartridge/scripts/helpers/siteHelpers');
++    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
++    const customerNo = targetLineItemContainer ? targetLineItemContainer.getCustomerNo() : '';
++    const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
++
++    if (!employee) {
++        return null;
++    }
++
++    const currentCountry = siteHelpers.getCurrentShopCountryCode();
++
++    if (currentCountry !== employee.countryCode) {
++        return null;
++    }
++
++    const employee1774AppliedDiscount = orderHelpers.get1774AppliedEmployeeDiscount(targetLineItemContainer);
++
++    const Order = require('dw/order/Order');
++    const isOrder = targetLineItemContainer instanceof Order;
++    const isConfirmedOrder =
++        isOrder && targetLineItemContainer.getConfirmationStatus().getValue() === Order.CONFIRMATION_STATUS_CONFIRMED;
++
++    const remaining1774Allowance = employee.remaining1774AnnualDiscount;
++
++    let employee1774Allowance = null;
++
++    if (employee1774AppliedDiscount > 0) {
++        const allowance1774BeforeOrder = isConfirmedOrder
++            ? remaining1774Allowance + employee1774AppliedDiscount
++            : remaining1774Allowance;
++
++        employee1774Allowance = calculateAllowance(
++            allowance1774BeforeOrder,
++            employee1774AppliedDiscount,
++            employee1774AppliedDiscount
++        );
+     }
++
++    if (!employee1774Allowance) {
++        return null;
++    }
++
++    return {
++        isPartner: employee.isExternal,
++        isEmployeeDiscountApplied: employee1774AppliedDiscount > 0,
++        allowanceRegular: null,
++        allowance1774: employee1774Allowance
++    };
+ };
+ 
+ /**
+- * @description Increase the employee's discount usage based on the order's applied employee discount, if any.
+- * @param {dw.order.Order} order - order instance
+- * @param {number} amount - amount to increase the usage by
+- * @throws {Error} if the employee is not found when trying to increase their discount usage
+- * @throws {Error} if employee.increaseAnnualDiscountUsage() fails
++ * @description Get regular and 1774 employee allowance values for order or basket rendering.
++ * @param {dw.order.LineItemCtnr} targetLineItemContainer - basket or order to evaluate.
++ * @returns {object|null} allowance object with regular and/or 1774 buckets, or null when no employee allowance data is applicable.
++ */
++orderHelpers.getDisplayEmployeeAllowance = function (targetLineItemContainer) {
++    const regularAllowances = orderHelpers.getDisplayRegularEmployeeAllowance(targetLineItemContainer);
++    const allowances1774 = orderHelpers.getDisplay1774EmployeeAllowance(targetLineItemContainer);
++
++    if (!regularAllowances && !allowances1774) {
++        return null;
++    }
++
++    return {
++        isPartner: regularAllowances ? regularAllowances.isPartner : allowances1774.isPartner,
++        isEmployeeDiscountApplied: !!(
++            (regularAllowances && regularAllowances.isEmployeeDiscountApplied)
++            || (allowances1774 && allowances1774.isEmployeeDiscountApplied)
++        ),
++        allowanceRegular: regularAllowances ? regularAllowances.allowanceRegular : null,
++        allowance1774: allowances1774 ? allowances1774.allowance1774 : null
++    };
++};
++
++/**
++ * @description Determine whether allowance increase should be skipped to prevent double charging.
++ * @param {object} employee - employee instance for logging context.
++ * @returns {boolean} true when increase should be skipped, false otherwise.
++ */
++function shouldSkipEmployeeAllowanceIncrease(employee) {
++    // skip if allowance usage already increased: double charging can happen in case caller runs this method more than once for the same order
++    // the flag is reset at the beginning of checkout process
++    if (!session.privacy.employeeAllowanceIncreased) {
++        return false;
++    }
++
++    let errorStack = '';
++
++    // error thrown on purpose to get the stack trace of the caller function execution to be logged,
++    // to investigate why double charging happens
++    try {
++        throw new Error(`Allowance usage of employee ${employee.ID} already increased for this checkout session.`);
++    } catch (e) {
++        // replace newlines with a separator to avoid lines after the first one to be cut out from the log viewer
++        errorStack = e.stack.replace(/\n/g, ' | ');
++    }
++
++    Logger.error(`Skipping to prevent double increase. Stack trace: ${errorStack}`);
++
++    return true;
++}
++
++/**
++ * @description Apply regular and 1774 allowance usage increases and set session guard flag.
++ * @param {object} employee - employee instance to update.
++ * @param {number} regularDiscountAmount - regular discount amount to add to usage.
++ * @param {number} employee1774DiscountAmount - 1774 discount amount to add to usage.
+  * @returns {void}
+  */
++function applyEmployeeDiscountUsageIncrease(employee, regularDiscountAmount, employee1774DiscountAmount) {
++    if (regularDiscountAmount > 0) {
++        employee.increaseAnnualRegularDiscountUsage(regularDiscountAmount);
++    }
+ 
+-function increaseEmployeeDiscountUsage(order, amount) {
+-    if (!order || amount <= 0) {
+-        return;
++    if (employee1774DiscountAmount > 0) {
++        employee.increaseAnnual1774DiscountUsage(employee1774DiscountAmount);
+     }
+ 
+-    const customerNo = order.getCustomerNo();
+-    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
+-    const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
++    // no usage increase takes place on employees with unlimited allowance
++    // for them the flag remains off to prevent the above logging
++    session.privacy.employeeAllowanceIncreased = regularDiscountAmount > 0 && !employee.unlimitedDiscount;
++}
+ 
+-    if (employee) {
+-        const Transaction = require('dw/system/Transaction');
+-
+-        // skip if allowance usage already increased: double charging can happen in case caller runs this method more than once for the same order
+-        // the flag is reset at the beginning of checkout process
+-        if (session.privacy.employeeAllowanceIncreased) {
+-            let errorMessage = '';
+-            let errorStack = '';
+-
+-            // error thrown on purpose to get the stack trace of the caller function execution to be logged,
+-            // to investigate why double charging happens
+-            try {
+-                throw new Error(`Allowance usage of employee ${employee.ID} already increased for this checkout session.`);
+-            } catch (e) {
+-                // replace newlines with a separator to avoid lines after the first one to be cut out from the log viewer
+-                errorStack = e.stack.replace(/\n/g, ' | ');
+-            }
++/**
++ * @description Increase employee allowance usage from discounts applied on an order.
++ * @param {dw.order.Order} order - order to evaluate.
++ * @returns {void}
++ * @throws {Error} if an employee cannot be found for a discounted order.
++ */
++function increaseEmployeeDiscountUsage(order) {
++    if (!order) {
++        return;
++    }
+ 
+-            Logger.error(`${errorMessage} Skipping to prevent double increase. Stack trace: ${errorStack}`);
++    const regularDiscountAmount = orderHelpers.getRegularAppliedEmployeeDiscount(order);
++    const employee1774DiscountAmount = orderHelpers.get1774AppliedEmployeeDiscount(order);
++    const hasDiscountToIncrease = regularDiscountAmount > 0 || employee1774DiscountAmount > 0;
+ 
+-            return;
+-        }
++    if (!hasDiscountToIncrease) {
++        return;
++    }
+ 
+-        Transaction.wrap(() => {
+-            employee.increaseAnnualDiscountUsage(amount);
++    const customerNo = order.getCustomerNo();
++    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
++    const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
+ 
+-            // no usage increase takes place on employees with unlimited allowance
+-            // for them the flag remains off to prevent the above logging
+-            session.privacy.employeeAllowanceIncreased = !employee.unlimitedDiscount;
+-        });
+-    } else {
++    if (!employee) {
+         throw new Error(
+             `Employee with customer number ${customerNo} not found when trying to increase their discount usage`
+         );
+     }
++
++    if (shouldSkipEmployeeAllowanceIncrease(employee)) {
++        return;
++    }
++
++    const Transaction = require('dw/system/Transaction');
++
++    Transaction.wrap(() => applyEmployeeDiscountUsageIncrease(employee, regularDiscountAmount, employee1774DiscountAmount));
+ }
+ 
+ /**
+- * @description Decrease the employee's discount usage based on the order's applied employee discount, if any.
++ * @description Decrease the employee's regular discount usage based on the order's applied employee discount, if any.
+  * If the order was placed before the employee's allowance reset, the allowance can't be recaptured.
+  * @param {dw.order.Order} order - order instance
+  * @param {number} amount - amount to decrease the usage by
+- * @throws {Error} if employee.decreaseAnnualDiscountUsage() fails
++ * @throws {Error} if employee.decreaseAnnualRegularDiscountUsage() fails
+  * @returns {void}
+  */
++function decreaseRegularEmployeeDiscountUsage(order, amount) {
++    if (!order || amount <= 0) {
++        return;
++    }
++
++    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
++    const employee = EmployeeMgr.getEmployeeByCustomerNumber(order.getCustomerNo());
++
++    if (!employee) {
++        return;
++    }
+ 
+-function decreaseEmployeeDiscountUsage(order, amount) {
++    if (order.getCreationDate() < employee.lastAllowanceReset) {
++        // employee allowance can't be recaptured as the order was placed before the allowance reset
++        return;
++    }
++
++    const Transaction = require('dw/system/Transaction');
++
++    Transaction.wrap(() => {
++        employee.decreaseAnnualRegularDiscountUsage(amount);
++    });
++}
++
++/**
++ * @description Decrease the employee's 1774 discount usage based on the order's applied employee discount, if any.
++ * If the order was placed before the employee's allowance reset, the allowance can't be recaptured.
++ * @param {dw.order.Order} order - order instance
++ * @param {number} amount - amount to decrease the usage by
++ * @throws {Error} if employee.decreaseAnnual1774DiscountUsage() fails
++ * @returns {void}
++ */
++function decrease1774EmployeeDiscountUsage(order, amount) {
+     if (!order || amount <= 0) {
+         return;
+     }
+@@ -336,7 +527,9 @@ function decreaseEmployeeDiscountUsage(order, amount) {
+ 
+     const Transaction = require('dw/system/Transaction');
+ 
+-    Transaction.wrap(() => employee.decreaseAnnualDiscountUsage(amount));
++    Transaction.wrap(() => {
++        employee.decreaseAnnual1774DiscountUsage(amount);
++    });
+ }
+ 
+ /**
+@@ -852,7 +1045,8 @@ module.exports.createOrderModelFromBasketAndRequest = createOrderModelFromBasket
+ module.exports.fillinOrderCustomAttributes = fillinOrderCustomAttributes;
+ module.exports.findCurrentAppleDevice = findCurrentAppleDevice;
+ module.exports.increaseEmployeeDiscountUsage = increaseEmployeeDiscountUsage;
+-module.exports.decreaseEmployeeDiscountUsage = decreaseEmployeeDiscountUsage;
++module.exports.decreaseRegularEmployeeDiscountUsage = decreaseRegularEmployeeDiscountUsage;
++module.exports.decrease1774EmployeeDiscountUsage = decrease1774EmployeeDiscountUsage;
+ module.exports.getOrders = getOrders;
+ module.exports.isOrderDetailsAllowed = isOrderDetailsAllowed;
+ module.exports.getOrderMainPaymentMethodID = getOrderMainPaymentMethodID;

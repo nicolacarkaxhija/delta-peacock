@@ -1,0 +1,18 @@
+diff --git a/cartridges/app_custom_core/cartridge/templates/default/tracking/yotpoConversionTracking.isml b/cartridges/app_custom_core/cartridge/templates/default/tracking/yotpoConversionTracking.isml
+index 367b289ae3..762110f21e 100644
+--- a/cartridges/app_custom_core/cartridge/templates/default/tracking/yotpoConversionTracking.isml
++++ b/cartridges/app_custom_core/cartridge/templates/default/tracking/yotpoConversionTracking.isml
+@@ -30,11 +30,11 @@
+             })();
+         </script>
+         <script>
+-            yotpoTrackConversionData = {orderId: ${pdict.order.orderNumber}, orderAmount: ${pdict.order.totals.subTotal.value}, orderCurrency: '${request.session.currency.currencyCode}'}
++            yotpoTrackConversionData = {orderId: ${pdict.order.orderNumber}, orderAmount: ${pdict.order.totals.grandTotal.value}, orderCurrency: '${request.session.currency.currencyCode}'}
+         </script>
+         <noscript>
+             <img
+-                src="//api.yotpo.com/conversion_tracking.gif?app_key=${appKey}&order_id=${pdict.order.orderNumber}&order_amount=${pdict.order.totals.subTotal.value}&order_currency=${request.session.currency.currencyCode}"
++                src="//api.yotpo.com/conversion_tracking.gif?app_key=${appKey}&order_id=${pdict.order.orderNumber}&order_amount=${pdict.order.totals.grandTotal.value}&order_currency=${request.session.currency.currencyCode}"
+                 width="1"
+                 height="1"
+                 alt="${Resource.msg('img.alt.yotpo.tracking', 'imgAltText', null)}"

@@ -1,0 +1,24 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_custom_core/cartridge/controllers/Account.js",
+      "line": 697,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    },
+    {
+      "file": "cartridges/app_custom_core/cartridge/controllers/Account.js",
+      "line": 705,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    },
+    {
+      "file": "cartridges/app_custom_core/cartridge/controllers/Account.js",
+      "line": 719,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    },
+    {
+      "file": "cartridges/app_custom_core/cartridge/controllers/Account.js",
+      "line": 742,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    }
+  ]
+}
