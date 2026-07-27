@@ -53,18 +53,28 @@ export function planBudget(input: BudgetInput): BudgetPlan {
 
 /**
  * Groups a unified diff's per-file chunks into batches that each fit the token
- * budget, never splitting one file. A single file over budget rides alone.
+ * budget and, when given, never exceed a file-count cap either -- never
+ * splitting one file. A single file over either cap still rides alone.
  */
-export function splitDiffByFile(diff: string, maxTokensPerBatch: number): string[] {
+export function splitDiffByFile(
+  diff: string,
+  maxTokensPerBatch: number,
+  maxFilesPerBatch = Number.POSITIVE_INFINITY,
+): string[] {
   const chunks = diff.split(/^(?=diff --git )/m).filter((chunk) => chunk !== "");
   const batches: string[] = [];
   let current = "";
+  let currentFiles = 0;
   for (const chunk of chunks) {
-    if (current !== "" && approximateTokens(current + chunk) > maxTokensPerBatch) {
+    const overTokens = current !== "" && approximateTokens(current + chunk) > maxTokensPerBatch;
+    const overFiles = current !== "" && currentFiles + 1 > maxFilesPerBatch;
+    if (overTokens || overFiles) {
       batches.push(current);
       current = "";
+      currentFiles = 0;
     }
     current += chunk;
+    currentFiles += 1;
   }
   if (current !== "") batches.push(current);
   return batches.length === 0 ? [diff] : batches;
@@ -81,16 +91,33 @@ export interface BatchPlan {
 }
 
 /**
- * Once the whole diff cannot fit even without context, packs it into batches
+ * Caps a single batch well below the token window. Model attention to any one
+ * file degrades with how many other files share its batch, long before the
+ * window itself binds -- a 439-file diff fits a 100k window as one batch, but
+ * a model reviewing it that way misses violations it catches every time when
+ * the same file is reviewed alone. Fitting the window is necessary but not
+ * sufficient, so every batch answers to this cap too.
+ */
+export interface AttentionBudget {
+  /** A batch never holds more files than this, however much room remains. */
+  maxFiles: number;
+  /** A batch never holds more (approximate) tokens than this, either. */
+  maxTokens: number;
+}
+
+/**
+ * Once the whole diff cannot fit even without context, or would exceed the
+ * attention budget even though it fits the window, packs it into batches
  * sized to leave room for the stable prefix and the context budget in every
  * one of them, so splitting the diff is not, by itself, a reason to give up
  * cross-file context: agentic/repo_map/rag are not abandoned just because
  * *something* had to be batched. Greedy bin packing over per-file chunks -- a
  * file joins the running batch while prefix + context + batch still fit the
- * window; the next file that would tip it over starts a new batch instead.
- * Only a file whose own diff cannot afford context even alone loses it, named
- * in a notice, and it does so by itself rather than dragging a whole batch of
- * unrelated files down with it.
+ * window AND the batch still fits the attention budget; the next file that
+ * would tip either over starts a new batch instead. Only a file whose own
+ * diff cannot afford context even alone loses it, named in a notice, and it
+ * does so by itself rather than dragging a whole batch of unrelated files
+ * down with it.
  */
 export function planBatches(
   whole: BudgetPlan,
@@ -98,8 +125,17 @@ export function planBatches(
   projectContext: string,
   prefix: string,
   windowTokens: number,
+  attentionBudget: AttentionBudget,
 ): BatchPlan {
-  if (!whole.batchDiff) {
+  const changedFiles = changedFilesFromDiff(diff);
+  // the window can easily hold a diff that still has far too many files (or
+  // raw tokens) for one call's worth of model attention; either cap alone is
+  // reason enough to batch, whether or not the window ever binds
+  const attentionBinds =
+    changedFiles.length > attentionBudget.maxFiles ||
+    approximateTokens(diff) > attentionBudget.maxTokens;
+
+  if (!whole.batchDiff && !attentionBinds) {
     return {
       diffBatches: [diff],
       batchContexts: [whole.dropContext ? "" : projectContext],
@@ -107,11 +143,22 @@ export function planBatches(
       notices: [],
     };
   }
-  // the packing cap leaves room for what every batch must also carry, so a
-  // batch built up to this cap already fits the window with context intact
-  const reserved = approximateTokens(prefix) + approximateTokens(projectContext);
-  const diffBatches = splitDiffByFile(diff, windowTokens - reserved);
+
   const notices: string[] = [];
+  if (!whole.batchDiff && attentionBinds) {
+    // the window had nothing to do with this split; say so, or the batch
+    // count looks arbitrary next to a window that clearly had room to spare
+    notices.push(
+      `budget: ${String(changedFiles.length)} file(s) (~${String(approximateTokens(diff))} tokens) exceed the attention budget (max ${String(attentionBudget.maxFiles)} files / ${String(attentionBudget.maxTokens)} tokens per batch); splitting so per-file review quality does not degrade`,
+    );
+  }
+  // the packing cap leaves room for what every batch must also carry, so a
+  // batch built up to this cap already fits the window with context intact;
+  // the attention cap can bind first, well below the window, capping batches
+  // smaller than the window alone would ever require
+  const reserved = approximateTokens(prefix) + approximateTokens(projectContext);
+  const perBatchTokenCap = Math.min(windowTokens - reserved, attentionBudget.maxTokens);
+  const diffBatches = splitDiffByFile(diff, perBatchTokenCap, attentionBudget.maxFiles);
   let degraded = false;
   const batchContexts = diffBatches.map((batchDiff, index) => {
     const batchPlan = planBudget({

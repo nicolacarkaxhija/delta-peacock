@@ -487,6 +487,10 @@ async function assembleReview(
     projectContext,
     prefix,
     config.review.windowTokens,
+    {
+      maxFiles: config.review.maxFilesPerBatch,
+      maxTokens: config.review.maxTokensPerBatch,
+    },
   );
   for (const notice of batches.notices) deps.err(`${notice}\n`);
   const { diffBatches, batchContexts, degraded: budgetDegraded } = batches;
