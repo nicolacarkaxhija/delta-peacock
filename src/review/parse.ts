@@ -1,5 +1,10 @@
 import { z } from "zod";
-import type { Finding, Observation, Violation } from "../domain/finding.js";
+import {
+  fingerprintOf,
+  type Finding,
+  type Observation,
+  type Violation,
+} from "../domain/finding.js";
 import type { Guideline } from "../domain/guideline.js";
 import { SEVERITIES, severityRank, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
@@ -160,7 +165,7 @@ function toFinding(
 }
 
 /** Below this many characters a backtick span is too generic to anchor on safely. */
-const MIN_SNIPPET_LENGTH = 3;
+const MIN_SNIPPET_LENGTH = 12;
 
 /** The first backtick-quoted code span in a finding's own title or body, if any. */
 function citedSnippet(finding: Pick<Finding, "title" | "body">): string | undefined {
@@ -174,31 +179,42 @@ function citedSnippet(finding: Pick<Finding, "title" | "body">): string | undefi
  * count drifts run to run on multi-hunk files even though the finding quotes
  * the right code (it saw the line, it just miscounted its position). When a
  * finding's own cited snippet is not on the line it named, this relocates it
- * to the nearest changed line in the same file whose text contains that
- * snippet; absent any match, the model's line is kept rather than guessed at
- * further.
+ * to the changed line in the same file whose text contains that snippet --
+ * but only when the match is unambiguous (exactly one changed line qualifies)
+ * and the target is not already claimed by another finding of the same
+ * guideline, whether that finding already sits there or was relocated there
+ * earlier in this same pass. A snippet generic enough to match several lines,
+ * or a line another finding already occupies, leaves the finding at the
+ * model's own line rather than guessed at further: piling distinct findings
+ * onto one line reads far worse than leaving them at their original, merely
+ * imprecise, positions.
  */
 export function relocateFindings(
   findings: readonly Finding[],
   anchorTexts: ReadonlyMap<string, ReadonlyMap<number, string>>,
 ): Finding[] {
+  // every finding's own (as-reported) spot counts as taken from the start; a
+  // relocation may only claim a line nobody -- itself included -- already has
+  const claimed = new Set(findings.map((finding) => fingerprintOf(finding)));
   return findings.map((finding) => {
     const snippet = citedSnippet(finding);
     if (snippet === undefined) return finding;
     const linesOf = anchorTexts.get(finding.file);
     if (linesOf === undefined) return finding;
     if (linesOf.get(finding.line)?.includes(snippet) === true) return finding;
-    let nearestLine: number | undefined;
-    let nearestDistance = Infinity;
+    let onlyMatch: number | undefined;
+    let matchCount = 0;
     for (const [line, text] of linesOf) {
       if (!text.includes(snippet)) continue;
-      const distance = Math.abs(line - finding.line);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestLine = line;
-      }
+      matchCount += 1;
+      onlyMatch = line;
     }
-    return nearestLine === undefined ? finding : { ...finding, line: nearestLine };
+    // more than one candidate means the snippet is a generic shape, not a safe anchor
+    if (matchCount !== 1 || onlyMatch === undefined) return finding;
+    const relocated = { ...finding, line: onlyMatch };
+    if (claimed.has(fingerprintOf(relocated))) return finding; // already spoken for; stay put
+    claimed.add(fingerprintOf(relocated));
+    return relocated;
   });
 }
 
