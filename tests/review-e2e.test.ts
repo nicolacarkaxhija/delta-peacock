@@ -616,3 +616,94 @@ describe("review end to end (local mode)", () => {
     expect(stderr).toContain("AWS_REGION");
   });
 });
+
+describe("line-anchor repair", () => {
+  /** A brand-new file: every line is added, so newLineTexts covers all of it. */
+  function makeLoopScenario(): string {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "add guidelines");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(
+      repo,
+      "src/orders/total.js",
+      [
+        "function total(lineItems) {",
+        "  let sum = 0;",
+        "  for (let i = 0; i < lineItems.length; i++) {",
+        "    const lineItem = lineItems[i];",
+        "    sum += lineItem.price;",
+        "  }",
+        "  return sum;",
+        "}",
+      ].join("\n") + "\n",
+    );
+    commitAll(repo, "add order total");
+    return repo;
+  }
+
+  it("relocates a finding to the changed line containing its own cited snippet", async () => {
+    const repo = makeLoopScenario();
+    // the model names the for-loop's own line, but quotes code that actually
+    // sits one line below it -- the drift the live tool showed across runs
+    const misplaced = JSON.stringify({
+      findings: [
+        {
+          guidelineId: "no-console",
+          file: "src/orders/total.js",
+          line: 3,
+          title: "Loop variable is unclear",
+          body: "Rename it: `const lineItem = lineItems[i];` reads better as `const item = ...`.",
+        },
+      ],
+    });
+    const { code, stdout } = await review(
+      repo,
+      scriptedModel(misplaced).port,
+      "--report",
+      "r.json",
+    );
+    expect(code).toBe(0);
+    expect(stdout).toContain("src/orders/total.js:4");
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings[0]?.line).toBe(4);
+  });
+
+  it("keeps the model's line when no changed line matches its cited snippet", async () => {
+    const repo = makeScenario();
+    const noMatch = JSON.stringify({
+      findings: [
+        {
+          guidelineId: "no-console",
+          file: "src/app.js",
+          line: 2,
+          title: "Console call added",
+          body: "Replace `this.exact.text.appears.nowhere()` with the logger.",
+        },
+      ],
+    });
+    const { code } = await review(repo, scriptedModel(noMatch).port, "--report", "r.json");
+    expect(code).toBe(0);
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings[0]?.line).toBe(2);
+  });
+
+  it("leaves an already-correct line untouched", async () => {
+    const repo = makeLoopScenario();
+    const correct = JSON.stringify({
+      findings: [
+        {
+          guidelineId: "no-console",
+          file: "src/orders/total.js",
+          line: 4,
+          title: "Loop variable is unclear",
+          body: "Rename it: `const lineItem = lineItems[i];` reads better as `const item = ...`.",
+        },
+      ],
+    });
+    const { code } = await review(repo, scriptedModel(correct).port, "--report", "r.json");
+    expect(code).toBe(0);
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings[0]?.line).toBe(4);
+  });
+});

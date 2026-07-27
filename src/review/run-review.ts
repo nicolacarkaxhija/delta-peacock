@@ -39,6 +39,7 @@ import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
   parseReviewResponse,
+  relocateFindings,
   type ParsedReview,
   type ParseOptions,
   type RejectedCandidate,
@@ -224,7 +225,13 @@ export async function runReview(
     parseOptions,
     promptOf,
   );
-  const parsed = executed.parsed;
+  // the model's own line count drifts on multi-hunk files even when its
+  // cited snippet is right; re-anchor each finding to where that snippet
+  // actually sits before anything downstream keys, waives, or posts on line
+  const parsed: ParsedReview = {
+    ...executed.parsed,
+    findings: relocateFindings(executed.parsed.findings, newLineTexts(redacted.text)),
+  };
   if (options.explainDrops === true) {
     for (const entry of parsed.rejected) {
       deps.err(`rejected (${entry.reason}): ${entry.raw}\n`);
