@@ -150,3 +150,95 @@ describe("frontmatter contract", () => {
     expect(loadGuidelines(dir, "strict").problems.join("\n")).toContain('"languages"');
   });
 });
+
+describe("language field alias (singular)", () => {
+  it("accepts a singular string as an alias for languages", () => {
+    const dir = makeDir();
+    write(
+      dir,
+      "a.md",
+      '---\nid: a\nseverity: MAJOR\nlanguage: javascript\npaths: ["src/**"]\n---\nbody\n',
+    );
+    const { guidelines, problems, notices } = loadGuidelines(dir);
+    expect(problems).toEqual([]);
+    expect(guidelines).toHaveLength(1);
+    expect(guidelines[0]?.languages).toEqual(["javascript"]);
+    expect(notices).toEqual([]);
+  });
+
+  it("accepts a singular list under the language key", () => {
+    const dir = makeDir();
+    write(
+      dir,
+      "a.md",
+      '---\nid: a\nseverity: MAJOR\nlanguage: [javascript, isml]\npaths: ["src/**"]\n---\nbody\n',
+    );
+    const { guidelines, notices } = loadGuidelines(dir);
+    expect(guidelines).toHaveLength(1);
+    expect(guidelines[0]?.languages).toEqual(["javascript", "isml"]);
+    expect(notices).toEqual([]);
+  });
+
+  it("leaves the plural languages field working unchanged when only it is present", () => {
+    const dir = makeDir();
+    write(
+      dir,
+      "a.md",
+      '---\nid: a\nseverity: MAJOR\nlanguages: [python]\npaths: ["src/**"]\n---\nbody\n',
+    );
+    const { guidelines, notices } = loadGuidelines(dir);
+    expect(guidelines[0]?.languages).toEqual(["python"]);
+    expect(notices).toEqual([]);
+  });
+
+  it("prefers languages over language when both are present, with a notice naming the guideline", () => {
+    const dir = makeDir();
+    write(
+      dir,
+      "a.md",
+      '---\nid: dual\nseverity: MAJOR\nlanguage: javascript\nlanguages: [typescript]\npaths: ["src/**"]\n---\nbody\n',
+    );
+    const { guidelines, notices } = loadGuidelines(dir);
+    expect(guidelines[0]?.languages).toEqual(["typescript"]);
+    const joined = notices.join("\n");
+    expect(joined).toContain("dual");
+    expect(joined).toContain("language");
+    expect(joined).toContain("languages");
+  });
+
+  it("does not notice a missing languages field when only the singular alias is supplied", () => {
+    const dir = makeDir();
+    write(
+      dir,
+      "a.md",
+      '---\nid: a\nseverity: MAJOR\nlanguage: javascript\npaths: ["src/**"]\n---\nbody\n',
+    );
+    expect(loadGuidelines(dir).notices).toEqual([]);
+  });
+
+  it("strict mode keeps a guideline scoped only via the singular alias", () => {
+    const dir = makeDir();
+    write(
+      dir,
+      "a.md",
+      '---\nid: a\nseverity: MAJOR\nlanguage: javascript\npaths: ["src/**"]\n---\nbody\n',
+    );
+    const { guidelines, problems } = loadGuidelines(dir, "strict");
+    expect(guidelines).toHaveLength(1);
+    expect(problems).toEqual([]);
+  });
+
+  it("still skips a guideline missing both keys under strict, same as before", () => {
+    const dir = makeDir();
+    write(dir, "a.md", '---\nid: a\nseverity: MAJOR\npaths: ["src/**"]\n---\nbody\n');
+    const { guidelines, problems } = loadGuidelines(dir, "strict");
+    expect(guidelines).toEqual([]);
+    expect(problems.join("\n")).toContain("languages");
+  });
+
+  it("rejects a malformed language value the same way languages is rejected", () => {
+    const dir = makeDir();
+    write(dir, "bad.md", "---\nid: bad\nseverity: MAJOR\nlanguage: 5\n---\nbody\n");
+    expect(loadGuidelines(dir).problems.join("\n")).toContain('"language"');
+  });
+});
