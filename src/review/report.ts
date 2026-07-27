@@ -29,6 +29,19 @@ export interface WaivedFinding {
   expired?: boolean;
 }
 
+/**
+ * A batch whose model reply held no parseable findings at all -- distinct from
+ * droppedMalformedFindings, which counts individual malformed elements inside
+ * an otherwise-parseable reply. Every other batch's findings still stand.
+ */
+export interface UnparsedBatch {
+  /** 1-based, matching the "batch N/M" language in the warning this came from. */
+  batch: number;
+  of: number;
+  /** The parse failure's own message (e.g. "model response held no JSON object"). */
+  reason: string;
+}
+
 export interface ReviewReport {
   version: 1;
   /** Rendered findings: violations and observations at or above the confidence floor. */
@@ -72,6 +85,8 @@ export interface ReviewReport {
   budgetDegraded?: true;
   /** Linters and formatters detected in the tree, whose rules the review skips. */
   lintersDetected?: string[];
+  /** Batches whose reply held no parseable findings; every other batch's findings still stand. */
+  unparsedBatches?: UnparsedBatch[];
 }
 
 export function buildReport(input: {
@@ -92,6 +107,8 @@ export function buildReport(input: {
   cachedResponse?: true;
   budgetDegraded?: true;
   lintersDetected?: string[];
+  /** Batches whose reply could not be parsed; recorded so a caller can tell a partial review from a complete one. */
+  unparsedBatches?: readonly UnparsedBatch[];
   /** Findings the baseline accepted; they join findings flagged, never gate. */
   baselined?: readonly Finding[];
   /** Violations an in-code waiver excused; recorded separately, never gating. */
@@ -138,5 +155,8 @@ export function buildReport(input: {
     ...(input.cachedResponse ? { cachedResponse: input.cachedResponse } : {}),
     ...(input.budgetDegraded ? { budgetDegraded: input.budgetDegraded } : {}),
     ...(input.lintersDetected ? { lintersDetected: input.lintersDetected } : {}),
+    ...(input.unparsedBatches && input.unparsedBatches.length > 0
+      ? { unparsedBatches: [...input.unparsedBatches] }
+      : {}),
   };
 }

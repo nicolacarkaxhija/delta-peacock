@@ -750,3 +750,93 @@ describe("duplicate finding collapse", () => {
     expect(stdout).toContain("src/app.js:3");
   });
 });
+
+describe("partial batch parse failures", () => {
+  // a real 439-file PR hit this: 4 batches went out, one reply held no JSON
+  // object, and the ToolError from parsing it aborted the whole review --
+  // discarding the other three batches' findings and writing no report at all
+  /** Two files, each padded past a tiny window so the diff splits one-file-per-batch. */
+  function makeTwoBatchScenario(): string {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "add guidelines");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/a.js", `console.log('${"a".repeat(400)}');\n`);
+    write(repo, "src/b.js", `console.log('${"b".repeat(400)}');\n`);
+    commitAll(repo, "add logging");
+    return repo;
+  }
+
+  /** The batch touching src/a.js answers with prose holding no JSON object; src/b.js's is clean. */
+  function partlyUnparseablePort(): { port: ModelPort; requests: ModelRequest[] } {
+    const requests: ModelRequest[] = [];
+    return {
+      requests,
+      port: {
+        complete(request) {
+          requests.push(request);
+          const files = [...request.user.matchAll(/\+\+\+ b\/(.+)/g)].map((m) => m[1]);
+          if (files.includes("src/a.js")) {
+            return Promise.resolve({ text: "Sorry, I cannot review this right now." });
+          }
+          return Promise.resolve({
+            text: JSON.stringify({
+              findings: files.map((file) => ({
+                guidelineId: "no-console",
+                file,
+                line: 1,
+                title: "Console call added",
+                body: "Replace with the logger.",
+              })),
+            }),
+          });
+        },
+      },
+    };
+  }
+
+  it("keeps the other batches' findings and records the unparsed one instead of aborting the run", async () => {
+    const repo = makeTwoBatchScenario();
+    const { port, requests } = partlyUnparseablePort();
+    let stderr = "";
+    const code = await runCli(["review", "--report", "r.json"], {
+      cwd: repo,
+      env: { DELTA_PEACOCK_REVIEW_WINDOW_TOKENS: "150" },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: port,
+    });
+    expect(requests.length).toBe(2); // sanity: the diff really did split into two batches
+    expect(code).toBe(0); // one unparseable batch must not abort an otherwise-clean review
+    expect(stderr).toMatch(/batch \d+\/2: .+; skipping this batch's findings/);
+
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    // src/b.js's finding survived even though src/a.js's batch could not be parsed
+    expect(report.findings.map((finding) => finding.file)).toEqual(["src/b.js"]);
+    expect(report.unparsedBatches).toHaveLength(1);
+    expect(report.unparsedBatches?.[0]?.of).toBe(2);
+    expect(report.unparsedBatches?.[0]?.reason).toContain("JSON");
+  });
+
+  it("still fails the run when every batch's reply is unparseable", async () => {
+    const repo = makeTwoBatchScenario();
+    const allBroken: ModelPort = {
+      complete: () => Promise.resolve({ text: "Nope, no findings here." }),
+    };
+    let stderr = "";
+    const code = await runCli(["review", "--report", "r.json"], {
+      cwd: repo,
+      env: { DELTA_PEACOCK_REVIEW_WINDOW_TOKENS: "150" },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: allBroken,
+    });
+    expect(code).toBe(1); // every batch failing to parse is a genuine failure, not a clean pass
+    expect(stderr).toContain("every batch");
+    expect(existsSync(path.join(repo, "r.json"))).toBe(false); // no partial report on total failure
+  });
+});
