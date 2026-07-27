@@ -10,17 +10,3 @@ index f0a6de024f..916917d275 100644
  
          const isOnline = productHelper.isOnlineStorefrontProduct(product);
          const hideOnStorefrontPref = sitePref.getValue('hideOnStorefront');
-@@ -123,6 +124,13 @@ server.replace(
-             showProductPageResult.isGrabPayEnabledForCurrentCountry = true;
-         }
- 
-+        /** *
-+         * ***** Custom Override Birkenstock *****
-+         *
-+         * This override used to show estimated delivery date
-+         */
-+        showProductPageResult.estimatedDeliveryDate = deliveryUtil.getEstimatedDeliveryDate();
-+
-         res.render(showProductPageResult.template, showProductPageResult);
- 
-         return next();

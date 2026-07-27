@@ -2,34 +2,6 @@ diff --git a/cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js 
 index 490319e015..72ec3b8cbb 100644
 --- a/cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js
 +++ b/cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js
-@@ -176,21 +176,18 @@ function fillinOrderCustomAttributes(order) {
- }
- 
- /**
-- * @description Get the amount of the employee discount applied to the order WHEN IT HAS BEEN PLACED.
-- * @param {dw.order.LineItemCtnr} lineItemContainer - current user's basket/order.
-- * @returns {number} - amount of the employee discount applied to the order, or 0 if not applied
-+ * @description Get applied employee discount by collecting and summing matching price adjustments.
-+ * @param {dw.order.LineItemCtnr} lineItemContainer - basket or order to inspect.
-+ * @param {Function} getEmployeePriceAdjustments - function that returns relevant employee price adjustments for a product line item.
-+ * @returns {number} summed absolute discount value, or 0 when no matching adjustments are found.
-  */
--
--orderHelpers.getAppliedEmployeeDiscount = function (lineItemContainer) {
--    const productLineItems = lineItemContainer ? lineItemContainer.getProductLineItems() : null;
-+function getAppliedEmployeeDiscountByGetter(lineItemContainer, getEmployeePriceAdjustments) {
-+    const productLineItems = lineItemContainer.getProductLineItems();
- 
-     if (empty(productLineItems)) {
-         return 0;
-     }
- 
--    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
--    const getEmployeePriceAdjustments = productLineItemHelpers.getEmployeePriceAdjustments;
--
-     const priceAdjustments = productLineItems
-         .toArray()
-         .reduce((acc, pli) => acc.concat(getEmployeePriceAdjustments(pli)), []);
 @@ -201,123 +198,317 @@ orderHelpers.getAppliedEmployeeDiscount = function (lineItemContainer) {
      );
  
@@ -419,24 +391,3 @@ index 490319e015..72ec3b8cbb 100644
      if (!order || amount <= 0) {
          return;
      }
-@@ -336,7 +527,9 @@ function decreaseEmployeeDiscountUsage(order, amount) {
- 
-     const Transaction = require('dw/system/Transaction');
- 
--    Transaction.wrap(() => employee.decreaseAnnualDiscountUsage(amount));
-+    Transaction.wrap(() => {
-+        employee.decreaseAnnual1774DiscountUsage(amount);
-+    });
- }
- 
- /**
-@@ -852,7 +1045,8 @@ module.exports.createOrderModelFromBasketAndRequest = createOrderModelFromBasket
- module.exports.fillinOrderCustomAttributes = fillinOrderCustomAttributes;
- module.exports.findCurrentAppleDevice = findCurrentAppleDevice;
- module.exports.increaseEmployeeDiscountUsage = increaseEmployeeDiscountUsage;
--module.exports.decreaseEmployeeDiscountUsage = decreaseEmployeeDiscountUsage;
-+module.exports.decreaseRegularEmployeeDiscountUsage = decreaseRegularEmployeeDiscountUsage;
-+module.exports.decrease1774EmployeeDiscountUsage = decrease1774EmployeeDiscountUsage;
- module.exports.getOrders = getOrders;
- module.exports.isOrderDetailsAllowed = isOrderDetailsAllowed;
- module.exports.getOrderMainPaymentMethodID = getOrderMainPaymentMethodID;

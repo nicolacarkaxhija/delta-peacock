@@ -2,37 +2,6 @@ diff --git a/cartridges/app_custom_core/cartridge/controllers/Account.js b/cartr
 index e63df21f2d..bc67062793 100644
 --- a/cartridges/app_custom_core/cartridge/controllers/Account.js
 +++ b/cartridges/app_custom_core/cartridge/controllers/Account.js
-@@ -357,7 +357,12 @@ server.append(
-             const loyaltyProvider = ProviderMgr.getLoyaltyProvider();
-             const customerProfile = viewData.authenticatedCustomer.profile;
- 
--            if (customerProfile && loyaltyProvider && loyaltyProvider.isLoyaltyEnabled()) {
-+            if (
-+                customerProfile
-+                && loyaltyProvider
-+                && loyaltyProvider.isLoyaltyEnabled()
-+                && loyaltyProvider.isMember(viewData.authenticatedCustomer)
-+            ) {
-                 loyaltyProvider.updateCustomerDataFromLoyaltySystem(customerProfile);
-             }
-         }
-@@ -473,13 +478,14 @@ server.get(
-         }
- 
-         const employeeHelpers = require('*/cartridge/scripts/helpers/employeeHelpers');
--        const discountRate = employeeHelpers.getDiscountRate();
-+        const discountRates = employeeHelpers.getDiscountRates();
-         const hasFreeShipping = employeeHelpers.hasFreeShipping();
-         const currentYear = new Date().getFullYear().toString() + ':';
- 
-         res.render('account/employeeDiscount', {
-             pageContext: 'employeeSale',
--            discountRate: discountRate,
-+            discountRateRegular: discountRates.promotionRegular,
-+            discountRate1774: discountRates.promotion1774,
-             hasFreeShipping: hasFreeShipping,
-             employee: employee,
-             currentYear: currentYear
 @@ -656,18 +662,23 @@ server.get(
      userLoggedIn.validateLoggedIn,
      function (req, res, next) {
