@@ -1,3 +1,4 @@
+import { loadCredentials } from "../config/credentials.js";
 import { loadConfig } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
@@ -72,7 +73,7 @@ export async function runDescribe(
     }
   }
 
-  const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
+  const modelPort = deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env));
   let reply;
   try {
     reply = await modelPort.complete(request);
@@ -96,7 +97,7 @@ export async function runDescribe(
     return 0;
   }
 
-  const scm = deps.scmPort ?? buildScmPort(config, deps.env);
+  const scm = deps.scmPort ?? buildScmPort(config, loadCredentials(deps.env));
   if (scm.getPullRequestText === undefined || scm.updatePullRequestText === undefined) {
     throw new ToolError(`the ${config.scm.provider} provider cannot edit descriptions`);
   }

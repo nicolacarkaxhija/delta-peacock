@@ -1,3 +1,4 @@
+import type { Credentials } from "../config/credentials.js";
 import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
 import { createAnthropicPort } from "./anthropic.js";
@@ -7,12 +8,12 @@ import type { ModelPort } from "./port.js";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
-function requiredEnv(
-  env: Readonly<Record<string, string | undefined>>,
-  name: string,
+function requiredCredential(
+  credentials: Credentials,
+  name: keyof Credentials,
   provider: string,
 ): string {
-  const value = env[name];
+  const value = credentials[name];
   if (value === undefined || value === "") {
     throw new ToolError(`${name} is not set; the ${provider} provider needs it`);
   }
@@ -25,10 +26,7 @@ export interface ModelRef {
   baseUrl?: string | undefined;
 }
 
-export function buildModelPort(
-  config: Config,
-  env: Readonly<Record<string, string | undefined>>,
-): ModelPort {
+export function buildModelPort(config: Config, credentials: Credentials): ModelPort {
   const modelId = config.model.id;
   if (modelId === undefined) {
     throw new ToolError(
@@ -41,25 +39,22 @@ export function buildModelPort(
       id: modelId,
       ...(config.model.baseUrl !== undefined ? { baseUrl: config.model.baseUrl } : {}),
     },
-    env,
+    credentials,
   );
 }
 
 /** The same wiring for ensemble members and judges: always provider plus model. */
-export function buildModelPortFor(
-  ref: ModelRef,
-  env: Readonly<Record<string, string | undefined>>,
-): ModelPort {
+export function buildModelPortFor(ref: ModelRef, credentials: Credentials): ModelPort {
   const modelId = ref.id;
   switch (ref.provider) {
     case "anthropic":
       return createAnthropicPort({
-        apiKey: requiredEnv(env, "ANTHROPIC_API_KEY", "anthropic"),
+        apiKey: requiredCredential(credentials, "ANTHROPIC_API_KEY", "anthropic"),
         modelId,
       });
     case "openrouter":
       return createOpenAiishPort({
-        apiKey: requiredEnv(env, "OPENROUTER_API_KEY", "openrouter"),
+        apiKey: requiredCredential(credentials, "OPENROUTER_API_KEY", "openrouter"),
         modelId,
         baseUrl: ref.baseUrl ?? OPENROUTER_BASE_URL,
       });
@@ -70,18 +65,18 @@ export function buildModelPortFor(
       const baseUrl = ref.baseUrl ?? "";
       return createOpenAiishPort({
         // many local hosts accept any key; default keeps them zero-config
-        apiKey: env["OPENAI_API_KEY"] ?? "unused",
+        apiKey: credentials.OPENAI_API_KEY ?? "unused",
         modelId,
         baseUrl,
       });
     }
     case "bedrock":
       return createBedrockPort({
-        region: requiredEnv(env, "AWS_REGION", "bedrock"),
-        accessKeyId: requiredEnv(env, "AWS_ACCESS_KEY_ID", "bedrock"),
-        secretAccessKey: requiredEnv(env, "AWS_SECRET_ACCESS_KEY", "bedrock"),
-        ...(env["AWS_SESSION_TOKEN"] !== undefined && env["AWS_SESSION_TOKEN"] !== ""
-          ? { sessionToken: env["AWS_SESSION_TOKEN"] }
+        region: requiredCredential(credentials, "AWS_REGION", "bedrock"),
+        accessKeyId: requiredCredential(credentials, "AWS_ACCESS_KEY_ID", "bedrock"),
+        secretAccessKey: requiredCredential(credentials, "AWS_SECRET_ACCESS_KEY", "bedrock"),
+        ...(credentials.AWS_SESSION_TOKEN !== undefined && credentials.AWS_SESSION_TOKEN !== ""
+          ? { sessionToken: credentials.AWS_SESSION_TOKEN }
           : {}),
         modelId,
         ...(ref.baseUrl !== undefined ? { baseUrl: ref.baseUrl } : {}),

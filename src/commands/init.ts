@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { detectCi, type CiProvider } from "../config/ci.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Severity } from "../domain/severity.js";
 import { resolvePack } from "../guidelines/packs.js";
@@ -190,14 +191,12 @@ const CI_SNIPPETS: Readonly<Record<WalkthroughAnswers["scm"], PlannedFile>> = {
   bitbucket: { relPath: "delta-peacock-pipelines-snippet.yml", content: BITBUCKET_SNIPPET },
 };
 
-function ciSnippet(env: RuntimeDeps["env"]): PlannedFile {
-  if (env["GITHUB_ACTIONS"] !== undefined) return CI_SNIPPETS.github;
-  if (env["GITLAB_CI"] !== undefined) return CI_SNIPPETS.gitlab;
-  if (env["BITBUCKET_BUILD_NUMBER"] !== undefined) return CI_SNIPPETS.bitbucket;
-  if (env["JENKINS_URL"] !== undefined) {
+function ciSnippet(ci: CiProvider): PlannedFile {
+  if (ci === "jenkins") {
     return { relPath: "delta-peacock-jenkinsfile-snippet.groovy", content: JENKINS_SNIPPET };
   }
-  return CI_SNIPPETS.local;
+  if (ci === undefined) return CI_SNIPPETS.local;
+  return CI_SNIPPETS[ci];
 }
 
 /** Pure planning seam: answers in, the three files init writes out. */
@@ -244,7 +243,11 @@ export function writeScaffold(
 /** First-ten-minutes scaffolding: config, an example guideline, a CI snippet. */
 export function runInit(deps: RuntimeDeps, options: { force: boolean; starter?: string }): number {
   if (options.starter === undefined) {
-    return writeScaffold(deps, planScaffold(DEFAULT_ANSWERS, ciSnippet(deps.env)), options.force);
+    return writeScaffold(
+      deps,
+      planScaffold(DEFAULT_ANSWERS, ciSnippet(detectCi(deps.env))),
+      options.force,
+    );
   }
   // seed the corpus from a curated pack the human reviews before committing
   const pack = resolvePack(deps.cwd, options.starter);
@@ -258,7 +261,7 @@ export function runInit(deps: RuntimeDeps, options: { force: boolean; starter?: 
     [
       { relPath: "delta-peacock.config.yaml", content: renderConfigYaml(DEFAULT_ANSWERS) },
       ...seeded,
-      ciSnippet(deps.env),
+      ciSnippet(detectCi(deps.env)),
     ],
     options.force,
   );

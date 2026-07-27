@@ -1,4 +1,5 @@
 import path from "node:path";
+import { loadCredentials, type Credentials } from "../config/credentials.js";
 import { ConfigError, loadConfig } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
 import type { RuntimeDeps } from "../deps.js";
@@ -72,18 +73,18 @@ function checkGuidelines(deps: RuntimeDeps, config: Config): CheckResult {
   }
 }
 
-function checkModel(config: Config, env: RuntimeDeps["env"]): CheckResult {
+function checkModel(config: Config, credentials: Credentials): CheckResult {
   if (config.model.id === undefined) {
     return check("model", "warn", "model.id is not set yet; reviews need it (see the config spec)");
   }
-  const credentials: Record<string, string> = {
+  const credentialName: Record<string, keyof Credentials> = {
     anthropic: "ANTHROPIC_API_KEY",
     bedrock: "AWS_ACCESS_KEY_ID",
     openrouter: "OPENROUTER_API_KEY",
     "openai-compatible": "OPENAI_API_KEY",
   };
-  const wanted = credentials[config.model.provider];
-  if (wanted !== undefined && (env[wanted] === undefined || env[wanted] === "")) {
+  const wanted = credentialName[config.model.provider];
+  if (wanted !== undefined && (credentials[wanted] === undefined || credentials[wanted] === "")) {
     // local openai-compatible hosts accept any key, so absence is only a hint
     if (config.model.provider === "openai-compatible") {
       return check(
@@ -110,7 +111,7 @@ async function checkScm(deps: RuntimeDeps, config: Config): Promise<CheckResult>
     return check("scm", "ok", "local mode; nothing will be posted, checks skipped");
   }
   try {
-    const scm = deps.scmPort ?? buildScmPort(config, deps.env);
+    const scm = deps.scmPort ?? buildScmPort(config, loadCredentials(deps.env));
     await scm.listSummaryComments(); // read-only probe
     return check(
       "scm",
@@ -140,7 +141,7 @@ export async function runDoctor(
   if (config !== undefined) {
     results.push(checkGit(deps, config));
     results.push(checkGuidelines(deps, config));
-    results.push(checkModel(config, deps.env));
+    results.push(checkModel(config, loadCredentials(deps.env)));
     results.push(await checkScm(deps, config));
   } else {
     results.push(check("everything else", "warn", "skipped until the configuration resolves"));
