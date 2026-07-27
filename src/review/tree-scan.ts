@@ -1,16 +1,9 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import picomatch from "picomatch";
+import { DEFAULT_SKIP_DIRS, walkFiles } from "../util/walk.js";
 
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "coverage",
-  "vendor",
-  "build",
-  ".delta-peacock-cache",
-]);
+const SKIP_DIRS = new Set([...DEFAULT_SKIP_DIRS, ".delta-peacock-cache"]);
 const MAX_FILE_BYTES = 256 * 1024;
 
 /**
@@ -26,24 +19,14 @@ export function collectFiles(
   const isIncluded = include.length === 0 ? () => true : picomatch([...include]);
   const isExcluded = exclude.length === 0 ? () => false : picomatch([...exclude]);
   const files: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) walk(full);
-        continue;
-      }
-      /* v8 ignore next -- sockets and fifos are not portably simulable */
-      if (!entry.isFile()) continue;
-      const relative = path.relative(cwd, full).replaceAll("\\", "/");
-      if (!isIncluded(relative) || isExcluded(relative)) continue;
-      if (statSync(full).size > MAX_FILE_BYTES) continue;
-      const content = readFileSync(full, "utf8");
-      if (content.includes("\u0000")) continue; // binary
-      files.push(relative);
-    }
-  };
-  walk(cwd);
+  for (const full of walkFiles(cwd, { skipDirs: SKIP_DIRS, onReaddirError: "throw" })) {
+    const relative = path.relative(cwd, full).replaceAll("\\", "/");
+    if (!isIncluded(relative) || isExcluded(relative)) continue;
+    if (statSync(full).size > MAX_FILE_BYTES) continue;
+    const content = readFileSync(full, "utf8");
+    if (content.includes("\u0000")) continue; // binary
+    files.push(relative);
+  }
   return files.sort();
 }
 

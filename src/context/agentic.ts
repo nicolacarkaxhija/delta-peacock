@@ -1,10 +1,10 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
+import { DEFAULT_SKIP_DIRS, walkFiles } from "../util/walk.js";
 import type { ContextInput, ContextProvider } from "./port.js";
 
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "coverage", "vendor", "build"]);
 const MAX_RESULT_CHARS = 4000;
 const MAX_MATCHES = 40;
 const MAX_FILE_BYTES = 512 * 1024;
@@ -14,27 +14,7 @@ function clip(text: string): string {
 }
 
 function textFilesUnder(root: string, limit = 2000): string[] {
-  const files: string[] = [];
-  const walk = (dir: string): void => {
-    if (files.length >= limit) return;
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (files.length >= limit) return;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) walk(full);
-      } else if (entry.isFile()) {
-        files.push(full);
-      }
-    }
-  };
-  walk(root);
-  return files;
+  return walkFiles(root, { skipDirs: DEFAULT_SKIP_DIRS, maxFiles: limit });
 }
 
 function scanRepo(
