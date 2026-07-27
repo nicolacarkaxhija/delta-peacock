@@ -122,6 +122,20 @@ export interface ResolvedTarget {
   notices: string[];
 }
 
+/**
+ * True when `target` already names a remote-tracking ref rather than a bare
+ * branch name: either syntactically, by starting with a configured remote's
+ * name, or because that exact ref already resolves under refs/remotes/ (a
+ * tracking ref left behind by a remote since renamed or removed). A bare
+ * name never matches here even if a like-named local branch exists — that
+ * must still go through the fetch-and-qualify path below so it resolves to
+ * the remote-tracking ref, not the local one.
+ */
+function isRemoteQualified(cwd: string, target: string, remotes: readonly string[]): boolean {
+  if (remotes.some((remote) => target === remote || target.startsWith(`${remote}/`))) return true;
+  return refExists(cwd, `refs/remotes/${target}`);
+}
+
 /** Prefer a freshly fetched {remote}/{target}; fall back to the local ref with a notice. */
 export function resolveTargetRef(
   cwd: string,
@@ -132,6 +146,11 @@ export function resolveTargetRef(
   const notices: string[] = [];
   if (fetchTarget) {
     const resolution = resolveFetchRemote(cwd);
+    // already a remote-tracking ref: use it as given rather than prepending
+    // a remote name it may already carry (that produced origin/origin/...)
+    if (isRemoteQualified(cwd, target, resolution.remotes)) {
+      return { ref: target, notices };
+    }
     if (resolution.remote !== undefined) {
       const remote = resolution.remote;
       try {
