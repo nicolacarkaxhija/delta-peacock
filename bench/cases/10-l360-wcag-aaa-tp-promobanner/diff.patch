@@ -1,0 +1,13 @@
+diff --git a/cartridges/app_custom_core/cartridge/templates/default/content/promoBanner.isml b/cartridges/app_custom_core/cartridge/templates/default/content/promoBanner.isml
+new file mode 100644
+index 0000000000..1a2b3c4d5e
+--- /dev/null
++++ b/cartridges/app_custom_core/cartridge/templates/default/content/promoBanner.isml
+@@ -0,0 +1,7 @@
++<iscontent type="text/html" charset="UTF-8" compact="true"/>
++
++<isif condition="${!empty(pdict.campaignBanner)}">
++    <div class="b-promo_banner">
++        <img class="b-promo_banner-image" src="${URLUtils.staticURL('/images/campaigns/' + pdict.campaignBanner)}" width="1440" height="360" />
++    </div>
++</isif>

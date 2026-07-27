@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_custom_core/cartridge/templates/default/content/promoBanner.isml",
+      "line": 5,
+      "guidelineId": "ACC-WCAG-AAA"
+    }
+  ]
+}
