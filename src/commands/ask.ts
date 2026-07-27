@@ -1,5 +1,3 @@
-import { loadCredentials } from "../config/credentials.js";
-import { loadConfig } from "../config/loader.js";
 import { buildContextProvider } from "../context/build.js";
 import { capToTokenBudget } from "../context/port.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
@@ -31,7 +29,7 @@ export async function runAsk(
   if (options.question === undefined && !options.interactive) {
     throw new ToolError("ask needs a question, or --interactive for a session");
   }
-  const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
+  const config = deps.loadConfig(flags);
 
   const resolvedTarget = resolveTargetRef(
     deps.cwd,
@@ -83,7 +81,7 @@ export async function runAsk(
       : corpus;
 
   const contextProvider = buildContextProvider(config, {
-    credentials: loadCredentials(deps.env),
+    credentials: deps.credentials,
     ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
     ...(deps.clock ? { clock: deps.clock } : {}),
   });
@@ -96,7 +94,7 @@ export async function runAsk(
   const contextTools = contextProvider.tools?.(contextInput);
 
   const system = buildAskSystem(guidelines, projectContext);
-  const modelPort = deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env));
+  const modelPort = deps.modelPort ?? buildModelPort(config, deps.credentials);
   const transcript: Turn[] = [];
   const now = deps.clock?.() ?? new Date();
 

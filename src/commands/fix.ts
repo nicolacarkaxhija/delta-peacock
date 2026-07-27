@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { runGit } from "../git/git.js";
@@ -33,7 +32,7 @@ export function runFix(
   flags: Readonly<Record<string, string>>,
   options: FixOptions,
 ): number {
-  const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
+  const config = deps.loadConfig(flags);
   const reportRel = options.report ?? config.output.report;
   if (reportRel === undefined) {
     throw new ToolError("fix needs a report: pass --report or configure output.report");

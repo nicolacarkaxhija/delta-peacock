@@ -1,6 +1,6 @@
 import path from "node:path";
-import { loadCredentials, type Credentials } from "../config/credentials.js";
-import { ConfigError, loadConfig } from "../config/loader.js";
+import type { Credentials } from "../config/credentials.js";
+import { ConfigError } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
 import type { RuntimeDeps } from "../deps.js";
 import { resolveTargetRef } from "../git/diff.js";
@@ -111,7 +111,7 @@ async function checkScm(deps: RuntimeDeps, config: Config): Promise<CheckResult>
     return check("scm", "ok", "local mode; nothing will be posted, checks skipped");
   }
   try {
-    const scm = deps.scmPort ?? buildScmPort(config, loadCredentials(deps.env));
+    const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
     await scm.listSummaryComments(); // read-only probe
     return check(
       "scm",
@@ -131,7 +131,7 @@ export async function runDoctor(
   const results: CheckResult[] = [];
   let config: Config | undefined;
   try {
-    config = loadConfig({ root: deps.cwd, env: deps.env, flags });
+    config = deps.loadConfig(flags);
     results.push(check("config", "ok", "configuration resolves and validates"));
   } catch (error) {
     if (!(error instanceof ConfigError)) throw error;
@@ -141,7 +141,7 @@ export async function runDoctor(
   if (config !== undefined) {
     results.push(checkGit(deps, config));
     results.push(checkGuidelines(deps, config));
-    results.push(checkModel(config, loadCredentials(deps.env)));
+    results.push(checkModel(config, deps.credentials));
     results.push(await checkScm(deps, config));
   } else {
     results.push(check("everything else", "warn", "skipped until the configuration resolves"));

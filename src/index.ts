@@ -20,5 +20,5 @@ export { parseReviewResponse, type ParsedReview } from "./review/parse.js";
 export { buildReviewPrompt } from "./review/prompt.js";
 export { buildReport, type ReviewReport } from "./review/report.js";
 export { runReview, type ReviewDeps } from "./review/run-review.js";
-export { buildProgram, type CliDeps } from "./program.js";
-export { runCli } from "./run-cli.js";
+export { buildProgram } from "./program.js";
+export { runCli, type CliDeps } from "./run-cli.js";

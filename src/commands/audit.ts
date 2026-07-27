@@ -1,7 +1,5 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadCredentials } from "../config/credentials.js";
-import { loadConfig } from "../config/loader.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
@@ -34,7 +32,7 @@ export async function runAudit(
   flags: Readonly<Record<string, string>>,
   options: AuditOptions = {},
 ): Promise<number> {
-  const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
+  const config = deps.loadConfig(flags);
   const loaded = loadGuidelines(
     path.join(deps.cwd, config.review.guidelinesDir),
     config.review.frontmatterContract,
@@ -88,7 +86,7 @@ export async function runAudit(
     }
   }
 
-  const modelPort = deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env));
+  const modelPort = deps.modelPort ?? buildModelPort(config, deps.credentials);
   const seen = new Set<string>();
   const findings: Finding[] = [];
   let usage: ModelUsage | undefined;
