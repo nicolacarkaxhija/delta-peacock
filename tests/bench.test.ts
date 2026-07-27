@@ -75,7 +75,11 @@ describe("scoring", () => {
 describe("harness", () => {
   it("loads the seed cases with diffs and expectations", () => {
     const cases = loadCases(CASES_DIR);
-    expect(cases.map((benchCase) => benchCase.name)).toEqual([
+    // the corpus has grown with L360-grounded cases alongside the two
+    // synthetic seed cases this test was written against; only the seed
+    // cases' own shape is this test's concern, not the corpus's final size
+    expect(cases.length).toBeGreaterThanOrEqual(2);
+    expect(cases.slice(0, 2).map((benchCase) => benchCase.name)).toEqual([
       "01-single-file",
       "02-cross-file-signature",
     ]);
@@ -88,7 +92,7 @@ describe("harness", () => {
     const outcome = await runBench(cases, (benchCase) =>
       Promise.resolve(benchCase.expected?.map((finding) => ({ ...finding })) ?? []),
     );
-    expect(outcome.cases).toHaveLength(2);
+    expect(outcome.cases).toHaveLength(cases.length);
     expect(outcome.cases.every((c) => c.milliseconds >= 0)).toBe(true);
     expect(outcome.aggregate?.f1).toBeCloseTo(1);
   });
@@ -218,9 +222,20 @@ describe("bench command discriminates context strategies", () => {
   });
 
   it("passes the min-f1 gate when the corpus scores above the threshold", async () => {
+    // the toy model only answers the two synthetic seed cases; scope this
+    // run to just those two so the corpus's L360 cases (which it cannot
+    // answer) do not drag the aggregate below the gate's threshold
+    const { mkdtempSync, cpSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const seedCases = mkdtempSync(path.join(tmpdir(), "peacock-bench-seed-"));
+    for (const name of ["01-single-file", "02-cross-file-signature"]) {
+      cpSync(path.join(CASES_DIR, name), path.join(seedCases, name), { recursive: true });
+    }
+
     let err = "";
     const code = await runCli(
-      ["bench", "--cases", CASES_DIR, "--context", "repo_map", "--min-f1", "0.9"],
+      ["bench", "--cases", seedCases, "--context", "repo_map", "--min-f1", "0.9"],
       {
         cwd: makeRepo(),
         env: {},
@@ -273,7 +288,7 @@ describe("bench command discriminates context strategies", () => {
       cases: unknown[];
       aggregate?: unknown;
     };
-    expect(outcome.cases).toHaveLength(2);
+    expect(outcome.cases).toHaveLength(loadCases(CASES_DIR).length);
     expect(outcome.aggregate).toBeDefined();
   });
 });
