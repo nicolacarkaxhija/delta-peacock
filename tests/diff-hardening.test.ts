@@ -114,6 +114,37 @@ describe("target fetching", () => {
     expect(resolved.notices.join("\n")).toContain("no single usable remote");
     expect(resolved.notices.join("\n")).toContain("skipping");
   });
+
+  it("uses an already remote-qualified target as-is, without re-prefixing or spurious warnings", () => {
+    const origin = makeRepo();
+    git(origin, "checkout", "-q", "-b", "feature/x");
+    write(origin, "feature.txt", "feature work\n");
+    commitAll(origin, "feature work");
+    git(origin, "checkout", "-q", "main");
+
+    // the clone already carries origin/feature/x as a remote-tracking ref,
+    // exactly as in the field report: passing it back in as --target must
+    // not become origin/origin/feature/x
+    const clone = cloneRepo(origin);
+    const resolved = resolveTargetRef(clone, "origin/feature/x", true);
+
+    expect(resolved.ref).toBe("origin/feature/x");
+    expect(resolved.notices).toEqual([]);
+    expect(resolved.notices.join("\n")).not.toContain("origin/origin/");
+  });
+
+  it("uses a target as-is when it resolves as a remote-tracking ref even under a remote no longer configured", () => {
+    const origin = makeRepo();
+    const clone = cloneRepo(origin);
+    // simulate a tracking ref left behind by a remote that was since renamed
+    // or removed: "ghost" names no configured remote, only a lingering ref
+    git(clone, "update-ref", "refs/remotes/ghost/feature/x", headSha(clone));
+
+    const resolved = resolveTargetRef(clone, "ghost/feature/x", true);
+
+    expect(resolved.ref).toBe("ghost/feature/x");
+    expect(resolved.notices).toEqual([]);
+  });
 });
 
 describe("incremental anchor", () => {
