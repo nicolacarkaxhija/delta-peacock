@@ -68,7 +68,7 @@ export interface ReviewReport {
   toolCalls?: number;
   /** The review reply came from the response cache; no model was called. */
   cachedResponse?: true;
-  /** The prompt exceeded the window; context was dropped or the diff batched. */
+  /** At least one batch could not afford its context; batching alone does not count. */
   budgetDegraded?: true;
   /** Linters and formatters detected in the tree, whose rules the review skips. */
   lintersDetected?: string[];

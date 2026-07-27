@@ -1,4 +1,5 @@
 import { approximateTokens } from "../context/port.js";
+import { changedFilesFromDiff } from "../git/diff.js";
 
 export interface BudgetInput {
   /** The stable prefix: system instructions plus the guidelines block. */
@@ -67,4 +68,68 @@ export function splitDiffByFile(diff: string, maxTokensPerBatch: number): string
   }
   if (current !== "") batches.push(current);
   return batches.length === 0 ? [diff] : batches;
+}
+
+export interface BatchPlan {
+  /** Each entry is one model call's worth of diff. */
+  diffBatches: string[];
+  /** The context text resolved for each entry of diffBatches, "" where dropped. */
+  batchContexts: string[];
+  /** At least one batch could not afford its context; batching alone is not degradation. */
+  degraded: boolean;
+  notices: string[];
+}
+
+/**
+ * Once the whole diff cannot fit even without context, packs it into batches
+ * sized to leave room for the stable prefix and the context budget in every
+ * one of them, so splitting the diff is not, by itself, a reason to give up
+ * cross-file context: agentic/repo_map/rag are not abandoned just because
+ * *something* had to be batched. Greedy bin packing over per-file chunks -- a
+ * file joins the running batch while prefix + context + batch still fit the
+ * window; the next file that would tip it over starts a new batch instead.
+ * Only a file whose own diff cannot afford context even alone loses it, named
+ * in a notice, and it does so by itself rather than dragging a whole batch of
+ * unrelated files down with it.
+ */
+export function planBatches(
+  whole: BudgetPlan,
+  diff: string,
+  projectContext: string,
+  prefix: string,
+  windowTokens: number,
+): BatchPlan {
+  if (!whole.batchDiff) {
+    return {
+      diffBatches: [diff],
+      batchContexts: [whole.dropContext ? "" : projectContext],
+      degraded: whole.dropContext,
+      notices: [],
+    };
+  }
+  // the packing cap leaves room for what every batch must also carry, so a
+  // batch built up to this cap already fits the window with context intact
+  const reserved = approximateTokens(prefix) + approximateTokens(projectContext);
+  const diffBatches = splitDiffByFile(diff, windowTokens - reserved);
+  const notices: string[] = [];
+  let degraded = false;
+  const batchContexts = diffBatches.map((batchDiff, index) => {
+    const batchPlan = planBudget({
+      prefix,
+      context: projectContext,
+      diff: batchDiff,
+      windowTokens,
+    });
+    if (!batchPlan.dropContext) return projectContext;
+    degraded = true;
+    // packing already keeps every affordable file out of this batch, so in
+    // every realistic case this names one oversized file, never a roll call
+    // of the whole batch
+    const files = changedFilesFromDiff(batchDiff).join(", ") || "unnamed files";
+    notices.push(
+      `budget: batch ${String(index + 1)}/${String(diffBatches.length)} (${files}) does not fit the window with cross-file context; reviewing it without context`,
+    );
+    return "";
+  });
+  return { diffBatches, batchContexts, degraded, notices };
 }

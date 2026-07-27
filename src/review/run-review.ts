@@ -32,7 +32,7 @@ import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
-import { planBudget, splitDiffByFile, type BudgetPlan } from "./budget.js";
+import { planBatches, planBudget } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate } from "./calibrate.js";
@@ -423,46 +423,6 @@ interface AssembledReview {
 }
 
 /**
- * Once the whole diff cannot fit even without context, splits it into
- * file-boundary batches and re-weighs context against each one alone: a
- * batch this small can often afford what the whole diff could not, so
- * agentic/repo_map/rag are not abandoned just because *something* had to be
- * batched. A batch that still cannot afford context, even alone, is named in
- * a notice rather than silently dropped.
- */
-function planBatches(
-  deps: ReviewDeps,
-  whole: BudgetPlan,
-  diff: string,
-  projectContext: string,
-  prefix: string,
-  windowTokens: number,
-): { diffBatches: string[]; batchContexts: string[] } {
-  if (!whole.batchDiff) {
-    return { diffBatches: [diff], batchContexts: [whole.dropContext ? "" : projectContext] };
-  }
-  const diffBatches = splitDiffByFile(diff, windowTokens);
-  const batchContexts = diffBatches.map((batchDiff, index) => {
-    const batchPlan = planBudget({
-      prefix,
-      context: projectContext,
-      diff: batchDiff,
-      windowTokens,
-    });
-    if (!batchPlan.batchDiff) return batchPlan.dropContext ? "" : projectContext;
-    // this one batch, alone, still exceeds the window even without context:
-    // named so a human can see which files paid the cost, instead of a
-    // blanket drop that reads the same whether one batch or all of them did
-    const files = changedFilesFromDiff(batchDiff).join(", ") || "unnamed files";
-    deps.err(
-      `budget: batch ${String(index + 1)}/${String(diffBatches.length)} (${files}) exceeds the window even without cross-file context; reviewing it without context\n`,
-    );
-    return "";
-  });
-  return { diffBatches, batchContexts };
-}
-
-/**
  * The assemble stage: redact the diff, gather cross-file context, detect
  * linters, and weigh the prompt against the window, degrading (drop context,
  * then batch the diff) so what leaves here already fits. Everything the rest of
@@ -517,17 +477,19 @@ async function assembleReview(
   for (const notice of plan.notices) deps.err(`${notice}\n`);
   // splitting (when needed) happens regardless of contextTools: agentic tools
   // do not shrink the diff itself, so a batch too big to afford context whole
-  // is still too big to afford context with tools bolted on. Each batch then
-  // gets its own context decision instead of one drop-for-everyone verdict.
-  const { diffBatches, batchContexts } = planBatches(
-    deps,
+  // is still too big to afford context with tools bolted on. Packing reserves
+  // room for prefix + context in every batch, so each batch gets its own
+  // context decision instead of one drop-for-everyone verdict, and splitting
+  // the diff is not, by itself, a reason to call the review degraded.
+  const batches = planBatches(
     plan,
     redacted.text,
     projectContext,
     prefix,
     config.review.windowTokens,
   );
-  const budgetDegraded = plan.dropContext || plan.batchDiff;
+  for (const notice of batches.notices) deps.err(`${notice}\n`);
+  const { diffBatches, batchContexts, degraded: budgetDegraded } = batches;
 
   const request = {
     ...promptOf(diffBatches[0] ?? redacted.text, batchContexts[0] ?? ""),

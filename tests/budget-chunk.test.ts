@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { chunkSource } from "../src/context/chunk.js";
-import { planBudget, splitDiffByFile } from "../src/review/budget.js";
+import { planBatches, planBudget, splitDiffByFile } from "../src/review/budget.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
@@ -136,6 +136,85 @@ describe("splitDiffByFile", () => {
     expect(splitDiffByFile("+just a loose line\n", 10)).toEqual(["+just a loose line\n"]);
     // an empty diff yields the single empty batch, never zero
     expect(splitDiffByFile("", 10)).toEqual([""]);
+  });
+});
+
+describe("planBatches", () => {
+  const prefix = "p".repeat(40); // 10 tokens
+  const context = "c".repeat(200); // 50 tokens
+  const windowTokens = 100;
+
+  function fileDiff(name: string, contentLen: number): string {
+    return `diff --git a/${name}.js b/${name}.js\n@@ -0,0 +1 @@\n+${"a".repeat(contentLen)}\n`;
+  }
+
+  it("packs many small files to fit the window with context reserved, isolating only the oversized file", () => {
+    const normalFiles = Array.from({ length: 10 }, (_, i) => fileDiff(`f${String(i)}`, 16)).join(
+      "",
+    );
+    const diff = normalFiles + fileDiff("huge", 400);
+    const whole = planBudget({ prefix, context, diff, windowTokens });
+    expect(whole.batchDiff).toBe(true); // sanity: this fixture does need batching
+
+    const plan = planBatches(whole, diff, context, prefix, windowTokens);
+
+    // budget-driven, not a fixed/small count: 10 small files pack two-per-batch
+    // plus the oversized file riding alone
+    expect(plan.diffBatches.length).toBe(6);
+    expect(plan.diffBatches.length).toBeGreaterThan(2);
+
+    // every batch except the oversized file keeps its full context
+    for (const batchContext of plan.batchContexts.slice(0, 5)) {
+      expect(batchContext).toBe(context);
+    }
+    // and each of those batches, reassembled with prefix + context, provably
+    // fits the window -- not just asserted by field name
+    for (const batchDiff of plan.diffBatches.slice(0, 5)) {
+      const reassembled = planBudget({ prefix, context, diff: batchDiff, windowTokens });
+      expect(reassembled.batchDiff).toBe(false);
+      expect(reassembled.dropContext).toBe(false);
+    }
+
+    // the one file too big for the window even alone rides without context
+    expect(plan.batchContexts[5]).toBe("");
+    expect(plan.diffBatches[5]).toContain("huge.js");
+
+    // named just that one file, never a roll call of every batched path
+    expect(plan.notices).toHaveLength(1);
+    expect(plan.notices[0]).toContain("huge.js");
+    expect(plan.notices[0]).not.toContain("f0.js");
+    expect(plan.notices[0]).not.toContain("f9.js");
+
+    expect(plan.degraded).toBe(true);
+  });
+
+  it("does not degrade when every packed batch affords its context", () => {
+    // ten small files force batching under this tiny window, but none is too
+    // big to share a batch with its neighbors once packing reserves room for
+    // prefix + context -- batching by itself is not degradation
+    const diff = Array.from({ length: 10 }, (_, i) => fileDiff(`f${String(i)}`, 16)).join("");
+    const whole = planBudget({ prefix, context, diff, windowTokens });
+    expect(whole.batchDiff).toBe(true);
+
+    const plan = planBatches(whole, diff, context, prefix, windowTokens);
+    expect(plan.diffBatches.length).toBeGreaterThan(1);
+    expect(plan.notices).toEqual([]);
+    expect(plan.degraded).toBe(false);
+    for (const batchContext of plan.batchContexts) expect(batchContext).toBe(context);
+  });
+
+  it("does not batch at all when the whole diff already fits", () => {
+    const plan = planBatches(
+      { dropContext: false, batchDiff: false, notices: [], estimatedTokens: 10 },
+      "diff",
+      context,
+      prefix,
+      windowTokens,
+    );
+    expect(plan.diffBatches).toEqual(["diff"]);
+    expect(plan.batchContexts).toEqual([context]);
+    expect(plan.degraded).toBe(false);
+    expect(plan.notices).toEqual([]);
   });
 });
 
