@@ -159,6 +159,49 @@ function toFinding(
   return observation;
 }
 
+/** Below this many characters a backtick span is too generic to anchor on safely. */
+const MIN_SNIPPET_LENGTH = 3;
+
+/** The first backtick-quoted code span in a finding's own title or body, if any. */
+function citedSnippet(finding: Pick<Finding, "title" | "body">): string | undefined {
+  const match = /`([^`]+)`/.exec(`${finding.title}\n${finding.body}`);
+  const snippet = match?.[1]?.trim();
+  return snippet !== undefined && snippet.length >= MIN_SNIPPET_LENGTH ? snippet : undefined;
+}
+
+/**
+ * The model counts a new-file line number off the raw diff by hand, and that
+ * count drifts run to run on multi-hunk files even though the finding quotes
+ * the right code (it saw the line, it just miscounted its position). When a
+ * finding's own cited snippet is not on the line it named, this relocates it
+ * to the nearest changed line in the same file whose text contains that
+ * snippet; absent any match, the model's line is kept rather than guessed at
+ * further.
+ */
+export function relocateFindings(
+  findings: readonly Finding[],
+  anchorTexts: ReadonlyMap<string, ReadonlyMap<number, string>>,
+): Finding[] {
+  return findings.map((finding) => {
+    const snippet = citedSnippet(finding);
+    if (snippet === undefined) return finding;
+    const linesOf = anchorTexts.get(finding.file);
+    if (linesOf === undefined) return finding;
+    if (linesOf.get(finding.line)?.includes(snippet) === true) return finding;
+    let nearestLine: number | undefined;
+    let nearestDistance = Infinity;
+    for (const [line, text] of linesOf) {
+      if (!text.includes(snippet)) continue;
+      const distance = Math.abs(line - finding.line);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestLine = line;
+      }
+    }
+    return nearestLine === undefined ? finding : { ...finding, line: nearestLine };
+  });
+}
+
 export function parseReviewResponse(text: string, options: ParseOptions): ParsedReview {
   const result = RawResponse.safeParse(parseJson(text));
   if (!result.success) {
