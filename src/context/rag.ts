@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { runGit } from "../git/git.js";
+import { DEFAULT_SKIP_DIRS, walkFiles } from "../util/walk.js";
 import { chunkSource } from "./chunk.js";
 import { cosine, type EmbeddingPort } from "./embedding.js";
 import type { ContextInput, ContextProvider } from "./port.js";
@@ -10,15 +11,7 @@ const CACHE_DIR = ".delta-peacock-cache";
 const CACHE_FILE = "rag-index.json";
 const EMBED_CACHE_FILE = "rag-embeddings.json";
 const TOP_CHUNKS = 8;
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "coverage",
-  "vendor",
-  "build",
-  CACHE_DIR,
-]);
+const SKIP_DIRS = new Set([...DEFAULT_SKIP_DIRS, CACHE_DIR]);
 const MAX_FILE_BYTES = 256 * 1024;
 
 interface Chunk {
@@ -46,39 +39,24 @@ function termCounts(tokens: readonly string[]): Record<string, number> {
 
 function buildChunks(cwd: string): Chunk[] {
   const chunks: Chunk[] = [];
-  const walk = (dir: string): void => {
-    let entries;
+  for (const full of walkFiles(cwd, { skipDirs: SKIP_DIRS })) {
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      if (statSync(full).size > MAX_FILE_BYTES) continue;
+      const content = readFileSync(full, "utf8");
+      if (content.includes("\u0000")) continue; // binary
+      const relative = path.relative(cwd, full).replaceAll("\\", "/");
+      for (const chunk of chunkSource(relative, content)) {
+        chunks.push({
+          file: relative,
+          startLine: chunk.startLine,
+          text: chunk.text,
+          terms: termCounts(tokenize(chunk.text)),
+        });
+      }
     } catch {
-      return;
+      // unreadable files contribute nothing
     }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) walk(full);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      try {
-        if (statSync(full).size > MAX_FILE_BYTES) continue;
-        const content = readFileSync(full, "utf8");
-        if (content.includes("\u0000")) continue; // binary
-        const relative = path.relative(cwd, full).replaceAll("\\", "/");
-        for (const chunk of chunkSource(relative, content)) {
-          chunks.push({
-            file: relative,
-            startLine: chunk.startLine,
-            text: chunk.text,
-            terms: termCounts(tokenize(chunk.text)),
-          });
-        }
-      } catch {
-        // unreadable files contribute nothing
-      }
-    }
-  };
-  walk(cwd);
+  }
   return chunks;
 }
 

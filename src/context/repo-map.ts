@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { DEFAULT_SKIP_DIRS, walkFiles } from "../util/walk.js";
 import type { ContextInput, ContextProvider } from "./port.js";
 
 export const SIGNATURE_PATTERNS: Readonly<Record<string, RegExp>> = {
@@ -14,7 +15,6 @@ export const SIGNATURE_PATTERNS: Readonly<Record<string, RegExp>> = {
   ".rs": /^\s*(?:pub\s+)?(?:fn|struct|enum|trait)\s+(\w+)/,
 };
 
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "coverage", "vendor", "build"]);
 const MAX_FILE_BYTES = 512 * 1024;
 const MAX_FILES = 2000;
 
@@ -27,27 +27,11 @@ interface FileSignatures {
 }
 
 function sourceFilesUnder(root: string): string[] {
-  const files: string[] = [];
-  const walk = (dir: string): void => {
-    if (files.length >= MAX_FILES) return;
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return; // an unreadable directory must not kill the default provider
-    }
-    for (const entry of entries) {
-      if (files.length >= MAX_FILES) return;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) walk(full);
-      } else if (entry.isFile() && path.extname(entry.name) in SIGNATURE_PATTERNS) {
-        files.push(full);
-      }
-    }
-  };
-  walk(root);
-  return files;
+  return walkFiles(root, {
+    skipDirs: DEFAULT_SKIP_DIRS,
+    maxFiles: MAX_FILES,
+    include: (entry) => path.extname(entry.name) in SIGNATURE_PATTERNS,
+  });
 }
 
 function extractFileInfo(filePath: string): { symbols: Map<string, string>; tokens: Set<string> } {
