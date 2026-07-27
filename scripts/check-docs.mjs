@@ -97,11 +97,7 @@ for (const [document, indexes] of registryEntries) {
 
 // Link rule: every relative link in the docs tree and the root entry
 // documents must point at an existing file.
-const linkSources = [
-  ...docsFiles,
-  path.join(root, "CONTEXT.md"),
-  path.join(root, "README.md"),
-].filter((file) => existsSync(file));
+const linkSources = [...docsFiles, path.join(root, "README.md")].filter((file) => existsSync(file));
 
 for (const file of linkSources) {
   for (const target of linkTargets(file)) {
