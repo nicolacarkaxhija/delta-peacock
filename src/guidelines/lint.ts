@@ -1,5 +1,4 @@
 import path from "node:path";
-import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
 import { runLintScaffold } from "./lint-scaffold.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "./loader.js";
@@ -12,7 +11,7 @@ export function runGuidelinesLint(
   deps: RuntimeDeps,
   flags: Readonly<Record<string, string>>,
 ): number {
-  const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
+  const config = deps.loadConfig(flags);
   const dir = path.resolve(deps.cwd, config.review.guidelinesDir);
   const loaded = loadGuidelinesFromFiles(
     readWorkingTreeGuidelines(dir),

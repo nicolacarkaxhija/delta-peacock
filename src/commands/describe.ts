@@ -1,5 +1,3 @@
-import { loadCredentials } from "../config/credentials.js";
-import { loadConfig } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
@@ -28,7 +26,7 @@ export async function runDescribe(
   flags: Readonly<Record<string, string>>,
   options: { title: boolean },
 ): Promise<number> {
-  const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
+  const config = deps.loadConfig(flags);
 
   const resolvedTarget = resolveTargetRef(
     deps.cwd,
@@ -73,7 +71,7 @@ export async function runDescribe(
     }
   }
 
-  const modelPort = deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env));
+  const modelPort = deps.modelPort ?? buildModelPort(config, deps.credentials);
   let reply;
   try {
     reply = await modelPort.complete(request);
@@ -97,7 +95,7 @@ export async function runDescribe(
     return 0;
   }
 
-  const scm = deps.scmPort ?? buildScmPort(config, loadCredentials(deps.env));
+  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
   if (scm.getPullRequestText === undefined || scm.updatePullRequestText === undefined) {
     throw new ToolError(`the ${config.scm.provider} provider cannot edit descriptions`);
   }

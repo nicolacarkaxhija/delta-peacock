@@ -1,13 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { RuntimeDeps } from "../src/deps.js";
 import { runWaive } from "../src/commands/waive.js";
 import { makeRepo, write } from "./helpers/git.js";
-
-function deps(cwd: string): RuntimeDeps {
-  return { cwd, env: {}, out: () => undefined, err: () => undefined };
-}
+import { testDeps as deps } from "./helpers/deps.js";
 
 function lineOf(repo: string, file: string, index: number): string {
   return readFileSync(path.join(repo, file), "utf8").split("\n")[index] ?? "";

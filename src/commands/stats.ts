@@ -1,7 +1,5 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadCredentials } from "../config/credentials.js";
-import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { addedLineCount } from "../git/diff.js";
@@ -46,11 +44,11 @@ export function recordFromSignals(
 }
 
 async function backfill(deps: RuntimeDeps, cwd: string, statsPath: string): Promise<number> {
-  const config = loadConfig({ root: deps.cwd, env: deps.env });
+  const config = deps.loadConfig();
   if (config.scm.provider === "local") {
     throw new ToolError("stats backfill reads a pull request's comments; local mode has none");
   }
-  const scm = deps.scmPort ?? buildScmPort(config, loadCredentials(deps.env));
+  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
   if (scm.listCommentSignals === undefined || scm.getPullRequestAuthor === undefined) {
     throw new ToolError(`the ${config.scm.provider} provider cannot back stats out yet`);
   }
@@ -75,7 +73,7 @@ async function backfill(deps: RuntimeDeps, cwd: string, statsPath: string): Prom
 }
 
 export async function runStats(deps: RuntimeDeps, options: StatsOptions): Promise<number> {
-  const config = loadConfig({ root: deps.cwd, env: deps.env });
+  const config = deps.loadConfig();
   const statsPath = config.stats.path;
   if (options.backfill) return backfill(deps, deps.cwd, statsPath);
 

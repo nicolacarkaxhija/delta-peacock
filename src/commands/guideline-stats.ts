@@ -1,7 +1,6 @@
 import { readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import picomatch from "picomatch";
-import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Guideline } from "../domain/guideline.js";
 import { LANGUAGE_EXTENSIONS } from "../guidelines/languages.js";
@@ -85,7 +84,7 @@ export interface GuidelineStatsOptions {
 }
 
 export function runGuidelineStats(deps: RuntimeDeps, options: GuidelineStatsOptions): number {
-  const config = loadConfig({ root: deps.cwd, env: deps.env });
+  const config = deps.loadConfig();
   const loaded = loadGuidelines(
     path.join(deps.cwd, config.review.guidelinesDir),
     config.review.frontmatterContract,

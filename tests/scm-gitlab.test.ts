@@ -8,6 +8,7 @@ import { ToolError } from "../src/errors.js";
 import { runCli } from "../src/index.js";
 import { buildScmPort } from "../src/scm/build.js";
 import { createGitLabPort } from "../src/scm/gitlab.js";
+import { testDeps } from "./helpers/deps.js";
 import { startFakeGitLab } from "./helpers/fake-gitlab.js";
 import { runScmContract } from "./helpers/scm-contract.js";
 import { commitAll, makeRepo, write } from "./helpers/git.js";
@@ -248,14 +249,15 @@ describe("init on gitlab ci", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "dp-init-"));
     let stdout = "";
     const code = runInit(
-      {
-        cwd: dir,
-        env: { GITLAB_CI: "true" },
-        out: (text) => {
-          stdout += text;
+      testDeps(
+        dir,
+        { GITLAB_CI: "true" },
+        {
+          out: (text) => {
+            stdout += text;
+          },
         },
-        err: () => undefined,
-      },
+      ),
       { force: false },
     );
     expect(code).toBe(0);

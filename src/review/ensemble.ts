@@ -1,4 +1,3 @@
-import { loadCredentials } from "../config/credentials.js";
 import type { Config } from "../config/schema.js";
 import type { RuntimeDeps } from "../deps.js";
 import { fingerprintOf, type Finding } from "../domain/finding.js";
@@ -24,7 +23,7 @@ export interface EnsembleResult {
 }
 
 function portFor(deps: RuntimeDeps, member: ModelRef): ModelPort {
-  return deps.modelPortFor?.(member) ?? buildModelPortFor(member, loadCredentials(deps.env));
+  return deps.modelPortFor?.(member) ?? buildModelPortFor(member, deps.credentials);
 }
 
 /** First occurrence of each fingerprint wins; order follows member order. */

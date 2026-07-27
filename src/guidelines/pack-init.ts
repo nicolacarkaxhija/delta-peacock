@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stringify as stringifyYaml } from "yaml";
-import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { markdownFilesUnder } from "./loader.js";
@@ -24,7 +23,7 @@ export function runGuidelinesPackInit(
   flags: Readonly<Record<string, string>>,
   options: PackInitOptions,
 ): number {
-  const config = loadConfig({ root: deps.cwd, env: deps.env, flags });
+  const config = deps.loadConfig(flags);
   const sourceDir = path.resolve(deps.cwd, config.review.guidelinesDir);
   if (!existsSync(sourceDir)) {
     throw new ToolError(`guidelines directory not found: ${sourceDir}`);

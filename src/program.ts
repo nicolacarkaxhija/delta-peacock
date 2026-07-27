@@ -1,6 +1,5 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
-import { loadConfig } from "./config/loader.js";
 import type { RuntimeDeps } from "./deps.js";
 import { ExitCodeError, ToolError } from "./errors.js";
 import { runGuidelinesLint } from "./guidelines/lint.js";
@@ -12,8 +11,6 @@ const manifest = require("../package.json") as {
   version: string;
   description: string;
 };
-
-export type CliDeps = RuntimeDeps;
 
 interface ReviewCommandOptions {
   target?: string;
@@ -57,7 +54,7 @@ function reviewFlags(options: ReviewCommandOptions): Record<string, string> {
   return flags;
 }
 
-export function buildProgram(deps: CliDeps): Command {
+export function buildProgram(deps: RuntimeDeps): Command {
   const program = new Command(manifest.name)
     .description(manifest.description)
     .version(manifest.version);
@@ -68,7 +65,7 @@ export function buildProgram(deps: CliDeps): Command {
     .command("config")
     .description("resolve and print the effective configuration")
     .action(() => {
-      const config = loadConfig({ root: deps.cwd, env: deps.env });
+      const config = deps.loadConfig();
       deps.out(`${JSON.stringify(config, null, 2)}\n`);
     });
 

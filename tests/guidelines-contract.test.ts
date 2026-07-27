@@ -6,6 +6,7 @@ import { runGuidelinesLint } from "../src/guidelines/lint.js";
 import { resolveGuidelines } from "../src/guidelines/loader.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
+import { testDeps } from "./helpers/deps.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 function guideline(overrides: Partial<Guideline> = {}): Guideline {
@@ -163,16 +164,18 @@ function lint(repo: string): { code: number; stdout: string; stderr: string } {
   let stdout = "";
   let stderr = "";
   const code = runGuidelinesLint(
-    {
-      cwd: repo,
-      env: {},
-      out: (text) => {
-        stdout += text;
+    testDeps(
+      repo,
+      {},
+      {
+        out: (text) => {
+          stdout += text;
+        },
+        err: (text) => {
+          stderr += text;
+        },
       },
-      err: (text) => {
-        stderr += text;
-      },
-    },
+    ),
     {},
   );
   return { code, stdout, stderr };
@@ -231,10 +234,7 @@ describe("guidelines lint", () => {
   it("propagates a missing directory as a tool error", () => {
     const repo = makeRepo();
     expect(() =>
-      runGuidelinesLint(
-        { cwd: path.join(repo), env: {}, out: () => undefined, err: () => undefined },
-        { "review.guidelinesDir": "nowhere" },
-      ),
+      runGuidelinesLint(testDeps(path.join(repo)), { "review.guidelinesDir": "nowhere" }),
     ).toThrow("guidelines directory not found");
   });
 });

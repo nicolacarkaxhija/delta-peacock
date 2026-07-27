@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { detectCi, type CiProvider } from "../config/ci.js";
+import type { CiProvider } from "../config/ci.js";
 import type { RuntimeDeps } from "../deps.js";
 import type { Severity } from "../domain/severity.js";
 import { resolvePack } from "../guidelines/packs.js";
@@ -243,11 +243,7 @@ export function writeScaffold(
 /** First-ten-minutes scaffolding: config, an example guideline, a CI snippet. */
 export function runInit(deps: RuntimeDeps, options: { force: boolean; starter?: string }): number {
   if (options.starter === undefined) {
-    return writeScaffold(
-      deps,
-      planScaffold(DEFAULT_ANSWERS, ciSnippet(detectCi(deps.env))),
-      options.force,
-    );
+    return writeScaffold(deps, planScaffold(DEFAULT_ANSWERS, ciSnippet(deps.ci)), options.force);
   }
   // seed the corpus from a curated pack the human reviews before committing
   const pack = resolvePack(deps.cwd, options.starter);
@@ -261,7 +257,7 @@ export function runInit(deps: RuntimeDeps, options: { force: boolean; starter?: 
     [
       { relPath: "delta-peacock.config.yaml", content: renderConfigYaml(DEFAULT_ANSWERS) },
       ...seeded,
-      ciSnippet(detectCi(deps.env)),
+      ciSnippet(deps.ci),
     ],
     options.force,
   );
