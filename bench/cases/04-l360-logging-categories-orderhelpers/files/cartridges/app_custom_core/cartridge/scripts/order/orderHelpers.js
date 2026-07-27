@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 /**
  * @memberof app_custom_core
@@ -9,12 +9,12 @@
  * @description Helper to work with orders functionality
  */
 
-const Logger = require("dw/system/Logger");
+const Logger = require('dw/system/Logger');
 
 const orderHelpers = module.superModule;
 
-const FILTER_YEAR_PARAM = "orderYear";
-const FILTER_MONTHS_PARAM = "orderTime";
+const FILTER_YEAR_PARAM = 'orderYear';
+const FILTER_MONTHS_PARAM = 'orderTime';
 
 /**
  * Creates an OrderModel instance from the current basket and request.
@@ -24,23 +24,23 @@ const FILTER_MONTHS_PARAM = "orderTime";
  * @returns {OrderModel} The constructed OrderModel instance.
  */
 function createOrderModelFromBasketAndRequest(currentBasket, req) {
-  const Locale = require("dw/util/Locale");
-  const COHelpers = require("*/cartridge/scripts/checkout/checkoutHelpers");
-  const OrderModel = require("*/cartridge/models/order");
-  const locale = Locale.getLocale(req.locale.id);
+    const Locale = require('dw/util/Locale');
+    const COHelpers = require('*/cartridge/scripts/checkout/checkoutHelpers');
+    const OrderModel = require('*/cartridge/models/order');
+    const locale = Locale.getLocale(req.locale.id);
 
-  let orderModel = new OrderModel(currentBasket, {
-    customer: req.currentCustomer.raw,
-    usingMultiShipping: req.session.privacyCache.get("usingMultiShipping"),
-    shippable: COHelpers.ensureValidShipments(currentBasket),
-    countryCode: locale && locale.country,
-    containerView: {
-      containerView: "basket",
-      imagesView: ["minicart"],
-    },
-  });
+    let orderModel = new OrderModel(currentBasket, {
+        customer: req.currentCustomer.raw,
+        usingMultiShipping: req.session.privacyCache.get('usingMultiShipping'),
+        shippable: COHelpers.ensureValidShipments(currentBasket),
+        countryCode: locale && locale.country,
+        containerView: {
+            containerView: 'basket',
+            imagesView: ['minicart']
+        }
+    });
 
-  return orderModel;
+    return orderModel;
 }
 
 /**
@@ -49,18 +49,18 @@ function createOrderModelFromBasketAndRequest(currentBasket, req) {
  * @returns {string} Returns 'DevL' for desktop, 'DevS' for iPhone (mobile), or 'DevM' for iPad (tablet).
  */
 function findCurrentAppleDevice() {
-  let deviceType = "DevL"; // desktop
-  const iPhoneDevice = "iPhone";
-  const iPadDevice = "iPad";
-  const httpUserAgent = request.httpUserAgent;
+    let deviceType = 'DevL'; // desktop
+    const iPhoneDevice = 'iPhone';
+    const iPadDevice = 'iPad';
+    const httpUserAgent = request.httpUserAgent;
 
-  if (httpUserAgent.indexOf(iPhoneDevice) > 1) {
-    deviceType = "DevS"; // mobile
-  } else if (httpUserAgent.indexOf(iPadDevice) > 1) {
-    deviceType = "DevM"; // tablet
-  }
+    if (httpUserAgent.indexOf(iPhoneDevice) > 1) {
+        deviceType = 'DevS'; // mobile
+    } else if (httpUserAgent.indexOf(iPadDevice) > 1) {
+        deviceType = 'DevM'; // tablet
+    }
 
-  return deviceType;
+    return deviceType;
 }
 
 /**
@@ -69,20 +69,20 @@ function findCurrentAppleDevice() {
  * @returns {string} The main payment method ID, or an empty string if none is found
  */
 function getOrderMainPaymentMethodID(order) {
-  const PaymentInstrument = require("dw/order/PaymentInstrument");
-  const collections = require("*/cartridge/scripts/util/collections");
+    const PaymentInstrument = require('dw/order/PaymentInstrument');
+    const collections = require('*/cartridge/scripts/util/collections');
 
-  let mainPaymentMethod = order.custom.Adyen_paymentMethod || "";
+    let mainPaymentMethod = order.custom.Adyen_paymentMethod || '';
 
-  if (!mainPaymentMethod) {
-    collections.forEach(order.paymentInstruments, ({ paymentMethod }) => {
-      if (paymentMethod !== PaymentInstrument.METHOD_GIFT_CERTIFICATE) {
-        mainPaymentMethod = paymentMethod;
-      }
-    });
-  }
+    if (!mainPaymentMethod) {
+        collections.forEach(order.paymentInstruments, ({ paymentMethod }) => {
+            if (paymentMethod !== PaymentInstrument.METHOD_GIFT_CERTIFICATE) {
+                mainPaymentMethod = paymentMethod;
+            }
+        });
+    }
 
-  return mainPaymentMethod;
+    return mainPaymentMethod;
 }
 
 /**
@@ -91,19 +91,19 @@ function getOrderMainPaymentMethodID(order) {
  * @returns {boolean} True if the order was paid using a gift certificate, otherwise false
  */
 function isPaidByGiftCertificate(order) {
-  const PaymentInstrument = require("dw/order/PaymentInstrument");
-  const collections = require("*/cartridge/scripts/util/collections");
-  let hasGiftCertificate = false;
+    const PaymentInstrument = require('dw/order/PaymentInstrument');
+    const collections = require('*/cartridge/scripts/util/collections');
+    let hasGiftCertificate = false;
 
-  if (order && order.paymentInstruments && order.paymentInstruments.length > 0) {
-    collections.forEach(order.paymentInstruments, (pi) => {
-      if (pi.paymentMethod === PaymentInstrument.METHOD_GIFT_CERTIFICATE) {
-        hasGiftCertificate = true;
-      }
-    });
-  }
+    if (order && order.paymentInstruments && order.paymentInstruments.length > 0) {
+        collections.forEach(order.paymentInstruments, (pi) => {
+            if (pi.paymentMethod === PaymentInstrument.METHOD_GIFT_CERTIFICATE) {
+                hasGiftCertificate = true;
+            }
+        });
+    }
 
-  return hasGiftCertificate;
+    return hasGiftCertificate;
 }
 
 /**
@@ -112,67 +112,67 @@ function isPaidByGiftCertificate(order) {
  * @param {dw.order.Order} order - The order object to update with custom attributes.
  */
 function fillinOrderCustomAttributes(order) {
-  const Transaction = require("dw/system/Transaction");
-  const Site = require("dw/system/Site");
-  const Calendar = require("dw/util/Calendar");
-  const StringUtils = require("dw/util/StringUtils");
-  const sitepref = require("util/sitepref");
+    const Transaction = require('dw/system/Transaction');
+    const Site = require('dw/system/Site');
+    const Calendar = require('dw/util/Calendar');
+    const StringUtils = require('dw/util/StringUtils');
+    const sitepref = require('util/sitepref');
 
-  const currentSite = Site.getCurrent();
-  const calendar = new Calendar(order.getCreationDate());
+    const currentSite = Site.getCurrent();
+    const calendar = new Calendar(order.getCreationDate());
 
-  calendar.setTimeZone(currentSite.timezone);
+    calendar.setTimeZone(currentSite.timezone);
 
-  const AdyenConfigs = require("*/cartridge/scripts/util/adyenConfigs");
-  const merchantName = AdyenConfigs.getAdyenMerchantAccount();
+    const AdyenConfigs = require('*/cartridge/scripts/util/adyenConfigs');
+    const merchantName = AdyenConfigs.getAdyenMerchantAccount();
 
-  Transaction.wrap(() => {
-    const orderProfile = order.getCustomer().getProfile();
+    Transaction.wrap(() => {
+        const orderProfile = order.getCustomer().getProfile();
 
-    // the employee ID has to be stored since it cannot be retrieved from the customer profile
-    // in case they unlink (e.g. customer deletes their profile)
-    if (orderProfile && session.custom.hasEnoughAllowance) {
-      order.custom.employeeNumber = orderProfile.custom.employeeNumber;
-    }
+        // the employee ID has to be stored since it cannot be retrieved from the customer profile
+        // in case they unlink (e.g. customer deletes their profile)
+        if (orderProfile && session.custom.hasEnoughAllowance) {
+            order.custom.employeeNumber = orderProfile.custom.employeeNumber;
+        }
 
-    if (orderProfile) {
-      order.custom.isEmployee = !!orderProfile.custom.isEmployee;
-    }
+        if (orderProfile) {
+            order.custom.isEmployee = !!orderProfile.custom.isEmployee;
+        }
 
-    const paymentMethod = this.getOrderMainPaymentMethodID(order);
-    const isCreditCard =
-      !empty(order.paymentInstruments[0].custom.Adyen_Payment_Method_Variant) &&
-      order.paymentInstruments[0].custom.Adyen_Payment_Method_Variant === "scheme";
+        const paymentMethod = this.getOrderMainPaymentMethodID(order);
+        const isCreditCard =
+            !empty(order.paymentInstruments[0].custom.Adyen_Payment_Method_Variant) &&
+            order.paymentInstruments[0].custom.Adyen_Payment_Method_Variant === 'scheme';
 
-    order.custom.customerIP = order.getRemoteHost();
-    order.custom.orderCreationDate = StringUtils.formatCalendar(calendar, "yyyy-MM-dd HH:mm:ss");
-    order.custom.SellingEntity = sitepref.getValue("SellingEntity");
-    order.custom.Adyen_merchantId = merchantName;
+        order.custom.customerIP = order.getRemoteHost();
+        order.custom.orderCreationDate = StringUtils.formatCalendar(calendar, 'yyyy-MM-dd HH:mm:ss');
+        order.custom.SellingEntity = sitepref.getValue('SellingEntity');
+        order.custom.Adyen_merchantId = merchantName;
 
-    if (session.privacy.isExpressCheckout) {
-      order.custom.paymentMethod = `${paymentMethod.toLowerCase()} express`;
-    } else {
-      order.custom.paymentMethod = `${isCreditCard ? "credit_card - " : ""}${paymentMethod.toLowerCase()}`;
-    }
+        if (session.privacy.isExpressCheckout) {
+            order.custom.paymentMethod = `${paymentMethod.toLowerCase()} express`;
+        } else {
+            order.custom.paymentMethod = `${isCreditCard ? 'credit_card - ' : ''}${paymentMethod.toLowerCase()}`;
+        }
 
-    if (order.custom.Adyen_paymentMethod === "applepay") {
-      order.custom.createdByDevice = findCurrentAppleDevice();
-    }
+        if (order.custom.Adyen_paymentMethod === 'applepay') {
+            order.custom.createdByDevice = findCurrentAppleDevice();
+        }
 
-    let paymentMethods = [];
+        let paymentMethods = [];
 
-    paymentMethods.push(order.custom.paymentMethod);
+        paymentMethods.push(order.custom.paymentMethod);
 
-    if (this.isPaidByGiftCertificate(order)) {
-      paymentMethods.push("gift_certificate");
-    }
+        if (this.isPaidByGiftCertificate(order)) {
+            paymentMethods.push('gift_certificate');
+        }
 
-    paymentMethods.push(order.custom.paymentMethod);
+        paymentMethods.push(order.custom.paymentMethod);
 
-    if (paymentMethods.length > 0) {
-      order.custom.appliedPaymentIDs = paymentMethods;
-    }
-  });
+        if (paymentMethods.length > 0) {
+            order.custom.appliedPaymentIDs = paymentMethods;
+        }
+    });
 }
 
 /**
@@ -182,22 +182,22 @@ function fillinOrderCustomAttributes(order) {
  * @returns {number} summed absolute discount value, or 0 when no matching adjustments are found.
  */
 function getAppliedEmployeeDiscountByGetter(lineItemContainer, getEmployeePriceAdjustments) {
-  const productLineItems = lineItemContainer.getProductLineItems();
+    const productLineItems = lineItemContainer.getProductLineItems();
 
-  if (empty(productLineItems)) {
-    return 0;
-  }
+    if (empty(productLineItems)) {
+        return 0;
+    }
 
-  const priceAdjustments = productLineItems
-    .toArray()
-    .reduce((acc, pli) => acc.concat(getEmployeePriceAdjustments(pli)), []);
+    const priceAdjustments = productLineItems
+        .toArray()
+        .reduce((acc, pli) => acc.concat(getEmployeePriceAdjustments(pli)), []);
 
-  const appliedEmployeeDiscount = priceAdjustments.reduce(
-    (acc, priceAdjustment) => acc - priceAdjustment.getPrice().value,
-    0,
-  );
+    const appliedEmployeeDiscount = priceAdjustments.reduce(
+        (acc, priceAdjustment) => acc - priceAdjustment.getPrice().value,
+        0
+    );
 
-  return appliedEmployeeDiscount;
+    return appliedEmployeeDiscount;
 }
 
 /**
@@ -206,12 +206,9 @@ function getAppliedEmployeeDiscountByGetter(lineItemContainer, getEmployeePriceA
  * @returns {number} - amount of the regular employee discount applied to the order, or 0 if not applied
  */
 orderHelpers.getRegularAppliedEmployeeDiscount = function (lineItemContainer) {
-  const productLineItemHelpers = require("*/cartridge/scripts/productLineItem/productLineItemHelpers");
+    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
 
-  return getAppliedEmployeeDiscountByGetter(
-    lineItemContainer,
-    productLineItemHelpers.getEmployeeRegularPriceAdjustments,
-  );
+    return getAppliedEmployeeDiscountByGetter(lineItemContainer, productLineItemHelpers.getEmployeeRegularPriceAdjustments);
 };
 
 /**
@@ -220,12 +217,9 @@ orderHelpers.getRegularAppliedEmployeeDiscount = function (lineItemContainer) {
  * @returns {number} - amount of the 1774 employee discount applied to the order, or 0 if not applied
  */
 orderHelpers.get1774AppliedEmployeeDiscount = function (lineItemContainer) {
-  const productLineItemHelpers = require("*/cartridge/scripts/productLineItem/productLineItemHelpers");
+    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
 
-  return getAppliedEmployeeDiscountByGetter(
-    lineItemContainer,
-    productLineItemHelpers.getEmployee1774PriceAdjustments,
-  );
+    return getAppliedEmployeeDiscountByGetter(lineItemContainer, productLineItemHelpers.getEmployee1774PriceAdjustments);
 };
 
 /**
@@ -234,12 +228,9 @@ orderHelpers.get1774AppliedEmployeeDiscount = function (lineItemContainer) {
  * @returns {number} - amount of all employee discounts applied to the order, or 0 if not applied
  */
 orderHelpers.getAppliedEmployeeDiscount = function (lineItemContainer) {
-  const productLineItemHelpers = require("*/cartridge/scripts/productLineItem/productLineItemHelpers");
+    const productLineItemHelpers = require('*/cartridge/scripts/productLineItem/productLineItemHelpers');
 
-  return getAppliedEmployeeDiscountByGetter(
-    lineItemContainer,
-    productLineItemHelpers.getEmployeePriceAdjustments,
-  );
+    return getAppliedEmployeeDiscountByGetter(lineItemContainer, productLineItemHelpers.getEmployeePriceAdjustments);
 };
 
 /**
@@ -252,23 +243,23 @@ orderHelpers.getAppliedEmployeeDiscount = function (lineItemContainer) {
  * formatted allowance values for UI consumption.
  */
 function calculateAllowance(remainingAnnualDiscount, appliedDiscount, requestedDiscount) {
-  const allowances = {
-    beforeOrder: remainingAnnualDiscount,
-  };
+    const allowances = {
+        beforeOrder: remainingAnnualDiscount
+    };
 
-  if (appliedDiscount > 0) {
-    allowances.drawdown = appliedDiscount;
+    if (appliedDiscount > 0) {
+        allowances.drawdown = appliedDiscount;
 
-    const allowanceAfterOrder = remainingAnnualDiscount - appliedDiscount;
+        const allowanceAfterOrder = remainingAnnualDiscount - appliedDiscount;
 
-    allowances.afterOrder = allowanceAfterOrder;
+        allowances.afterOrder = allowanceAfterOrder;
+
+        return allowances;
+    }
+
+    allowances.drawdown = requestedDiscount;
 
     return allowances;
-  }
-
-  allowances.drawdown = requestedDiscount;
-
-  return allowances;
 }
 
 /**
@@ -277,44 +268,37 @@ function calculateAllowance(remainingAnnualDiscount, appliedDiscount, requestedD
  * @returns {object|null} regular allowance object, or null when no regular allowance data is applicable.
  */
 orderHelpers.getDisplayRegularEmployeeAllowance = function (targetLineItemContainer) {
-  const EmployeeMgr = require("*/cartridge/scripts/customObjects/employee/EmployeeMgr");
-  const customerNo = targetLineItemContainer ? targetLineItemContainer.getCustomerNo() : "";
-  const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
+    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
+    const customerNo = targetLineItemContainer ? targetLineItemContainer.getCustomerNo() : '';
+    const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
 
-  if (!employee || employee.unlimitedDiscount) {
-    return null;
-  }
+    if (!employee || employee.unlimitedDiscount) {
+        return null;
+    }
 
-  const regularAppliedDiscount =
-    orderHelpers.getRegularAppliedEmployeeDiscount(targetLineItemContainer);
+    const regularAppliedDiscount = orderHelpers.getRegularAppliedEmployeeDiscount(targetLineItemContainer);
 
-  if (regularAppliedDiscount <= 0) {
-    return null;
-  }
+    if (regularAppliedDiscount <= 0) {
+        return null;
+    }
 
-  const Order = require("dw/order/Order");
-  const isOrder = targetLineItemContainer instanceof Order;
-  const isConfirmedOrder =
-    isOrder &&
-    targetLineItemContainer.getConfirmationStatus().getValue() ===
-      Order.CONFIRMATION_STATUS_CONFIRMED;
+    const Order = require('dw/order/Order');
+    const isOrder = targetLineItemContainer instanceof Order;
+    const isConfirmedOrder =
+        isOrder && targetLineItemContainer.getConfirmationStatus().getValue() === Order.CONFIRMATION_STATUS_CONFIRMED;
 
-  const remainingRegularAllowance = employee.remainingAnnualDiscount;
-  const regularAllowanceBeforeOrder = isConfirmedOrder
-    ? remainingRegularAllowance + regularAppliedDiscount
-    : remainingRegularAllowance;
-  const regularAllowance = calculateAllowance(
-    regularAllowanceBeforeOrder,
-    regularAppliedDiscount,
-    regularAppliedDiscount,
-  );
+    const remainingRegularAllowance = employee.remainingAnnualDiscount;
+    const regularAllowanceBeforeOrder = isConfirmedOrder
+        ? remainingRegularAllowance + regularAppliedDiscount
+        : remainingRegularAllowance;
+    const regularAllowance = calculateAllowance(regularAllowanceBeforeOrder, regularAppliedDiscount, regularAppliedDiscount);
 
-  return {
-    isPartner: employee.isExternal,
-    isEmployeeDiscountApplied: regularAppliedDiscount > 0,
-    allowanceRegular: regularAllowance,
-    allowance1774: null,
-  };
+    return {
+        isPartner: employee.isExternal,
+        isEmployeeDiscountApplied: regularAppliedDiscount > 0,
+        allowanceRegular: regularAllowance,
+        allowance1774: null
+    };
 };
 
 /**
@@ -323,57 +307,54 @@ orderHelpers.getDisplayRegularEmployeeAllowance = function (targetLineItemContai
  * @returns {object|null} 1774 allowance object, or null when no 1774 allowance data is applicable.
  */
 orderHelpers.getDisplay1774EmployeeAllowance = function (targetLineItemContainer) {
-  const siteHelpers = require("*/cartridge/scripts/helpers/siteHelpers");
-  const EmployeeMgr = require("*/cartridge/scripts/customObjects/employee/EmployeeMgr");
-  const customerNo = targetLineItemContainer ? targetLineItemContainer.getCustomerNo() : "";
-  const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
+    const siteHelpers = require('*/cartridge/scripts/helpers/siteHelpers');
+    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
+    const customerNo = targetLineItemContainer ? targetLineItemContainer.getCustomerNo() : '';
+    const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
 
-  if (!employee) {
-    return null;
-  }
+    if (!employee) {
+        return null;
+    }
 
-  const currentCountry = siteHelpers.getCurrentShopCountryCode();
+    const currentCountry = siteHelpers.getCurrentShopCountryCode();
 
-  if (currentCountry !== employee.countryCode) {
-    return null;
-  }
+    if (currentCountry !== employee.countryCode) {
+        return null;
+    }
 
-  const employee1774AppliedDiscount =
-    orderHelpers.get1774AppliedEmployeeDiscount(targetLineItemContainer);
+    const employee1774AppliedDiscount = orderHelpers.get1774AppliedEmployeeDiscount(targetLineItemContainer);
 
-  const Order = require("dw/order/Order");
-  const isOrder = targetLineItemContainer instanceof Order;
-  const isConfirmedOrder =
-    isOrder &&
-    targetLineItemContainer.getConfirmationStatus().getValue() ===
-      Order.CONFIRMATION_STATUS_CONFIRMED;
+    const Order = require('dw/order/Order');
+    const isOrder = targetLineItemContainer instanceof Order;
+    const isConfirmedOrder =
+        isOrder && targetLineItemContainer.getConfirmationStatus().getValue() === Order.CONFIRMATION_STATUS_CONFIRMED;
 
-  const remaining1774Allowance = employee.remaining1774AnnualDiscount;
+    const remaining1774Allowance = employee.remaining1774AnnualDiscount;
 
-  let employee1774Allowance = null;
+    let employee1774Allowance = null;
 
-  if (employee1774AppliedDiscount > 0) {
-    const allowance1774BeforeOrder = isConfirmedOrder
-      ? remaining1774Allowance + employee1774AppliedDiscount
-      : remaining1774Allowance;
+    if (employee1774AppliedDiscount > 0) {
+        const allowance1774BeforeOrder = isConfirmedOrder
+            ? remaining1774Allowance + employee1774AppliedDiscount
+            : remaining1774Allowance;
 
-    employee1774Allowance = calculateAllowance(
-      allowance1774BeforeOrder,
-      employee1774AppliedDiscount,
-      employee1774AppliedDiscount,
-    );
-  }
+        employee1774Allowance = calculateAllowance(
+            allowance1774BeforeOrder,
+            employee1774AppliedDiscount,
+            employee1774AppliedDiscount
+        );
+    }
 
-  if (!employee1774Allowance) {
-    return null;
-  }
+    if (!employee1774Allowance) {
+        return null;
+    }
 
-  return {
-    isPartner: employee.isExternal,
-    isEmployeeDiscountApplied: employee1774AppliedDiscount > 0,
-    allowanceRegular: null,
-    allowance1774: employee1774Allowance,
-  };
+    return {
+        isPartner: employee.isExternal,
+        isEmployeeDiscountApplied: employee1774AppliedDiscount > 0,
+        allowanceRegular: null,
+        allowance1774: employee1774Allowance
+    };
 };
 
 /**
@@ -382,23 +363,22 @@ orderHelpers.getDisplay1774EmployeeAllowance = function (targetLineItemContainer
  * @returns {object|null} allowance object with regular and/or 1774 buckets, or null when no employee allowance data is applicable.
  */
 orderHelpers.getDisplayEmployeeAllowance = function (targetLineItemContainer) {
-  const regularAllowances =
-    orderHelpers.getDisplayRegularEmployeeAllowance(targetLineItemContainer);
-  const allowances1774 = orderHelpers.getDisplay1774EmployeeAllowance(targetLineItemContainer);
+    const regularAllowances = orderHelpers.getDisplayRegularEmployeeAllowance(targetLineItemContainer);
+    const allowances1774 = orderHelpers.getDisplay1774EmployeeAllowance(targetLineItemContainer);
 
-  if (!regularAllowances && !allowances1774) {
-    return null;
-  }
+    if (!regularAllowances && !allowances1774) {
+        return null;
+    }
 
-  return {
-    isPartner: regularAllowances ? regularAllowances.isPartner : allowances1774.isPartner,
-    isEmployeeDiscountApplied: !!(
-      (regularAllowances && regularAllowances.isEmployeeDiscountApplied) ||
-      (allowances1774 && allowances1774.isEmployeeDiscountApplied)
-    ),
-    allowanceRegular: regularAllowances ? regularAllowances.allowanceRegular : null,
-    allowance1774: allowances1774 ? allowances1774.allowance1774 : null,
-  };
+    return {
+        isPartner: regularAllowances ? regularAllowances.isPartner : allowances1774.isPartner,
+        isEmployeeDiscountApplied: !!(
+            (regularAllowances && regularAllowances.isEmployeeDiscountApplied)
+            || (allowances1774 && allowances1774.isEmployeeDiscountApplied)
+        ),
+        allowanceRegular: regularAllowances ? regularAllowances.allowanceRegular : null,
+        allowance1774: allowances1774 ? allowances1774.allowance1774 : null
+    };
 };
 
 /**
@@ -407,28 +387,26 @@ orderHelpers.getDisplayEmployeeAllowance = function (targetLineItemContainer) {
  * @returns {boolean} true when increase should be skipped, false otherwise.
  */
 function shouldSkipEmployeeAllowanceIncrease(employee) {
-  // skip if allowance usage already increased: double charging can happen in case caller runs this method more than once for the same order
-  // the flag is reset at the beginning of checkout process
-  if (!session.privacy.employeeAllowanceIncreased) {
-    return false;
-  }
+    // skip if allowance usage already increased: double charging can happen in case caller runs this method more than once for the same order
+    // the flag is reset at the beginning of checkout process
+    if (!session.privacy.employeeAllowanceIncreased) {
+        return false;
+    }
 
-  let errorStack = "";
+    let errorStack = '';
 
-  // error thrown on purpose to get the stack trace of the caller function execution to be logged,
-  // to investigate why double charging happens
-  try {
-    throw new Error(
-      `Allowance usage of employee ${employee.ID} already increased for this checkout session.`,
-    );
-  } catch (e) {
-    // replace newlines with a separator to avoid lines after the first one to be cut out from the log viewer
-    errorStack = e.stack.replace(/\n/g, " | ");
-  }
+    // error thrown on purpose to get the stack trace of the caller function execution to be logged,
+    // to investigate why double charging happens
+    try {
+        throw new Error(`Allowance usage of employee ${employee.ID} already increased for this checkout session.`);
+    } catch (e) {
+        // replace newlines with a separator to avoid lines after the first one to be cut out from the log viewer
+        errorStack = e.stack.replace(/\n/g, ' | ');
+    }
 
-  Logger.error(`Skipping to prevent double increase. Stack trace: ${errorStack}`);
+    Logger.error(`Skipping to prevent double increase. Stack trace: ${errorStack}`);
 
-  return true;
+    return true;
 }
 
 /**
@@ -438,23 +416,18 @@ function shouldSkipEmployeeAllowanceIncrease(employee) {
  * @param {number} employee1774DiscountAmount - 1774 discount amount to add to usage.
  * @returns {void}
  */
-function applyEmployeeDiscountUsageIncrease(
-  employee,
-  regularDiscountAmount,
-  employee1774DiscountAmount,
-) {
-  if (regularDiscountAmount > 0) {
-    employee.increaseAnnualRegularDiscountUsage(regularDiscountAmount);
-  }
+function applyEmployeeDiscountUsageIncrease(employee, regularDiscountAmount, employee1774DiscountAmount) {
+    if (regularDiscountAmount > 0) {
+        employee.increaseAnnualRegularDiscountUsage(regularDiscountAmount);
+    }
 
-  if (employee1774DiscountAmount > 0) {
-    employee.increaseAnnual1774DiscountUsage(employee1774DiscountAmount);
-  }
+    if (employee1774DiscountAmount > 0) {
+        employee.increaseAnnual1774DiscountUsage(employee1774DiscountAmount);
+    }
 
-  // no usage increase takes place on employees with unlimited allowance
-  // for them the flag remains off to prevent the above logging
-  session.privacy.employeeAllowanceIncreased =
-    regularDiscountAmount > 0 && !employee.unlimitedDiscount;
+    // no usage increase takes place on employees with unlimited allowance
+    // for them the flag remains off to prevent the above logging
+    session.privacy.employeeAllowanceIncreased = regularDiscountAmount > 0 && !employee.unlimitedDiscount;
 }
 
 /**
@@ -464,37 +437,35 @@ function applyEmployeeDiscountUsageIncrease(
  * @throws {Error} if an employee cannot be found for a discounted order.
  */
 function increaseEmployeeDiscountUsage(order) {
-  if (!order) {
-    return;
-  }
+    if (!order) {
+        return;
+    }
 
-  const regularDiscountAmount = orderHelpers.getRegularAppliedEmployeeDiscount(order);
-  const employee1774DiscountAmount = orderHelpers.get1774AppliedEmployeeDiscount(order);
-  const hasDiscountToIncrease = regularDiscountAmount > 0 || employee1774DiscountAmount > 0;
+    const regularDiscountAmount = orderHelpers.getRegularAppliedEmployeeDiscount(order);
+    const employee1774DiscountAmount = orderHelpers.get1774AppliedEmployeeDiscount(order);
+    const hasDiscountToIncrease = regularDiscountAmount > 0 || employee1774DiscountAmount > 0;
 
-  if (!hasDiscountToIncrease) {
-    return;
-  }
+    if (!hasDiscountToIncrease) {
+        return;
+    }
 
-  const customerNo = order.getCustomerNo();
-  const EmployeeMgr = require("*/cartridge/scripts/customObjects/employee/EmployeeMgr");
-  const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
+    const customerNo = order.getCustomerNo();
+    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
+    const employee = EmployeeMgr.getEmployeeByCustomerNumber(customerNo);
 
-  if (!employee) {
-    throw new Error(
-      `Employee with customer number ${customerNo} not found when trying to increase their discount usage`,
-    );
-  }
+    if (!employee) {
+        throw new Error(
+            `Employee with customer number ${customerNo} not found when trying to increase their discount usage`
+        );
+    }
 
-  if (shouldSkipEmployeeAllowanceIncrease(employee)) {
-    return;
-  }
+    if (shouldSkipEmployeeAllowanceIncrease(employee)) {
+        return;
+    }
 
-  const Transaction = require("dw/system/Transaction");
+    const Transaction = require('dw/system/Transaction');
 
-  Transaction.wrap(() =>
-    applyEmployeeDiscountUsageIncrease(employee, regularDiscountAmount, employee1774DiscountAmount),
-  );
+    Transaction.wrap(() => applyEmployeeDiscountUsageIncrease(employee, regularDiscountAmount, employee1774DiscountAmount));
 }
 
 /**
@@ -506,27 +477,27 @@ function increaseEmployeeDiscountUsage(order) {
  * @returns {void}
  */
 function decreaseRegularEmployeeDiscountUsage(order, amount) {
-  if (!order || amount <= 0) {
-    return;
-  }
+    if (!order || amount <= 0) {
+        return;
+    }
 
-  const EmployeeMgr = require("*/cartridge/scripts/customObjects/employee/EmployeeMgr");
-  const employee = EmployeeMgr.getEmployeeByCustomerNumber(order.getCustomerNo());
+    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
+    const employee = EmployeeMgr.getEmployeeByCustomerNumber(order.getCustomerNo());
 
-  if (!employee) {
-    return;
-  }
+    if (!employee) {
+        return;
+    }
 
-  if (order.getCreationDate() < employee.lastAllowanceReset) {
-    // employee allowance can't be recaptured as the order was placed before the allowance reset
-    return;
-  }
+    if (order.getCreationDate() < employee.lastAllowanceReset) {
+        // employee allowance can't be recaptured as the order was placed before the allowance reset
+        return;
+    }
 
-  const Transaction = require("dw/system/Transaction");
+    const Transaction = require('dw/system/Transaction');
 
-  Transaction.wrap(() => {
-    employee.decreaseAnnualRegularDiscountUsage(amount);
-  });
+    Transaction.wrap(() => {
+        employee.decreaseAnnualRegularDiscountUsage(amount);
+    });
 }
 
 /**
@@ -538,27 +509,27 @@ function decreaseRegularEmployeeDiscountUsage(order, amount) {
  * @returns {void}
  */
 function decrease1774EmployeeDiscountUsage(order, amount) {
-  if (!order || amount <= 0) {
-    return;
-  }
+    if (!order || amount <= 0) {
+        return;
+    }
 
-  const EmployeeMgr = require("*/cartridge/scripts/customObjects/employee/EmployeeMgr");
-  const employee = EmployeeMgr.getEmployeeByCustomerNumber(order.getCustomerNo());
+    const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
+    const employee = EmployeeMgr.getEmployeeByCustomerNumber(order.getCustomerNo());
 
-  if (!employee) {
-    return;
-  }
+    if (!employee) {
+        return;
+    }
 
-  if (order.getCreationDate() < employee.lastAllowanceReset) {
-    // employee allowance can't be recaptured as the order was placed before the allowance reset
-    return;
-  }
+    if (order.getCreationDate() < employee.lastAllowanceReset) {
+        // employee allowance can't be recaptured as the order was placed before the allowance reset
+        return;
+    }
 
-  const Transaction = require("dw/system/Transaction");
+    const Transaction = require('dw/system/Transaction');
 
-  Transaction.wrap(() => {
-    employee.decreaseAnnual1774DiscountUsage(amount);
-  });
+    Transaction.wrap(() => {
+        employee.decreaseAnnual1774DiscountUsage(amount);
+    });
 }
 
 /**
@@ -567,12 +538,12 @@ function decrease1774EmployeeDiscountUsage(order, amount) {
  * @returns {string} order status
  */
 function getOfflineOrderStatusParsed(status) {
-  const statusMapping = {
-    10: "storepurchased",
-    11: "returned",
-  };
+    const statusMapping = {
+        10: 'storepurchased',
+        11: 'returned'
+    };
 
-  return statusMapping[status];
+    return statusMapping[status];
 }
 
 /**
@@ -582,15 +553,15 @@ function getOfflineOrderStatusParsed(status) {
  * @returns {object|null} The image object if found, otherwise null.
  */
 function getLineItemImage(product, imageKey) {
-  const ImageModel = require("*/cartridge/models/product/productImages");
-  let imageModel = new ImageModel(product, {
-    types: [imageKey],
-    quantity: "single",
-  });
+    const ImageModel = require('*/cartridge/models/product/productImages');
+    let imageModel = new ImageModel(product, {
+        types: [imageKey],
+        quantity: 'single'
+    });
 
-  let images = imageModel && imageModel[imageKey];
+    let images = imageModel && imageModel[imageKey];
 
-  return images && images.length ? images[0] : null;
+    return images && images.length ? images[0] : null;
 }
 
 /**
@@ -600,13 +571,13 @@ function getLineItemImage(product, imageKey) {
  * @returns {string|null} The product number if found, otherwise null.
  */
 function getProductNumber(product, ProductFactory) {
-  if (!product) {
-    return null;
-  }
+    if (!product) {
+        return null;
+    }
 
-  let productModel = ProductFactory.get({ pid: product.ID });
+    let productModel = ProductFactory.get({ pid: product.ID });
 
-  return productModel && productModel.productNumber ? productModel.productNumber : null;
+    return productModel && productModel.productNumber ? productModel.productNumber : null;
 }
 
 /**
@@ -615,13 +586,13 @@ function getProductNumber(product, ProductFactory) {
  * @returns {string|null} The product detail page URL if the product exists, otherwise null.
  */
 function getPdpUrl(product) {
-  if (!product) {
-    return null;
-  }
+    if (!product) {
+        return null;
+    }
 
-  const URLUtils = require("dw/web/URLUtils");
+    const URLUtils = require('dw/web/URLUtils');
 
-  return URLUtils.url("Product-Show", "pid", product.ID).toString();
+    return URLUtils.url('Product-Show', 'pid', product.ID).toString();
 }
 
 /**
@@ -630,15 +601,15 @@ function getPdpUrl(product) {
  * @returns {object} The cloned line item object.
  */
 function cloneLineItem(lineItem) {
-  let copy = {};
+    let copy = {};
 
-  for (let prop in lineItem) {
-    if (Object.prototype.hasOwnProperty.call(lineItem, prop)) {
-      copy[prop] = lineItem[prop];
+    for (let prop in lineItem) {
+        if (Object.prototype.hasOwnProperty.call(lineItem, prop)) {
+            copy[prop] = lineItem[prop];
+        }
     }
-  }
 
-  return copy;
+    return copy;
 }
 
 /**
@@ -647,41 +618,41 @@ function cloneLineItem(lineItem) {
  * @returns {object} An object containing enriched line items and their images.
  */
 function getOfflineOrderProductDetails(lineItems) {
-  const ProductMgr = require("dw/catalog/ProductMgr");
-  const ProductFactory = require("*/cartridge/scripts/factories/product");
-  const imageKey = require("util/pref").get("product.img.viewtype.orderlistitem", "small");
+    const ProductMgr = require('dw/catalog/ProductMgr');
+    const ProductFactory = require('*/cartridge/scripts/factories/product');
+    const imageKey = require('util/pref').get('product.img.viewtype.orderlistitem', 'small');
 
-  let result = {
-    lineItems: [],
-    orderItemsImages: [],
-  };
+    let result = {
+        lineItems: [],
+        orderItemsImages: []
+    };
 
-  for (let i = 0; i < lineItems.length; i++) {
-    let lineItem = lineItems[i];
-    let product = ProductMgr.getProduct(lineItem.id);
-    let enrichedLineItem = this.cloneLineItem(lineItem);
+    for (let i = 0; i < lineItems.length; i++) {
+        let lineItem = lineItems[i];
+        let product = ProductMgr.getProduct(lineItem.id);
+        let enrichedLineItem = this.cloneLineItem(lineItem);
 
-    let image = this.getLineItemImage(product, imageKey);
+        let image = this.getLineItemImage(product, imageKey);
 
-    if (image) {
-      enrichedLineItem.image = image;
-      result.orderItemsImages.push(image);
+        if (image) {
+            enrichedLineItem.image = image;
+            result.orderItemsImages.push(image);
+        }
+
+        let productNumber = this.getProductNumber(product, ProductFactory);
+
+        if (productNumber) {
+            enrichedLineItem.productNumber = productNumber;
+        }
+
+        enrichedLineItem.statusParsed = this.getOfflineOrderStatusParsed(enrichedLineItem.status);
+        enrichedLineItem.subtotal = enrichedLineItem.rrp * enrichedLineItem.qty;
+        enrichedLineItem.link = this.getPdpUrl(product);
+
+        result.lineItems.push(enrichedLineItem);
     }
 
-    let productNumber = this.getProductNumber(product, ProductFactory);
-
-    if (productNumber) {
-      enrichedLineItem.productNumber = productNumber;
-    }
-
-    enrichedLineItem.statusParsed = this.getOfflineOrderStatusParsed(enrichedLineItem.status);
-    enrichedLineItem.subtotal = enrichedLineItem.rrp * enrichedLineItem.qty;
-    enrichedLineItem.link = this.getPdpUrl(product);
-
-    result.lineItems.push(enrichedLineItem);
-  }
-
-  return result;
+    return result;
 }
 
 /**
@@ -690,27 +661,27 @@ function getOfflineOrderProductDetails(lineItems) {
  * @returns {object|null} An object containing store information, or null if the store is not found.
  */
 function getOfflineOrderStoreInfo(storeId) {
-  const StoreMgr = require("dw/catalog/StoreMgr");
+    const StoreMgr = require('dw/catalog/StoreMgr');
 
-  let store = StoreMgr.getStore(storeId);
+    let store = StoreMgr.getStore(storeId);
 
-  if (!store) {
-    return null;
-  }
+    if (!store) {
+        return null;
+    }
 
-  const Locale = require("dw/util/Locale");
-  const currentLocale = Locale.getLocale(request.locale);
+    const Locale = require('dw/util/Locale');
+    const currentLocale = Locale.getLocale(request.locale);
 
-  return {
-    name: store.getName(),
-    stateCode: store.getStateCode(),
-    postalCode: store.getPostalCode(),
-    address1: store.getAddress1(),
-    address2: store.getAddress2(),
-    city: store.getCity(),
-    phone: store.getPhone(),
-    country: currentLocale && currentLocale.getDisplayCountry(),
-  };
+    return {
+        name: store.getName(),
+        stateCode: store.getStateCode(),
+        postalCode: store.getPostalCode(),
+        address1: store.getAddress1(),
+        address2: store.getAddress2(),
+        city: store.getCity(),
+        phone: store.getPhone(),
+        country: currentLocale && currentLocale.getDisplayCountry()
+    };
 }
 
 /**
@@ -720,40 +691,40 @@ function getOfflineOrderStoreInfo(storeId) {
  * @returns {object|null} Offline order object or null if parsing fails
  */
 function getOfflineOrderObjectFromJSON(offlineOrderJSON, customerEmail) {
-  if (!offlineOrderJSON || !customerEmail) {
+    if (!offlineOrderJSON || !customerEmail) {
+        return null;
+    }
+
+    try {
+        let currentOfflineOrder = JSON.parse(offlineOrderJSON);
+        let ooSaleDate = currentOfflineOrder.s_d;
+        let ooSaleTime = currentOfflineOrder.s_t;
+        let offlineOrderDate = new Date(
+            ooSaleDate.substr(0, 4),
+            parseInt(ooSaleDate.substr(4, 2), 10) - 1,
+            ooSaleDate.substr(6, 2),
+            ooSaleTime.substr(0, 2),
+            ooSaleTime.substr(2, 2),
+            ooSaleTime.substr(4, 2),
+            2
+        );
+        let productsInfo = this.getOfflineOrderProductDetails(currentOfflineOrder.items);
+
+        currentOfflineOrder.orderDateTime = offlineOrderDate;
+        currentOfflineOrder.orderDateTimeString = offlineOrderDate.toString();
+        currentOfflineOrder.isOffline = true;
+        currentOfflineOrder.statusParsed = this.getOfflineOrderStatusParsed(currentOfflineOrder.status);
+        currentOfflineOrder.orderItemsImages = productsInfo.orderItemsImages;
+        currentOfflineOrder.items = productsInfo.lineItems;
+        currentOfflineOrder.customerEmail = customerEmail;
+        currentOfflineOrder.storeInfo = this.getOfflineOrderStoreInfo(currentOfflineOrder.store);
+
+        return currentOfflineOrder;
+    } catch (e) {
+        Logger.error('Error while parsing offline order: {0}', e.toString());
+    }
+
     return null;
-  }
-
-  try {
-    let currentOfflineOrder = JSON.parse(offlineOrderJSON);
-    let ooSaleDate = currentOfflineOrder.s_d;
-    let ooSaleTime = currentOfflineOrder.s_t;
-    let offlineOrderDate = new Date(
-      ooSaleDate.substr(0, 4),
-      parseInt(ooSaleDate.substr(4, 2), 10) - 1,
-      ooSaleDate.substr(6, 2),
-      ooSaleTime.substr(0, 2),
-      ooSaleTime.substr(2, 2),
-      ooSaleTime.substr(4, 2),
-      2,
-    );
-    let productsInfo = this.getOfflineOrderProductDetails(currentOfflineOrder.items);
-
-    currentOfflineOrder.orderDateTime = offlineOrderDate;
-    currentOfflineOrder.orderDateTimeString = offlineOrderDate.toString();
-    currentOfflineOrder.isOffline = true;
-    currentOfflineOrder.statusParsed = this.getOfflineOrderStatusParsed(currentOfflineOrder.status);
-    currentOfflineOrder.orderItemsImages = productsInfo.orderItemsImages;
-    currentOfflineOrder.items = productsInfo.lineItems;
-    currentOfflineOrder.customerEmail = customerEmail;
-    currentOfflineOrder.storeInfo = this.getOfflineOrderStoreInfo(currentOfflineOrder.store);
-
-    return currentOfflineOrder;
-  } catch (e) {
-    Logger.error("Error while parsing offline order: {0}", e.toString());
-  }
-
-  return null;
 }
 
 /**
@@ -764,36 +735,36 @@ function getOfflineOrderObjectFromJSON(offlineOrderJSON, customerEmail) {
  * @returns {Array} Merged array of orders
  */
 function mergeOfflineOrders(orders, offlineOrders, email) {
-  if (!offlineOrders || offlineOrders.length === 0) {
+    if (!offlineOrders || offlineOrders.length === 0) {
+        return orders;
+    }
+
+    for (let i = 0; i < offlineOrders.length; i++) {
+        let currentOfflineOrder = this.getOfflineOrderObjectFromJSON(offlineOrders[i], email);
+
+        if (!currentOfflineOrder) {
+            continue;
+        }
+
+        orders.push(currentOfflineOrder);
+    }
+
+    orders.sort(function (a, b) {
+        let dateA = 'orderDateTime' in a ? a.orderDateTime : a.creationDate;
+        let dateB = 'orderDateTime' in b ? b.orderDateTime : b.creationDate;
+
+        if (dateA > dateB) {
+            return -1;
+        }
+
+        if (dateA < dateB) {
+            return 1;
+        }
+
+        return 0;
+    });
+
     return orders;
-  }
-
-  for (let i = 0; i < offlineOrders.length; i++) {
-    let currentOfflineOrder = this.getOfflineOrderObjectFromJSON(offlineOrders[i], email);
-
-    if (!currentOfflineOrder) {
-      continue;
-    }
-
-    orders.push(currentOfflineOrder);
-  }
-
-  orders.sort(function (a, b) {
-    let dateA = "orderDateTime" in a ? a.orderDateTime : a.creationDate;
-    let dateB = "orderDateTime" in b ? b.orderDateTime : b.creationDate;
-
-    if (dateA > dateB) {
-      return -1;
-    }
-
-    if (dateA < dateB) {
-      return 1;
-    }
-
-    return 0;
-  });
-
-  return orders;
 }
 
 /**
@@ -804,53 +775,50 @@ function mergeOfflineOrders(orders, offlineOrders, email) {
  * @returns {object} Object with filtered orders and possible years for filter
  */
 function processFiltering(customerOrders, querystring) {
-  const ArrayList = require("dw/util/ArrayList");
-  const Site = require("dw/system/Site");
-  const Calendar = require("dw/util/Calendar");
+    const ArrayList = require('dw/util/ArrayList');
+    const Site = require('dw/system/Site');
+    const Calendar = require('dw/util/Calendar');
 
-  const yearFilter = querystring[FILTER_YEAR_PARAM];
-  const monthFilter = querystring[FILTER_MONTHS_PARAM];
+    const yearFilter = querystring[FILTER_YEAR_PARAM];
+    const monthFilter = querystring[FILTER_MONTHS_PARAM];
 
-  let yearFilterValues = [];
-  let orders = new ArrayList();
-  let timeAgoFilter;
+    let yearFilterValues = [];
+    let orders = new ArrayList();
+    let timeAgoFilter;
 
-  if (!yearFilter) {
-    const timeAgoCalendar = Site.getCalendar();
+    if (!yearFilter) {
+        const timeAgoCalendar = Site.getCalendar();
 
-    timeAgoCalendar.add(
-      Calendar.MONTH,
-      monthFilter ? -monthFilter : -(new Date().getMonth() + 1) * 12,
-    );
+        timeAgoCalendar.add(
+            Calendar.MONTH,
+            monthFilter ? -monthFilter : -(new Date().getMonth() + 1) * 12
+        );
 
-    timeAgoFilter = timeAgoCalendar.getTime();
-  }
-
-  for (let i = 0; i < customerOrders.length; i++) {
-    let customerOrder = customerOrders[i];
-    let orderCreationDate =
-      "orderDateTime" in customerOrder
-        ? customerOrder.orderDateTime
-        : customerOrder.getCreationDate();
-    let orderYear = orderCreationDate.getFullYear().toString();
-
-    if (yearFilterValues.indexOf(orderYear) === -1) {
-      yearFilterValues.push(orderYear);
+        timeAgoFilter = timeAgoCalendar.getTime();
     }
 
-    if (yearFilter) {
-      if (orderYear === yearFilter) {
-        orders.push(customerOrder);
-      }
-    } else if (timeAgoFilter && orderCreationDate.getTime() > timeAgoFilter) {
-      orders.push(customerOrder);
-    }
-  }
+    for (let i = 0; i < customerOrders.length; i++) {
+        let customerOrder = customerOrders[i];
+        let orderCreationDate = 'orderDateTime' in customerOrder ? customerOrder.orderDateTime : customerOrder.getCreationDate();
+        let orderYear = orderCreationDate.getFullYear().toString();
 
-  return {
-    orders: orders,
-    yearFilters: yearFilterValues,
-  };
+        if (yearFilterValues.indexOf(orderYear) === -1) {
+            yearFilterValues.push(orderYear);
+        }
+
+        if (yearFilter) {
+            if (orderYear === yearFilter) {
+                orders.push(customerOrder);
+            }
+        } else if (timeAgoFilter && orderCreationDate.getTime() > timeAgoFilter) {
+            orders.push(customerOrder);
+        }
+    }
+
+    return {
+        orders: orders,
+        yearFilters: yearFilterValues
+    };
 }
 
 /**
@@ -860,24 +828,22 @@ function processFiltering(customerOrders, querystring) {
  * @returns {Array} List of orders created with model
  */
 function createOrderObjects(orders, config) {
-  const OrderModel = require("*/cartridge/models/order");
-  let orderObjects = [];
+    const OrderModel = require('*/cartridge/models/order');
+    let orderObjects = [];
 
-  while (orders.hasNext()) {
-    let order = orders.next();
+    while (orders.hasNext()) {
+        let order = orders.next();
 
-    if ("isOffline" in order) {
-      orderObjects.push(order);
-    } else {
-      orderObjects.push(
-        new OrderModel(order, {
-          config: config,
-        }),
-      );
+        if ('isOffline' in order) {
+            orderObjects.push(order);
+        } else {
+            orderObjects.push(new OrderModel(order, {
+                config: config
+            }));
+        }
     }
-  }
 
-  return orderObjects;
+    return orderObjects;
 }
 
 /**
@@ -886,31 +852,26 @@ function createOrderObjects(orders, config) {
  * @returns {Array} Array of orders
  */
 function getOrdersSortedArray(currentCustomer) {
-  const orderHistory = currentCustomer.raw.getOrderHistory();
-  const Order = require("dw/order/Order");
-  let orders = orderHistory
-    .getOrders(
-      "status!={0} AND status!={1}",
-      "creationDate DESC",
-      Order.ORDER_STATUS_REPLACED,
-      Order.ORDER_STATUS_FAILED,
-    )
-    .asList()
-    .toArray();
+    const orderHistory = currentCustomer.raw.getOrderHistory();
+    const Order = require('dw/order/Order');
+    let orders = orderHistory.getOrders(
+        'status!={0} AND status!={1}',
+        'creationDate DESC',
+        Order.ORDER_STATUS_REPLACED,
+        Order.ORDER_STATUS_FAILED
+    ).asList().toArray();
 
-  const siteHelpers = require("*/cartridge/scripts/helpers/siteHelpers");
-  const isOfflineOrdersDisplayEnabled = siteHelpers.getCustomPreference(
-    "enableOfflineOrdersDisplay",
-  );
+    const siteHelpers = require('*/cartridge/scripts/helpers/siteHelpers');
+    const isOfflineOrdersDisplayEnabled = siteHelpers.getCustomPreference('enableOfflineOrdersDisplay');
 
-  if (isOfflineOrdersDisplayEnabled && currentCustomer.raw && currentCustomer.raw.profile) {
-    const offlineOrders = currentCustomer.raw.profile.custom.OfflineOrders;
-    const email = currentCustomer.raw.profile.email;
+    if (isOfflineOrdersDisplayEnabled && currentCustomer.raw && currentCustomer.raw.profile) {
+        const offlineOrders = currentCustomer.raw.profile.custom.OfflineOrders;
+        const email = currentCustomer.raw.profile.email;
 
-    orders = mergeOfflineOrders(orders, offlineOrders, email);
-  }
+        orders = mergeOfflineOrders(orders, offlineOrders, email);
+    }
 
-  return orders;
+    return orders;
 }
 
 /**
@@ -922,21 +883,21 @@ function getOrdersSortedArray(currentCustomer) {
  * @returns {object} Order history page data
  */
 function getOrders(currentCustomer, querystring) {
-  const orderModelConfig = {
-    numberOfLineItems: "single",
-  };
+    const orderModelConfig = {
+        numberOfLineItems: 'single'
+    };
 
-  let orders = getOrdersSortedArray(currentCustomer);
+    let orders = getOrdersSortedArray(currentCustomer);
 
-  const processFilteringResult = this.processFiltering(orders, querystring);
-  const paging = this.getPaging(processFilteringResult.orders, querystring);
+    const processFilteringResult = this.processFiltering(orders, querystring);
+    const paging = this.getPaging(processFilteringResult.orders, querystring);
 
-  return {
-    orders: this.createOrderObjects(paging.pageElements, orderModelConfig),
-    ordersCount: paging.count,
-    filterValues: this.createFilters(processFilteringResult.yearFilters, querystring),
-    showMore: this.getShowMore(paging, querystring),
-  };
+    return {
+        orders: this.createOrderObjects(paging.pageElements, orderModelConfig),
+        ordersCount: paging.count,
+        filterValues: this.createFilters(processFilteringResult.yearFilters, querystring),
+        showMore: this.getShowMore(paging, querystring)
+    };
 }
 
 /**
@@ -948,27 +909,25 @@ function getOrders(currentCustomer, querystring) {
  * @returns {boolean} Is an order allowed for displaying
  */
 function isOrderDetailsAllowed(order, currentCustomer, email, skipAuthenticChecking) {
-  let allowed = false;
-  const Order = require("dw/order/Order");
+    let allowed = false;
+    const Order = require('dw/order/Order');
 
-  if (!order || order.status.value === Order.ORDER_STATUS_FAILED) {
-    return allowed;
-  }
-
-  if (email) {
-    allowed = String(order.customerEmail).toLowerCase() === String(email).toLowerCase();
-
-    if (!skipAuthenticChecking) {
-      allowed =
-        allowed &&
-        session.privacy.trackingEmail === email &&
-        session.privacy.trackingOrderId === order.orderNo;
+    if (!order || order.status.value === Order.ORDER_STATUS_FAILED) {
+        return allowed;
     }
-  } else if (currentCustomer.profile) {
-    allowed = currentCustomer.profile.customerNo === order.customerNo;
-  }
 
-  return allowed;
+    if (email) {
+        allowed = String(order.customerEmail).toLowerCase() === String(email).toLowerCase();
+
+        if (!skipAuthenticChecking) {
+            allowed =
+                allowed && session.privacy.trackingEmail === email && session.privacy.trackingOrderId === order.orderNo;
+        }
+    } else if (currentCustomer.profile) {
+        allowed = currentCustomer.profile.customerNo === order.customerNo;
+    }
+
+    return allowed;
 }
 
 /**
@@ -978,27 +937,27 @@ function isOrderDetailsAllowed(order, currentCustomer, email, skipAuthenticCheck
  * @returns {object|null} Offline order object or null if not found
  */
 function getOfflineOrderByOrderId(orderId, currentCustomer) {
-  if (!orderId || !currentCustomer || !currentCustomer.raw || !currentCustomer.raw.profile) {
-    return null;
-  }
-
-  const offlineOrders = currentCustomer.raw.profile.custom.OfflineOrders;
-
-  if (!offlineOrders) {
-    return null;
-  }
-
-  let email = currentCustomer.raw.profile.email;
-
-  for (let i = 0; i < offlineOrders.length; i++) {
-    let currentOfflineOrder = this.getOfflineOrderObjectFromJSON(offlineOrders[i], email);
-
-    if (currentOfflineOrder.id === orderId) {
-      return currentOfflineOrder;
+    if (!orderId || !currentCustomer || !currentCustomer.raw || !currentCustomer.raw.profile) {
+        return null;
     }
-  }
 
-  return null;
+    const offlineOrders = currentCustomer.raw.profile.custom.OfflineOrders;
+
+    if (!offlineOrders) {
+        return null;
+    }
+
+    let email = currentCustomer.raw.profile.email;
+
+    for (let i = 0; i < offlineOrders.length; i++) {
+        let currentOfflineOrder = this.getOfflineOrderObjectFromJSON(offlineOrders[i], email);
+
+        if (currentOfflineOrder.id === orderId) {
+            return currentOfflineOrder;
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -1007,27 +966,29 @@ function getOfflineOrderByOrderId(orderId, currentCustomer) {
  * @returns {boolean} true/false
  */
 function isShowCODReturnMessage(orderModel) {
-  if (!orderModel) {
-    return false;
-  }
+    if (!orderModel) {
+        return false;
+    }
 
-  const returnHelpers = require("*/cartridge/scripts/helpers/order/returnHelpers");
+    const returnHelpers = require('*/cartridge/scripts/helpers/order/returnHelpers');
 
-  const isCodMessageVisible = returnHelpers.isCodMessageVisibleOnReturnPortal();
+    const isCodMessageVisible = returnHelpers.isCodMessageVisibleOnReturnPortal();
 
-  if (!isCodMessageVisible) {
-    return false;
-  }
+    if (!isCodMessageVisible) {
+        return false;
+    }
 
-  const isCODOrder = orderModel.isCODOrder;
-  const hasReturnableProduct = orderModel.hasReturnableProduct;
-  const isReturnable = orderModel.isReturnable;
+    const isCODOrder = orderModel.isCODOrder;
+    const hasReturnableProduct = orderModel.hasReturnableProduct;
+    const isReturnable = orderModel.isReturnable;
 
-  if (!isCODOrder || !hasReturnableProduct || !isReturnable) {
-    return false;
-  }
+    if (!isCODOrder ||
+        !hasReturnableProduct ||
+        !isReturnable) {
+        return false;
+    }
 
-  return true;
+    return true;
 }
 
 /**
@@ -1037,31 +998,31 @@ function isShowCODReturnMessage(orderModel) {
  * @returns {boolean} true/false
  */
 function isShowNonReturnableMessage(order, isNotifyNonReturnable) {
-  if (!order) {
-    return false;
-  }
+    if (!order) {
+        return false;
+    }
 
-  if (!isNotifyNonReturnable) {
-    return false;
-  }
+    if (!isNotifyNonReturnable) {
+        return false;
+    }
 
-  const isOrderFullyReturned = order.overallOrderStatus === "returned";
+    const isOrderFullyReturned = order.overallOrderStatus === 'returned';
 
-  if (isOrderFullyReturned) {
-    return false;
-  }
+    if (isOrderFullyReturned) {
+        return false;
+    }
 
-  const noReturnableItem = !order.hasReturnableProduct;
+    const noReturnableItem = (!order.hasReturnableProduct);
 
-  if (!order.isReturnable) {
-    return false;
-  }
+    if (!order.isReturnable) {
+        return false;
+    }
 
-  if (!noReturnableItem) {
-    return false;
-  }
+    if (!noReturnableItem) {
+        return false;
+    }
 
-  return true;
+    return true;
 }
 
 /**
@@ -1070,13 +1031,13 @@ function isShowNonReturnableMessage(order, isNotifyNonReturnable) {
  * @returns {boolean} true/false
  */
 function isShowReturnButton(orderModel) {
-  if (!orderModel) {
-    return false;
-  }
+    if (!orderModel) {
+        return false;
+    }
 
-  const hasReturnableItems = orderModel.hasReturnableProduct || orderModel.hasAnyReturnableProduct;
+    const hasReturnableItems = orderModel.hasReturnableProduct || orderModel.hasAnyReturnableProduct;
 
-  return orderModel.isReturnable && hasReturnableItems && !orderModel.isCODOrder;
+    return orderModel.isReturnable && hasReturnableItems && !orderModel.isCODOrder;
 }
 
 module.exports = orderHelpers;
