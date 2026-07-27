@@ -1,7 +1,7 @@
 import path from "node:path";
 import { loadConfig } from "../config/loader.js";
 import type { RuntimeDeps } from "../deps.js";
-import { guidelineProblems, guidelineWarnings } from "./validate.js";
+import { runLintScaffold } from "./lint-scaffold.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "./loader.js";
 
 /**
@@ -19,20 +19,11 @@ export function runGuidelinesLint(
     config.review.frontmatterContract,
   );
 
-  const problems = [...loaded.problems];
   for (const notice of loaded.notices) deps.err(`${notice}\n`);
-  for (const guideline of loaded.guidelines) {
-    problems.push(...guidelineProblems(guideline));
-    for (const warning of guidelineWarnings(guideline)) deps.err(`warning: ${warning}\n`);
-  }
-
-  if (problems.length > 0) {
-    for (const problem of problems) deps.err(`${problem}\n`);
-    deps.err(`guidelines lint failed with ${String(problems.length)} problem(s)\n`);
-    return 1;
-  }
-  deps.out(
-    `guidelines ok: ${String(loaded.guidelines.length)} usable, ${String(loaded.disabled)} disabled\n`,
-  );
-  return 0;
+  return runLintScaffold(deps, {
+    problems: loaded.problems,
+    guidelines: loaded.guidelines,
+    label: "guidelines lint",
+    successMessage: `guidelines ok: ${String(loaded.guidelines.length)} usable, ${String(loaded.disabled)} disabled\n`,
+  });
 }

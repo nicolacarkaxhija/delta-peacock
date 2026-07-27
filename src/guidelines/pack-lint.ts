@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
-import { guidelineProblems, guidelineWarnings } from "./validate.js";
+import { runLintScaffold } from "./lint-scaffold.js";
 import { loadGuidelinesFromFiles, markdownFilesUnder } from "./loader.js";
 import { PACK_MANIFEST_NAME } from "./packs.js";
 
@@ -59,7 +59,6 @@ export function runGuidelinesPackLint(deps: RuntimeDeps, options: PackLintOption
   }
 
   const manifest = manifestProblems(dir);
-  const problems = [...manifest.problems];
   for (const warning of manifest.warnings) deps.err(`warning: ${warning}\n`);
 
   const files = markdownFilesUnder(dir).map((filePath) => ({
@@ -67,22 +66,15 @@ export function runGuidelinesPackLint(deps: RuntimeDeps, options: PackLintOption
     content: readFileSync(filePath, "utf8"),
   }));
   const loaded = loadGuidelinesFromFiles(files);
-  problems.push(...loaded.problems);
-  for (const guideline of loaded.guidelines) {
-    problems.push(...guidelineProblems(guideline));
-    for (const warning of guidelineWarnings(guideline)) deps.err(`warning: ${warning}\n`);
-  }
+  const problems = [...manifest.problems, ...loaded.problems];
   if (loaded.guidelines.length === 0 && loaded.problems.length === 0) {
     problems.push("the pack holds no usable guidelines");
   }
 
-  if (problems.length > 0) {
-    for (const problem of problems) deps.err(`${problem}\n`);
-    deps.err(`pack lint failed with ${String(problems.length)} problem(s)\n`);
-    return 1;
-  }
-  deps.out(
-    `pack ok: ${manifest.name ?? "(unnamed)"} — ${String(loaded.guidelines.length)} usable guideline(s)\n`,
-  );
-  return 0;
+  return runLintScaffold(deps, {
+    problems,
+    guidelines: loaded.guidelines,
+    label: "pack lint",
+    successMessage: `pack ok: ${manifest.name ?? "(unnamed)"} — ${String(loaded.guidelines.length)} usable guideline(s)\n`,
+  });
 }
