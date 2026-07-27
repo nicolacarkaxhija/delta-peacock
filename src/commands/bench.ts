@@ -1,10 +1,11 @@
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { ToolSet } from "ai";
 import { loadCases, runBench, type BenchCase, type ReviewFn } from "../bench/harness.js";
 import { formatTable } from "../bench/harness.js";
 import { overlapMatrix, type ProducedFinding } from "../bench/scoring.js";
-import { buildContextProvider } from "../context/build.js";
-import { capToTokenBudget } from "../context/port.js";
+import { attachContextTools, resolveContext } from "../context/build.js";
+import { checkCostGuard, guardActive } from "../cost/guard.js";
 import type { RuntimeDeps } from "../deps.js";
 import { changedFilesFromDiff } from "../git/diff.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guidelines/loader.js";
@@ -28,22 +29,50 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     const filesRoot = path.join(benchCase.dir, "files");
     const changedFiles = changedFilesFromDiff(benchCase.diff);
     let projectContext = "";
+    let contextTools: ToolSet | undefined;
     if (existsSync(filesRoot)) {
-      const provider = buildContextProvider(config, {
-        credentials: deps.credentials,
-        ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
-      });
-      projectContext = capToTokenBudget(
-        await provider.systemContext({ cwd: filesRoot, diff: benchCase.diff, changedFiles }),
-        config.context.maxTokens,
+      // the same resolution path a live review takes: systemContext AND
+      // tools, never just the former (that gap once left an agentic bench
+      // run with no file access at all while scoring as if it had one)
+      const resolved = await resolveContext(
+        config,
+        {
+          credentials: deps.credentials,
+          ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
+        },
+        { cwd: filesRoot, diff: benchCase.diff, changedFiles },
       );
+      for (const notice of resolved.notices) deps.err(`${notice}\n`);
+      projectContext = resolved.projectContext;
+      contextTools = resolved.tools;
     }
 
-    const request = buildReviewPrompt(
-      guidelines,
-      benchCase.diff,
-      buildPromptOptions(config, benchCase.dir, projectContext),
+    const request = attachContextTools(
+      buildReviewPrompt(
+        guidelines,
+        benchCase.diff,
+        buildPromptOptions(config, benchCase.dir, projectContext),
+      ),
+      contextTools,
+      config.context.maxToolRounds,
     );
+
+    // the same pre-flight gate a live review applies, scoped to this one
+    // case: a blocked case scores as "nothing produced" rather than aborting
+    // the whole corpus run, so DELTA_PEACOCK_COST_MAX_PER_REVIEW still bites
+    // on the command meant to be run repeatedly, without making one capped
+    // case take the rest of the corpus down with it
+    if (guardActive(config)) {
+      const now = deps.clock?.() ?? new Date();
+      const decision = await checkCostGuard(config, request, now);
+      for (const notice of decision.notices) deps.err(`${notice}\n`);
+      if (!decision.allowed) {
+        for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
+        deps.out(`bench: ${benchCase.name} blocked by the cost guard before any model call\n`);
+        return [];
+      }
+    }
+
     const port = deps.modelPort ?? buildModelPort(config, deps.credentials);
     const reply = await port.complete(request);
     const parsed = parseReviewResponse(reply.text, {

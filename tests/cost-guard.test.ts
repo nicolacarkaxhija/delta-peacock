@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -15,6 +15,15 @@ const GUIDELINE = "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUs
 const CITED = JSON.stringify({
   findings: [{ guidelineId: "no-console", file: "src/app.js", line: 1, title: "t", body: "b" }],
 });
+const BENCH_DIFF = [
+  "diff --git a/src/app.js b/src/app.js",
+  "new file mode 100644",
+  "--- /dev/null",
+  "+++ b/src/app.js",
+  "@@ -0,0 +1,1 @@",
+  "+console.log('x');",
+  "",
+].join("\n");
 
 function makeScenario(): string {
   const repo = makeRepo();
@@ -319,5 +328,62 @@ describe("cost explorer source", () => {
     expect(decision.allowed).toBe(true);
     expect(decision.notices.join("\n")).toContain("cost explorer unavailable");
     expect(decision.monthToDate).toBe(0); // fell back to the empty counter
+  });
+});
+
+describe("bench cost guard", () => {
+  /** One self-contained bench case: a diff.patch and a guideline it would trip. */
+  function benchCasesDir(): string {
+    const casesDir = mkdtempSync(path.join(tmpdir(), "peacock-bench-guard-"));
+    const caseDir = path.join(casesDir, "01-case");
+    mkdirSync(path.join(caseDir, "guidelines"), { recursive: true });
+    writeFileSync(path.join(caseDir, "diff.patch"), BENCH_DIFF);
+    writeFileSync(path.join(caseDir, "guidelines", "no-console.md"), GUIDELINE);
+    return casesDir;
+  }
+
+  it("blocks a case's model call before it happens when the estimate exceeds maxPerReview", async () => {
+    let requests = 0;
+    let out = "";
+    const code = await runCli(["bench", "--cases", benchCasesDir(), "--context", "none"], {
+      cwd: mkdtempSync(path.join(tmpdir(), "peacock-bench-guard-cwd-")),
+      env: {
+        DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+        DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+        DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001",
+      },
+      out: (text) => {
+        out += text;
+      },
+      err: () => undefined,
+      modelPort: {
+        complete() {
+          requests += 1;
+          return Promise.resolve({ text: CITED });
+        },
+      },
+    });
+    expect(code).toBe(0); // bench never fails the process over a blocked case
+    expect(requests).toBe(0); // nothing reached the model
+    expect(out).toContain("exceeds cost.maxPerReview");
+    expect(out).toContain("blocked by the cost guard");
+  });
+
+  it("calls the model as usual when no cap is configured", async () => {
+    let requests = 0;
+    const code = await runCli(["bench", "--cases", benchCasesDir(), "--context", "none"], {
+      cwd: mkdtempSync(path.join(tmpdir(), "peacock-bench-guard-cwd-")),
+      env: {},
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: {
+        complete() {
+          requests += 1;
+          return Promise.resolve({ text: CITED });
+        },
+      },
+    });
+    expect(code).toBe(0);
+    expect(requests).toBe(1);
   });
 });
