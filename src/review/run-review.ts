@@ -606,9 +606,11 @@ async function executeReview(
   }
   return {
     parsed: {
-      // dedup only bridges batches; a single batch keeps same-base collisions
-      // for the publisher to suffix, exactly as before
-      findings: diffBatches.length > 1 ? dedupeFindings(merged) : merged,
+      // same file + line + guidelineId (or file + line + kind for an
+      // observation) is the same finding regardless of batch count -- the
+      // model can cite one guideline twice, worded differently, within a
+      // single reply, not just across batches
+      findings: dedupeFindings(merged),
       droppedUncited: batchDropped,
       droppedOutOfScope: batchOutOfScope,
       adjustedLines: batchAdjusted,

@@ -29,9 +29,11 @@ async function reviewedRepo(
   fileContent: string,
   reply: string,
   eol: "\n" | "\r\n" = "\n",
+  extraGuidelines: Record<string, string> = {},
 ): Promise<{ repo: string; reportPath: string }> {
   const repo = makeRepo();
   write(repo, "guidelines/no-console.md", GUIDELINE);
+  for (const [relPath, content] of Object.entries(extraGuidelines)) write(repo, relPath, content);
   commitAll(repo, "rules");
   git(repo, "checkout", "-q", "-b", "feature");
   const full = path.join(repo, "src/app.js");
@@ -143,6 +145,9 @@ describe("fix applies suggestions", () => {
   });
 
   it("skips overlapping suggestions on the same line", async () => {
+    // two distinct guidelines legitimately flag the same line with conflicting
+    // fixes; same file + line but a different guidelineId is a different
+    // finding, so both survive to the report for the fix command's own guard
     const { repo } = await reviewedRepo(
       "console.log('x');\n",
       JSON.stringify({
@@ -156,7 +161,7 @@ describe("fix applies suggestions", () => {
             suggestion: "logger.info('x');",
           },
           {
-            guidelineId: "no-console",
+            guidelineId: "no-var",
             file: "src/app.js",
             line: 1,
             title: "Two",
@@ -165,6 +170,11 @@ describe("fix applies suggestions", () => {
           },
         ],
       }),
+      "\n",
+      {
+        "guidelines/no-var.md":
+          "---\nid: no-var\nseverity: MAJOR\n---\n# No var\n\nUse const/let.\n",
+      },
     );
     const { code, stdout } = await runFixCli(repo);
     expect(code).toBe(3);

@@ -167,7 +167,7 @@ describe("publishing to github", () => {
     }
   });
 
-  it("keeps distinct comments for two findings sharing a fingerprint base", async () => {
+  it("collapses two findings sharing a fingerprint into a single comment", async () => {
     const fake = await startFakeGitHub();
     try {
       const repo = makeScenario();
@@ -178,11 +178,11 @@ describe("publishing to github", () => {
         ],
       });
       const { stderr } = await reviewAgainst(fake, repo, twin);
-      expect(stderr).toContain("2 created");
-      expect(fake.reviewComments).toHaveLength(2);
+      expect(stderr).toContain("1 created");
+      expect(fake.reviewComments).toHaveLength(1);
       // and the re-run stays stable
       const again = await reviewAgainst(fake, repo, twin);
-      expect(again.stderr).toContain("0 created, 0 updated, 0 resolved, 2 unchanged");
+      expect(again.stderr).toContain("0 created, 0 updated, 0 resolved, 1 unchanged");
     } finally {
       await fake.close();
     }
