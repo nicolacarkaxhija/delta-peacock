@@ -344,3 +344,91 @@ describe("bench wires context tools like a real review does", () => {
     expect(requests.every((request) => request.tools === undefined)).toBe(true);
   });
 });
+
+describe("bench survives a case whose model reply crashes", () => {
+  // observed twice against the real corpus: one case's reply held no
+  // parseable JSON, and the ToolError out of parseReviewResponse aborted the
+  // whole run -- discarding the other cases' scores and printing no table at
+  // all. Scope to the two synthetic seed cases so this test's call-order
+  // assumption (01 before 02) never drifts as L360 cases are added elsewhere.
+  async function seedCasesDir(): Promise<string> {
+    const { mkdtempSync, cpSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-crash-"));
+    for (const name of ["01-single-file", "02-cross-file-signature"]) {
+      cpSync(path.join(CASES_DIR, name), path.join(dir, name), { recursive: true });
+    }
+    return dir;
+  }
+
+  /** The first case's reply is unparseable prose-free JSON garbage; the second answers cleanly. */
+  function flakyPort(): ModelPort {
+    let calls = 0;
+    return {
+      complete: () => {
+        calls += 1;
+        if (calls === 1) return Promise.resolve({ text: "{ not json }" });
+        return Promise.resolve({
+          text: JSON.stringify({
+            findings: [
+              {
+                guidelineId: "no-breaking-signature-change",
+                file: "src/pricing.js",
+                line: 1,
+                title: "Signature change breaks checkout.js",
+                body: "b",
+              },
+            ],
+          }),
+        });
+      },
+    };
+  }
+
+  it("keeps the other case's score and marks the crashed one instead of aborting the run", async () => {
+    const seedCases = await seedCasesDir();
+    let stdout = "";
+    const code = await runCli(["bench", "--cases", seedCases, "--context", "none"], {
+      cwd: makeRepo(),
+      env: {},
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: flakyPort(),
+    });
+
+    expect(code).toBe(0); // one crashed case must not abort an otherwise-scorable run
+    const rows = stdout.split("\n");
+    const crashedRow = rows.find((line) => line.includes("01-single-file"));
+    const okRow = rows.find((line) => line.includes("02-cross-file-signature"));
+    expect(okRow).toContain("100%"); // the other case's score survives untouched
+    // the crashed case must read as crashed, never as a genuine clean pass
+    expect(crashedRow?.toLowerCase()).toContain("error");
+    const aggregateRow = rows.find((line) => line.startsWith("| aggregate"));
+    expect(aggregateRow).toBeDefined();
+    expect(aggregateRow?.toLowerCase()).toContain("errored");
+  });
+
+  it("still fails the run when every case's reply is unparseable", async () => {
+    const seedCases = await seedCasesDir();
+    const allBroken: ModelPort = { complete: () => Promise.resolve({ text: "{ not json }" }) };
+    let stdout = "";
+    let stderr = "";
+    const code = await runCli(["bench", "--cases", seedCases, "--context", "none"], {
+      cwd: makeRepo(),
+      env: {},
+      out: (text) => {
+        stdout += text;
+      },
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: allBroken,
+    });
+    expect(code).toBe(1); // every case crashing is a genuine failure, not a clean pass
+    expect(stderr).toContain("every case");
+    expect(stdout).not.toContain("| aggregate |"); // no partial table on total failure
+  });
+});
