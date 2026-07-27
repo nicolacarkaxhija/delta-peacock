@@ -51,7 +51,7 @@ import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.j
 import { renderReview } from "./render.js";
 import { harvestUncited } from "./harvest.js";
 import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
-import { buildReport, type WaivedFinding } from "./report.js";
+import { buildReport, type UnparsedBatch, type WaivedFinding } from "./report.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import { appendRecord, guidelineCounts, severityCounts } from "../stats/record.js";
 
@@ -256,6 +256,7 @@ export async function runReview(
   const ensembleMembers = executed.ensembleMembers;
   const toolCalls = executed.toolCalls;
   const cachedResponse = executed.cachedResponse;
+  const unparsedBatches = executed.unparsedBatches;
 
   const finalized = await finalizeFindings(
     deps,
@@ -359,6 +360,7 @@ export async function runReview(
       ...(cachedResponse ? { cachedResponse: true as const } : {}),
       ...(budgetDegraded ? { budgetDegraded: true as const } : {}),
       ...(linters.length > 0 ? { lintersDetected: linters } : {}),
+      ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
     });
     if (config.output.report !== undefined) {
       writeFileSync(
@@ -525,6 +527,8 @@ interface ExecuteResult {
   ensembleMembers: MemberOutcome[] | undefined;
   toolCalls: number | undefined;
   cachedResponse: boolean;
+  /** Batches whose reply could not be parsed; every other batch's findings still stand. */
+  unparsedBatches: UnparsedBatch[];
 }
 
 /**
@@ -553,6 +557,7 @@ async function executeReview(
       ensembleMembers: ensemble.members,
       toolCalls: undefined,
       cachedResponse: false,
+      unparsedBatches: [],
     };
   }
 
@@ -577,6 +582,7 @@ async function executeReview(
   let batchAdjusted = 0;
   let batchMalformed = 0;
   const batchRejected: RejectedCandidate[] = [];
+  const unparsedBatches: UnparsedBatch[] = [];
   for (const [index, batchDiff] of diffBatches.entries()) {
     // every batch carries its own (already-budgeted) context and the same
     // tools: agentic/repo_map/rag are not a whole-diff privilege, so a batch
@@ -594,19 +600,43 @@ async function executeReview(
       if (error instanceof ToolError) throw error;
       throw new ToolError(`model call failed: ${(error as Error).message}`);
     }
-    const batchParsed = parseReviewResponse(reply.text, parseOptions);
-    merged.push(...batchParsed.findings);
-    batchDropped += batchParsed.droppedUncited;
-    batchOutOfScope += batchParsed.droppedOutOfScope;
-    batchAdjusted += batchParsed.adjustedLines;
-    batchMalformed += batchParsed.droppedMalformed;
-    batchRejected.push(...batchParsed.rejected);
-    usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
-    if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
-      deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
-      toolCalls = (toolCalls ?? 0) + reply.toolCalls;
+    // a reply with no parseable JSON costs only this batch's findings: the
+    // other batches were already paid for and must survive alongside it, or
+    // one bad reply among many (routine once a large diff forces batching)
+    // would discard a whole review's worth of real work
+    try {
+      const batchParsed = parseReviewResponse(reply.text, parseOptions);
+      merged.push(...batchParsed.findings);
+      batchDropped += batchParsed.droppedUncited;
+      batchOutOfScope += batchParsed.droppedOutOfScope;
+      batchAdjusted += batchParsed.adjustedLines;
+      batchMalformed += batchParsed.droppedMalformed;
+      batchRejected.push(...batchParsed.rejected);
+      usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
+      if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
+        deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
+        toolCalls = (toolCalls ?? 0) + reply.toolCalls;
+      }
+      if (reply.cached === true) cachedResponse = true;
+    } catch (error) {
+      const reason = (error as Error).message;
+      deps.err(
+        `batch ${String(index + 1)}/${String(diffBatches.length)}: ${reason}; skipping this batch's findings\n`,
+      );
+      unparsedBatches.push({ batch: index + 1, of: diffBatches.length, reason });
     }
-    if (reply.cached === true) cachedResponse = true;
+  }
+  if (unparsedBatches.length === diffBatches.length) {
+    // every batch failed to parse: zero findings here would read as a clean
+    // pass, so this must surface exactly like the old single-batch failure did
+    throw new ToolError(
+      [
+        "every batch's reply failed to parse; nothing to review with",
+        ...unparsedBatches.map(
+          (entry) => `batch ${String(entry.batch)}/${String(entry.of)}: ${entry.reason}`,
+        ),
+      ].join("\n"),
+    );
   }
   return {
     parsed: {
@@ -625,6 +655,7 @@ async function executeReview(
     ensembleMembers: undefined,
     toolCalls,
     cachedResponse,
+    unparsedBatches,
   };
 }
 
