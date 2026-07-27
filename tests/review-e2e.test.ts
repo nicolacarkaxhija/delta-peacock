@@ -707,3 +707,46 @@ describe("line-anchor repair", () => {
     expect(report.findings[0]?.line).toBe(4);
   });
 });
+
+describe("duplicate finding collapse", () => {
+  it("reports a finding once even when the model repeats it within a single reply", async () => {
+    const repo = makeScenario();
+    // the live tool saw a single (unbatched) reply cite the same guideline at the
+    // same file and line twice, worded differently each time -- both survived
+    // into the final report as if they were distinct findings
+    const repeated = JSON.stringify({
+      findings: [
+        {
+          guidelineId: "no-console",
+          file: "src/app.js",
+          line: 2,
+          title: "Console call added",
+          body: "Replace the console.log with the logger.",
+        },
+        {
+          guidelineId: "no-console",
+          file: "src/app.js",
+          line: 2,
+          title: "Console statement present",
+          body: "This line calls console.log directly.",
+        },
+        {
+          guidelineId: "no-console",
+          file: "src/app.js",
+          line: 3,
+          title: "A genuinely distinct finding",
+          body: "A different line; must not be merged away with the others.",
+        },
+      ],
+    });
+    const { code, stdout } = await review(repo, scriptedModel(repeated).port, "--report", "r.json");
+    expect(code).toBe(0);
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    // same file + line + guidelineId is the same finding: reported once, not twice
+    expect(report.findings.filter((finding) => finding.line === 2)).toHaveLength(1);
+    // a genuinely different line is a different finding and survives alongside it
+    expect(report.findings).toHaveLength(2);
+    expect(stdout).toContain("src/app.js:2");
+    expect(stdout).toContain("src/app.js:3");
+  });
+});
