@@ -195,6 +195,40 @@ describe("review degradation end to end", () => {
     expect(report.findings.map((f) => f.file).sort()).toEqual(["src/a.js", "src/b.js"]);
   });
 
+  it("still serves agentic tools to every batch when the diff must be split", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "rules");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/a.js", `console.log('${"a".repeat(400)}');\n`);
+    write(repo, "src/b.js", `console.log('${"b".repeat(400)}');\n`);
+    commitAll(repo, "change");
+    const { requests, port } = perFilePort();
+    let stderr = "";
+    const code = await runCli(["review", "--report", "r.json"], {
+      cwd: repo,
+      env: {
+        DELTA_PEACOCK_REVIEW_WINDOW_TOKENS: "150",
+        DELTA_PEACOCK_CONTEXT_PROVIDER: "agentic",
+      },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: port,
+    });
+    expect(code).toBe(0);
+    expect(stderr).toContain("file-boundary batches");
+    expect(requests.length).toBeGreaterThan(1); // the diff was still split into batches
+    // every batch keeps its agentic tools available, not just a single unsplit request
+    for (const request of requests) {
+      expect(request.tools).toBeDefined();
+      expect(Object.keys(request.tools ?? {})).toContain("get_definition");
+    }
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    expect(report.budgetDegraded).toBe(true);
+  });
+
   it("sums usage and tool calls across batches", async () => {
     const repo = makeRepo();
     write(repo, "guidelines/no-console.md", GUIDELINE);
