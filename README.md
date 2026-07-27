@@ -215,7 +215,6 @@ cost:
   maxPerReview: 0.50 # block a review estimated above this, before any model call
 ```
 
-
 ## Security and privacy
 
 - **No telemetry, no phone home.** Nothing about your code or your review leaves the process except the model call you configured.
@@ -230,11 +229,11 @@ delta-peacock is deliberately not the chattiest assistant. Tools like Qodo Merge
 
 ## Documentation
 
-| Guide                                                                                                 | Read it when                                               |
-| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [Getting started](docs/guides/getting-started.md)                                                     | Your first review, in five steps                           |
-| [CI recipes](docs/guides/ci-recipes.md)                                                               | Wiring into GitHub, GitLab, Bitbucket, Jenkins, pre-commit |
-| [Guideline packs](docs/guides/packs.md)                                                               | Sharing and importing guideline sets                       |
+| Guide                                             | Read it when                                               |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| [Getting started](docs/guides/getting-started.md) | Your first review, in five steps                           |
+| [CI recipes](docs/guides/ci-recipes.md)           | Wiring into GitHub, GitLab, Bitbucket, Jenkins, pre-commit |
+| [Guideline packs](docs/guides/packs.md)           | Sharing and importing guideline sets                       |
 
 ## Development
 
