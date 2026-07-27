@@ -1,3 +1,4 @@
+import type { Credentials } from "../config/credentials.js";
 import type { Config } from "../config/schema.js";
 import { createAgenticProvider } from "./agentic.js";
 import { buildEmbeddingPort, type EmbeddingPort } from "./embedding.js";
@@ -8,7 +9,7 @@ import { createRepoMapProvider } from "./repo-map.js";
 type StrategyName = "repo_map" | "agentic" | "rag";
 
 export interface ContextBuildDeps {
-  env?: Readonly<Record<string, string | undefined>>;
+  credentials?: Credentials;
   /** Test seam for the embeddings backend; real adapters otherwise. */
   embeddingPort?: EmbeddingPort;
   clock?: () => Date;
@@ -25,7 +26,7 @@ function buildRag(config: Config, deps: ContextBuildDeps): ContextProvider {
   if (config.context.rag.backend !== "embeddings") return createRagProvider();
   const port =
     deps.embeddingPort ??
-    buildEmbeddingPort(config, deps.env ?? {}, deps.clock ?? (() => new Date()));
+    buildEmbeddingPort(config, deps.credentials ?? {}, deps.clock ?? (() => new Date()));
   return createRagEmbeddingsProvider({
     port,
     // model is schema-guaranteed for the embeddings backend

@@ -1,3 +1,4 @@
+import type { Credentials } from "../config/credentials.js";
 import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
 import { createBitbucketPort } from "./bitbucket.js";
@@ -6,14 +7,11 @@ import { createGitLabPort } from "./gitlab.js";
 import type { ScmPort } from "./port.js";
 
 /** Callers guarantee the provider is not local; the schema guarantees the fields. */
-export function buildScmPort(
-  config: Config,
-  env: Readonly<Record<string, string | undefined>>,
-): ScmPort {
+export function buildScmPort(config: Config, credentials: Credentials): ScmPort {
   const repository = config.scm.repository ?? "";
   const pullRequest = config.scm.pullRequest ?? 0;
   if (config.scm.provider === "github") {
-    const token = env["GITHUB_TOKEN"];
+    const token = credentials.GITHUB_TOKEN;
     if (token === undefined || token === "") {
       throw new ToolError("GITHUB_TOKEN is not set; the github provider needs it");
     }
@@ -25,7 +23,7 @@ export function buildScmPort(
     });
   }
   if (config.scm.provider === "bitbucket") {
-    const token = env["BITBUCKET_TOKEN"];
+    const token = credentials.BITBUCKET_TOKEN;
     if (token === undefined || token === "") {
       throw new ToolError("BITBUCKET_TOKEN is not set; the bitbucket provider needs it");
     }
@@ -37,7 +35,7 @@ export function buildScmPort(
     });
   }
   if (config.scm.provider === "gitlab") {
-    const token = env["GITLAB_TOKEN"];
+    const token = credentials.GITLAB_TOKEN;
     if (token === undefined || token === "") {
       throw new ToolError("GITLAB_TOKEN is not set; the gitlab provider needs it");
     }

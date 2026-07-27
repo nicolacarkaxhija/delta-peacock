@@ -223,11 +223,7 @@ describe("buildModelPort provider matrix", () => {
     },
   ])("$provider without credentials names $missing", ({ provider, env, missing }) => {
     expect(() =>
-      buildModelPort(config({ DELTA_PEACOCK_MODEL_PROVIDER: provider, ...env }), {
-        DELTA_PEACOCK_MODEL_PROVIDER: provider,
-        DELTA_PEACOCK_MODEL_ID: "m",
-        ...env,
-      }),
+      buildModelPort(config({ DELTA_PEACOCK_MODEL_PROVIDER: provider, ...env }), env),
     ).toThrow(missing);
   });
 
@@ -243,10 +239,7 @@ describe("buildModelPort provider matrix", () => {
       },
     },
   ])("$provider constructs with credentials", ({ provider, env }) => {
-    const built = buildModelPort(config({ DELTA_PEACOCK_MODEL_PROVIDER: provider, ...env }), {
-      DELTA_PEACOCK_MODEL_ID: "m",
-      ...env,
-    });
+    const built = buildModelPort(config({ DELTA_PEACOCK_MODEL_PROVIDER: provider, ...env }), env);
     expect(typeof built.complete).toBe("function");
   });
 
@@ -256,10 +249,7 @@ describe("buildModelPort provider matrix", () => {
         DELTA_PEACOCK_MODEL_PROVIDER: "openai-compatible",
         DELTA_PEACOCK_MODEL_BASE_URL: "http://localhost:11434/v1",
       }),
-      {
-        DELTA_PEACOCK_MODEL_ID: "m",
-        DELTA_PEACOCK_MODEL_BASE_URL: "http://localhost:11434/v1",
-      },
+      {},
     );
     expect(typeof built.complete).toBe("function");
   });
@@ -276,7 +266,7 @@ describe("buildModelPort provider matrix", () => {
         DELTA_PEACOCK_MODEL_BASE_URL: "http://bedrock.local",
         ...env,
       }),
-      { DELTA_PEACOCK_MODEL_ID: "m", ...env },
+      env,
     );
     expect(typeof built.complete).toBe("function");
   });
@@ -288,7 +278,7 @@ describe("buildModelPort provider matrix", () => {
         DELTA_PEACOCK_MODEL_BASE_URL: "http://router.local/v1",
         OPENROUTER_API_KEY: "k",
       }),
-      { DELTA_PEACOCK_MODEL_ID: "m", OPENROUTER_API_KEY: "k" },
+      { OPENROUTER_API_KEY: "k" },
     );
     expect(typeof openrouter.complete).toBe("function");
     const compatible = buildModelPort(
@@ -296,7 +286,7 @@ describe("buildModelPort provider matrix", () => {
         DELTA_PEACOCK_MODEL_PROVIDER: "openai-compatible",
         DELTA_PEACOCK_MODEL_BASE_URL: "http://llm.local/v1",
       }),
-      { DELTA_PEACOCK_MODEL_ID: "m", OPENAI_API_KEY: "real-key" },
+      { OPENAI_API_KEY: "real-key" },
     );
     expect(typeof compatible.complete).toBe("function");
   });

@@ -3,6 +3,7 @@ import path from "node:path";
 import { loadCases, runBench, type BenchCase, type ReviewFn } from "../bench/harness.js";
 import { formatTable } from "../bench/harness.js";
 import { overlapMatrix, type ProducedFinding } from "../bench/scoring.js";
+import { loadCredentials } from "../config/credentials.js";
 import { loadConfig } from "../config/loader.js";
 import { buildContextProvider } from "../context/build.js";
 import { capToTokenBudget } from "../context/port.js";
@@ -31,7 +32,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     let projectContext = "";
     if (existsSync(filesRoot)) {
       const provider = buildContextProvider(config, {
-        env: deps.env,
+        credentials: loadCredentials(deps.env),
         ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
       });
       projectContext = capToTokenBudget(
@@ -45,7 +46,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       benchCase.diff,
       buildPromptOptions(config, benchCase.dir, projectContext),
     );
-    const port = deps.modelPort ?? buildModelPort(config, deps.env);
+    const port = deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env));
     const reply = await port.complete(request);
     const parsed = parseReviewResponse(reply.text, {
       guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),

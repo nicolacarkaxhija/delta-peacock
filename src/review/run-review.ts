@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { loadCredentials } from "../config/credentials.js";
 import { loadConfig } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
 import { buildContextProvider } from "../context/build.js";
@@ -433,7 +434,7 @@ async function assembleReview(
   }
 
   const contextProvider = buildContextProvider(config, {
-    env: deps.env,
+    credentials: loadCredentials(deps.env),
     ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
     ...(deps.clock ? { clock: deps.clock } : {}),
   });
@@ -529,7 +530,7 @@ async function executeReview(
   }
 
   const modelPort = withResponseCache(
-    deps.modelPort ?? buildModelPort(config, deps.env),
+    deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env)),
     config,
     deps.cwd,
     () => deps.clock?.() ?? new Date(),
@@ -621,8 +622,8 @@ async function finalizeFindings(
   if (config.calibration.enabled) {
     const ref = config.calibration.model;
     const calibrationPort = ref
-      ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.env))
-      : (deps.modelPort ?? buildModelPort(config, deps.env));
+      ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, loadCredentials(deps.env)))
+      : (deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env)));
     const outcome = await calibrate(calibrationPort, kept, diffText);
     for (const notice of outcome.notices) deps.err(`${notice}\n`);
     // the gate reads exactly these findings next; calibration only annotated them
@@ -687,7 +688,7 @@ async function apiDiffFallback(
   cause: unknown,
 ): Promise<AcquiredDiff> {
   if (config.scm.provider === "local") throw cause;
-  const scm = deps.scmPort ?? buildScmPort(config, deps.env);
+  const scm = deps.scmPort ?? buildScmPort(config, loadCredentials(deps.env));
   if (scm.fetchPullRequestDiff === undefined) throw cause;
   const causeMessage = cause instanceof Error ? cause.message.split("\n")[0] : String(cause);
   const raw = await scm.fetchPullRequestDiff();
@@ -727,7 +728,7 @@ async function publishIfConfigured(
   if (config.scm.provider === "local") return;
   // publishReview itself holds the hard guarantee now: a dry run trips zero
   // adapter writes even if this caller got the plumbing wrong.
-  const scm = deps.scmPort ?? buildScmPort(config, deps.env);
+  const scm = deps.scmPort ?? buildScmPort(config, loadCredentials(deps.env));
   const outcome = await publishReview(scm, input);
   for (const notice of outcome.notices) deps.err(`${notice}\n`);
   if (!input.dryRun) {

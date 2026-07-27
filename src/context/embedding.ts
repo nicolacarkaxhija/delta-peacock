@@ -1,6 +1,7 @@
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
 import { createOpenAI } from "@ai-sdk/openai";
 import { embedMany, type EmbeddingModel } from "ai";
+import type { Credentials } from "../config/credentials.js";
 import type { Config } from "../config/schema.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import { ToolError } from "../errors.js";
@@ -67,12 +68,12 @@ export function bedrockEmbedding(options: BedrockEmbeddingOptions): EmbeddingMod
 function createModel(
   modelId: string,
   rag: Config["context"]["rag"],
-  env: Readonly<Record<string, string | undefined>>,
+  credentials: Credentials,
 ): EmbeddingModel {
   if (rag.provider === "bedrock") {
-    const region = env["AWS_REGION"];
-    const accessKeyId = env["AWS_ACCESS_KEY_ID"];
-    const secretAccessKey = env["AWS_SECRET_ACCESS_KEY"];
+    const region = credentials.AWS_REGION;
+    const accessKeyId = credentials.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = credentials.AWS_SECRET_ACCESS_KEY;
     if (region === undefined || accessKeyId === undefined || secretAccessKey === undefined) {
       throw new ToolError(
         "AWS_REGION, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required for bedrock embeddings",
@@ -82,14 +83,16 @@ function createModel(
       region,
       accessKeyId,
       secretAccessKey,
-      ...(env["AWS_SESSION_TOKEN"] !== undefined ? { sessionToken: env["AWS_SESSION_TOKEN"] } : {}),
+      ...(credentials.AWS_SESSION_TOKEN !== undefined
+        ? { sessionToken: credentials.AWS_SESSION_TOKEN }
+        : {}),
       ...(rag.baseUrl !== undefined ? { baseUrl: rag.baseUrl } : {}),
       modelId,
     });
   }
   return openAiishEmbedding({
     baseUrl: rag.baseUrl ?? "",
-    apiKey: env["OPENAI_API_KEY"] ?? "unused-for-local-hosts",
+    apiKey: credentials.OPENAI_API_KEY ?? "unused-for-local-hosts",
     modelId,
   });
 }
@@ -100,7 +103,7 @@ function createModel(
  */
 export function buildEmbeddingPort(
   config: Config,
-  env: Readonly<Record<string, string | undefined>>,
+  credentials: Credentials,
   clock: () => Date = () => new Date(),
 ): EmbeddingPort {
   const rag = config.context.rag;
@@ -109,7 +112,7 @@ export function buildEmbeddingPort(
     throw new ToolError("context.rag.model is required for the embeddings backend");
   }
   // eager, so a missing credential is an actionable error before any work
-  const model = createModel(modelId, rag, env);
+  const model = createModel(modelId, rag, credentials);
   return priceEmbeddings({ embed: (texts) => embedWith(model, texts) }, config, clock);
 }
 

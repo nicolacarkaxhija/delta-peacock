@@ -166,7 +166,7 @@ describe("adapter construction branches", () => {
       },
     });
     // construction only; nothing is embedded until systemContext runs
-    const provider = buildContextProvider(config, { env: { OPENAI_API_KEY: "k" } });
+    const provider = buildContextProvider(config, { credentials: { OPENAI_API_KEY: "k" } });
     expect(provider.name).toBe("rag");
   });
 });

@@ -1,3 +1,4 @@
+import { loadCredentials } from "../config/credentials.js";
 import { loadConfig } from "../config/loader.js";
 import { buildContextProvider } from "../context/build.js";
 import { capToTokenBudget } from "../context/port.js";
@@ -82,7 +83,7 @@ export async function runAsk(
       : corpus;
 
   const contextProvider = buildContextProvider(config, {
-    env: deps.env,
+    credentials: loadCredentials(deps.env),
     ...(deps.embeddingPort ? { embeddingPort: deps.embeddingPort } : {}),
     ...(deps.clock ? { clock: deps.clock } : {}),
   });
@@ -95,7 +96,7 @@ export async function runAsk(
   const contextTools = contextProvider.tools?.(contextInput);
 
   const system = buildAskSystem(guidelines, projectContext);
-  const modelPort = deps.modelPort ?? buildModelPort(config, deps.env);
+  const modelPort = deps.modelPort ?? buildModelPort(config, loadCredentials(deps.env));
   const transcript: Turn[] = [];
   const now = deps.clock?.() ?? new Date();
 
