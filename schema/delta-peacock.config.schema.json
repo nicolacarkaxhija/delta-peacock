@@ -335,7 +335,8 @@
             "none",
             "repo_map",
             "agentic",
-            "rag"
+            "rag",
+            "scope"
           ]
         },
         "providers": {
@@ -346,7 +347,8 @@
             "enum": [
               "repo_map",
               "agentic",
-              "rag"
+              "rag",
+              "scope"
             ]
           }
         },
