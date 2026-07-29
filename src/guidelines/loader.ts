@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Guideline } from "../domain/guideline.js";
+import { STRUCTURAL_CHECKS, type StructuralCheck } from "../domain/guideline.js";
 import { SEVERITIES, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { runGit } from "../git/git.js";
@@ -141,6 +142,17 @@ export function parseGuidelineContent(
   if (tags === undefined) {
     return { problem: `${displayPath}: "tags" must be a list of strings` };
   }
+  const structuralRaw = record["structural"];
+  if (
+    structuralRaw !== undefined &&
+    (typeof structuralRaw !== "string" ||
+      !STRUCTURAL_CHECKS.includes(structuralRaw as StructuralCheck))
+  ) {
+    return {
+      problem: `${displayPath}: "structural" must be one of ${STRUCTURAL_CHECKS.join(", ")}`,
+    };
+  }
+  const structural = structuralRaw as StructuralCheck | undefined;
   // only a field absent under both its names counts as a contract gap; an
   // explicit [] (under either name) is a deliberate "matches everything"
   // choice the author already made
@@ -164,6 +176,7 @@ export function parseGuidelineContent(
     languages,
     paths,
     tags,
+    ...(structural !== undefined ? { structural } : {}),
   };
   if (missingFields.length > 0) {
     notices.push(

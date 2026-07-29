@@ -7,6 +7,8 @@ export interface RenderableReview {
   proposals: readonly ProposedGuideline[];
   droppedUncited: number;
   droppedOutOfScope?: number;
+  /** Violations whose structural claim (loop, module scope) the AST contradicted. */
+  droppedStructural?: number;
   adjustedLines: number;
   droppedMalformed?: number;
   /** How many findings sit under the confidence floor, report-only. */
@@ -95,6 +97,11 @@ export function renderReview(review: RenderableReview): string {
       : []),
     ...(review.droppedUncited > 0
       ? [`${String(review.droppedUncited)} uncited finding(s) dropped`]
+      : []),
+    ...((review.droppedStructural ?? 0) > 0
+      ? [
+          `${String(review.droppedStructural ?? 0)} finding(s) dropped: structural claim contradicted by the AST`,
+        ]
       : []),
     ...(review.adjustedLines > 0
       ? [`${String(review.adjustedLines)} finding(s) had no usable line and were pinned to line 1`]

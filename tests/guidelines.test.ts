@@ -96,6 +96,34 @@ describe("guidelines loader", () => {
   });
 });
 
+describe("structural frontmatter field", () => {
+  it("leaves structural undefined when the field is absent", () => {
+    const dir = makeDir();
+    write(dir, "no-console.md", VALID);
+    const { guidelines } = loadGuidelines(dir);
+    expect(guidelines[0]?.structural).toBeUndefined();
+  });
+
+  it.each(["no-declaration-in-loop", "module-scope-only"])("accepts structural: %s", (value) => {
+    const dir = makeDir();
+    write(dir, "rule.md", `---\nid: r\nseverity: MAJOR\nstructural: ${value}\n---\nbody\n`);
+    const { guidelines, problems } = loadGuidelines(dir);
+    expect(problems).toEqual([]);
+    expect(guidelines[0]?.structural).toBe(value);
+  });
+
+  it("reports a problem and skips the guideline for an unknown structural value", () => {
+    const dir = makeDir();
+    write(dir, "rule.md", "---\nid: r\nseverity: MAJOR\nstructural: not-a-real-check\n---\nbody\n");
+    const { guidelines, problems } = loadGuidelines(dir);
+    expect(guidelines).toEqual([]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("structural");
+    expect(problems[0]).toContain("no-declaration-in-loop");
+    expect(problems[0]).toContain("module-scope-only");
+  });
+});
+
 describe("frontmatter contract", () => {
   it("lenient (the default) keeps a guideline missing languages/paths and names the gap", () => {
     const dir = makeDir();
