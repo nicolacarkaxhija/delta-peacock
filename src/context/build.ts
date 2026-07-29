@@ -13,8 +13,9 @@ import {
 } from "./port.js";
 import { createRagEmbeddingsProvider, createRagProvider } from "./rag.js";
 import { createRepoMapProvider } from "./repo-map.js";
+import { createScopeProvider } from "./scope.js";
 
-type StrategyName = "repo_map" | "agentic" | "rag";
+type StrategyName = "repo_map" | "agentic" | "rag" | "scope";
 
 export interface ContextBuildDeps {
   credentials?: Credentials;
@@ -49,6 +50,7 @@ export function buildContextProvider(config: Config, deps: ContextBuildDeps = {}
     repo_map: createRepoMapProvider,
     agentic: createAgenticProvider,
     rag: () => buildRag(config, deps),
+    scope: createScopeProvider,
   };
   const providers = strategies.map((name) => factories[name]());
   const first = providers[0];

@@ -297,7 +297,10 @@ export function buildProgram(deps: RuntimeDeps): Command {
       "directory of case folders (diff.patch, guidelines, expected.json)",
     )
     .option("--report <path>", "write the outcome as JSON")
-    .option("--context <provider>", "context strategy to benchmark: none, repo_map, agentic, rag")
+    .option(
+      "--context <provider>",
+      "context strategy to benchmark: none, repo_map, agentic, rag, scope",
+    )
     .option("--contexts <list>", "comma-separated strategies to compare with an overlap matrix")
     .option("--min-f1 <score>", "fail (exit 1) when aggregate f1 falls below this 0..1 threshold")
     .action(
