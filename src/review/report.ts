@@ -56,6 +56,8 @@ export interface ReviewReport {
   droppedUncitedFindings: number;
   /** Violations whose cited guideline declares a scope excluding the file. */
   droppedOutOfScopeFindings: number;
+  /** Violations whose structural claim (loop, module scope) the AST contradicted (ADR 0008: deterministic, so it may gate). */
+  droppedStructuralFindings: number;
   adjustedLines: number;
   /** Findings the model returned in an unreadable shape (or a truncated tail). */
   droppedMalformedFindings: number;
@@ -95,6 +97,7 @@ export function buildReport(input: {
   proposals: readonly ProposedGuideline[];
   droppedUncited: number;
   droppedOutOfScope?: number;
+  droppedStructural?: number;
   adjustedLines: number;
   droppedMalformed?: number;
   redactions?: Record<string, number>;
@@ -143,6 +146,7 @@ export function buildReport(input: {
     proposedGuidelines: [...input.proposals],
     droppedUncitedFindings: input.droppedUncited,
     droppedOutOfScopeFindings: input.droppedOutOfScope ?? 0,
+    droppedStructuralFindings: input.droppedStructural ?? 0,
     adjustedLines: input.adjustedLines,
     droppedMalformedFindings: input.droppedMalformed ?? 0,
     redactions: input.redactions ?? {},

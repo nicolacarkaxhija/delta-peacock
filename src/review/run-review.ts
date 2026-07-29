@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { ToolSet } from "ai";
 import type { Config } from "../config/schema.js";
@@ -51,6 +51,7 @@ import { renderReview } from "./render.js";
 import { harvestUncited } from "./harvest.js";
 import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
 import { buildReport, type UnparsedBatch, type WaivedFinding } from "./report.js";
+import { verifyStructural } from "./structural.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import { appendRecord, guidelineCounts, severityCounts } from "../stats/record.js";
 
@@ -230,9 +231,20 @@ export async function runReview(
   // the model's own line count drifts on multi-hunk files even when its
   // cited snippet is right; re-anchor each finding to where that snippet
   // actually sits before anything downstream keys, waives, or posts on line
+  const relocated = relocateFindings(executed.parsed.findings, newLineTexts(redacted.text));
+  // deterministic and therefore allowed to drop outright (ADR 0008, unlike
+  // calibration below): refutes a finding whose structural claim -- "this is
+  // a loop", "this is top level" -- the AST itself contradicts. Reads source
+  // from the checkout, which is exactly the post-change file a diff-relative
+  // line number already points into.
+  const structural = verifyStructural(relocated, parseOptions.guidelinesById, (file) =>
+    readSourceForStructuralCheck(deps.cwd, file),
+  );
+  const droppedStructural = structural.dropped.length;
   const parsed: ParsedReview = {
     ...executed.parsed,
-    findings: relocateFindings(executed.parsed.findings, newLineTexts(redacted.text)),
+    findings: structural.kept,
+    rejected: [...executed.parsed.rejected, ...structural.dropped],
   };
   if (options.explainDrops === true) {
     for (const entry of parsed.rejected) {
@@ -297,6 +309,7 @@ export async function runReview(
       proposals,
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
+      droppedStructural,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       filtered: filtered.length,
@@ -346,6 +359,7 @@ export async function runReview(
       proposals,
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
+      droppedStructural,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       redactions: redacted.counts,
@@ -407,6 +421,15 @@ export async function runReview(
   }
 
   return gate.failed ? 2 : 0;
+}
+
+/** The checkout's current text of a finding's file, for the structural verifier; undefined if unreadable. */
+function readSourceForStructuralCheck(cwd: string, file: string): string | undefined {
+  try {
+    return readFileSync(path.resolve(cwd, file), "utf8");
+  } catch {
+    return undefined; // deleted, renamed away, or otherwise unreadable at review time
+  }
 }
 
 interface AssembledReview {

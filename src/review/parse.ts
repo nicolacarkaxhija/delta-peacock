@@ -5,7 +5,7 @@ import {
   type Observation,
   type Violation,
 } from "../domain/finding.js";
-import type { Guideline } from "../domain/guideline.js";
+import type { Guideline, StructuralCheck } from "../domain/guideline.js";
 import { SEVERITIES, severityRank, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { appliesTo } from "../guidelines/languages.js";
@@ -42,9 +42,15 @@ export interface ParseOptions {
   observationSeverityCap: Severity;
 }
 
-/** A raw model element the parser refused, kept for diagnostics (never a finding). */
+/**
+ * A raw model element the parser refused, kept for diagnostics (never a
+ * finding). The `structural:*` reasons are not raised here -- they come from
+ * the post-parse structural verifier, once relocation has settled each
+ * finding's real line -- but share this shape so `--explain-drops` and the
+ * report's rejected-candidates list cover every gate uniformly.
+ */
 export interface RejectedCandidate {
-  reason: "malformed" | "uncited" | "out-of-scope";
+  reason: "malformed" | "uncited" | "out-of-scope" | `structural:${StructuralCheck}`;
   /** The candidate's JSON, capped; the diff it came from was already redacted. */
   raw: string;
   /** The cited guideline id, when the candidate carried one. */
@@ -69,7 +75,8 @@ export interface ParsedReview {
   rejected: RejectedCandidate[];
 }
 
-const REJECTED_RAW_CAP = 500;
+/** Shared with the structural verifier, so every rejected-candidate payload is capped alike. */
+export const REJECTED_RAW_CAP = 500;
 const rawOf = (candidate: unknown): string => JSON.stringify(candidate).slice(0, REJECTED_RAW_CAP);
 
 /** Candidate JSON slices in order of confidence; the first that parses wins. */
