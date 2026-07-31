@@ -7,5 +7,7 @@ coverage/
 .env.*
 .DS_Store
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .claude/settings.local.json
