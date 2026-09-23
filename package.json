@@ -1,6 +1,6 @@
 {
   "name": "delta-peacock",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Guideline-anchored, provider-agnostic PR reviewer. Your rules, any SCM, any LLM.",
   "keywords": [
     "code-review",
@@ -16,13 +16,17 @@
     "type": "git",
     "url": "git+https://github.com/nicolacarkaxhija/delta-peacock.git"
   },
+  "homepage": "https://github.com/nicolacarkaxhija/delta-peacock#readme",
+  "bugs": {
+    "url": "https://github.com/nicolacarkaxhija/delta-peacock/issues"
+  },
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "packageManager": "pnpm@11.5.0",
   "bin": {
-    "delta-peacock": "./dist/cli.js"
+    "delta-peacock": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -33,8 +37,14 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "schema",
+    "packs",
+    "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -46,6 +56,7 @@
     "format:check": "prettier --check .",
     "docs:check": "node scripts/check-docs.mjs",
     "schema:update": "vitest run tests/config-schema.test.ts -u",
+    "prepack": "tsup",
     "prepare": "husky"
   },
   "devDependencies": {

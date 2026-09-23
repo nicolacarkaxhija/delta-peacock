@@ -29,7 +29,7 @@ pnpm lint && pnpm typecheck && pnpm docs:check
 
 ## Gotchas
 
-- `engines` is `>=20` deliberately (consumer floor); local dev pin is Node 24 (.nvmrc),
+- `engines` is `>=22.12.0`, the floor of commander 15 and the AI SDK; local dev pin is Node 24 (.nvmrc),
   pnpm 11 via corepack.
 - LLM calls go through the AI SDK (anthropic, openai, bedrock) — provider credentials are
   needed at runtime, via env (`.env*` is gitignored).
