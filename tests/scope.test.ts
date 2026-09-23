@@ -182,6 +182,62 @@ describe("analyzeScope: plain functions and module scope", () => {
   });
 });
 
+describe("analyzeScope: function labels and callee shapes", () => {
+  it.each([
+    [
+      "an assignment to a plain variable",
+      "let handler;\nhandler = function () {\n  const x = 1;\n};",
+      "handler",
+    ],
+    ["a member assignment", "exports.run = function () {\n  const x = 1;\n};", "run"],
+    [
+      "a quoted object key",
+      "const o = {\n  'quoted': function () {\n    const x = 1;\n  },\n};",
+      "quoted",
+    ],
+    ["a class method", "class A {\n  run() {\n    const x = 1;\n  }\n}", "run"],
+  ])("borrows the name of %s", (_what, source, label) => {
+    expect(scopeOf(source, 3).enclosing[0]?.label).toBe(label);
+  });
+
+  it.each([
+    ["a numeric object key", "const o = {\n  1: function () {\n    const x = 1;\n  },\n};"],
+    ["a computed object key", "const o = {\n  [k]: function () {\n    const x = 1;\n  },\n};"],
+    ["a computed member assignment", "o[k] = function () {\n  const x = 1;\n};"],
+    ["a destructuring declarator", "const { length } = function () {\n  const x = 1;\n};"],
+  ])("leaves a function bound to %s unlabeled", (_what, source) => {
+    const line = source.split("\n").findIndex((text) => text.includes("const x")) + 1;
+    const scope = scopeOf(source, line);
+    expect(scope.enclosing[0]).toMatchObject({ kind: "function" });
+    expect(scope.enclosing[0]?.label).toBeUndefined();
+  });
+
+  it.each([
+    ["a computed callee", "items['forEach'](function () {\n  const x = 1;\n});"],
+    ["a bare function callee", "run(function () {\n  const x = 1;\n});"],
+    ["an IIFE", "(function () {\n  const x = 1;\n})();"],
+  ])("does not treat a function passed through %s as an iteration callback", (_what, source) => {
+    expect(scopeOf(source, 2).enclosing[0]?.kind).toBe("function");
+  });
+});
+
+describe("describeLineScope: every construct kind", () => {
+  it.each([
+    ["for-in", "inside for...in loop opened at line 4"],
+    ["for-of", "inside for...of loop opened at line 4"],
+    ["while", "inside while loop opened at line 4"],
+    ["do-while", "inside do...while loop opened at line 4"],
+    ["iteration-callback", "inside callback passed to .? opened at line 4"],
+    ["function", "inside an anonymous function opened at line 4"],
+  ] as const)("describes %s", (kind, text) => {
+    const scope: LineScope = {
+      line: 5,
+      enclosing: [{ kind, isLoop: false, openedAtLine: 4 }],
+    };
+    expect(describeLineScope(scope)).toBe(`${text}; module scope depth 1`);
+  });
+});
+
 describe("isInsideLoop", () => {
   it("is false when a function boundary sits between the line and an outer loop", () => {
     // the const below sits in a callback; that callback happens to run once
@@ -284,6 +340,66 @@ describe("scope context provider", () => {
     expect(text).toContain("src/app.js:");
     expect(text).toContain("lines 3-4: inside callback passed to .forEach opened at line 2");
     expect(text).not.toContain("line 3:"); // collapsed into the range, not listed singly
+  });
+
+  it("splits ranges at gaps and at scope changes, listing single lines singly", async () => {
+    const repo = makeRepo();
+    write(
+      repo,
+      "src/app.js",
+      ["const a = 1;", "function f() {", "  const b = 2;", "}", "const c = 3;"].join("\n"),
+    );
+    const diff = [
+      "diff --git a/src/app.js b/src/app.js",
+      "--- a/src/app.js",
+      "+++ b/src/app.js",
+      "@@ -0,0 +1,5 @@",
+      "+const a = 1;",
+      "+function f() {",
+      "+  const b = 2;",
+      " }",
+      "+const c = 3;",
+      "",
+    ].join("\n");
+    const text = await createScopeProvider().systemContext({
+      cwd: repo,
+      diff,
+      changedFiles: ["src/app.js"],
+    });
+    expect(text).toContain("line 1: module scope (top level)");
+    expect(text).toContain("lines 2-3: inside function f opened at line 2");
+    expect(text).toContain("line 5: module scope (top level)");
+  });
+
+  it("skips deletion-only, oversized and vanished JS files without a notice", async () => {
+    const repo = makeRepo();
+    write(repo, "src/big.js", `const x = "${"a".repeat(600 * 1024)}";\n`);
+    const header = (file: string): string[] => [
+      `diff --git a/${file} b/${file}`,
+      `--- a/${file}`,
+      `+++ b/${file}`,
+    ];
+    const diff = [
+      ...header("src/gone.js"),
+      "@@ -1,2 +1,1 @@",
+      " const kept = 1;",
+      "-const dropped = 2;",
+      ...header("src/big.js"),
+      "@@ -0,0 +1 @@",
+      "+const x = 1;",
+      ...header("src/missing.js"),
+      "@@ -0,0 +1 @@",
+      "+const y = 1;",
+      "",
+    ].join("\n");
+    const provider = createScopeProvider();
+    const text = await provider.systemContext({
+      cwd: repo,
+      diff,
+      changedFiles: ["src/gone.js", "src/big.js", "src/missing.js"],
+    });
+    expect(text).toBe("");
+    expect(provider.notices?.()).toEqual([]);
   });
 
   it("ignores non-JS changed files entirely", async () => {
