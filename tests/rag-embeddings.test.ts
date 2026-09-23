@@ -370,6 +370,20 @@ describe("embedding retrieval", () => {
     expect(text).toBe("");
   });
 
+  it("skips the query embedding when every chunk belongs to a changed file", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const repo = mkdtempSync(path.join(tmpdir(), "dp-allchanged-"));
+    write(repo, "src/app.js", "greet('x');\n");
+    const { calls, port } = keywordPort();
+    const text = await createRagEmbeddingsProvider({
+      port,
+      embeddingKey: "test/fake",
+    }).systemContext({ cwd: repo, diff: "+greet('y');", changedFiles: ["src/app.js"] });
+    expect(text).toBe("");
+    expect(calls).toHaveLength(1); // corpus only, no query
+  });
+
   it("returns nothing when no chunk relates to the diff", async () => {
     const { repo } = makeCrossFileRepo();
     const { port } = keywordPort();

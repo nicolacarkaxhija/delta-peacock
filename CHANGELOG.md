@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 (2026-09-23)
+
+### Tests
+
+- Branch coverage gate restored: 95.56% of branches against the 95% gate, up from 93.99%.
+
 ## 0.1.0 (2026-09-23)
 
 First npm release.

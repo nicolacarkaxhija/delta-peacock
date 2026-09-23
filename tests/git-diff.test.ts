@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ToolError } from "../src/errors.js";
-import { mergeBaseDiff } from "../src/git/diff.js";
+import { mergeBaseDiff, newLineTexts } from "../src/git/diff.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 describe("merge-base diff", () => {
@@ -52,5 +52,23 @@ describe("merge-base diff", () => {
     expect(() => mergeBaseDiff(path.join(makeRepo(), "definitely-missing"), "main")).toThrow(
       ToolError,
     );
+  });
+});
+
+describe("newLineTexts", () => {
+  it("ignores text before the first file header and no-newline markers", () => {
+    const diff = [
+      "preamble a tool printed",
+      "diff --git a/x.js b/x.js",
+      "--- a/x.js",
+      "+++ b/x.js",
+      "@@ -1,2 +1,2 @@",
+      " keep",
+      "-old",
+      "+new",
+      "\\ No newline at end of file",
+      "",
+    ].join("\n");
+    expect([...newLineTexts(diff)]).toEqual([["x.js", new Map([[2, "new"]])]]);
   });
 });

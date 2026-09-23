@@ -79,6 +79,23 @@ describe("repo_map provider", () => {
     expect(map).not.toContain("huge.js");
   });
 
+  it("ranks definers above mere callers and breaks score ties by path", async () => {
+    const repo = makeRepo();
+    write(repo, "src/b.js", "function beta() {\n  return greet(1);\n}\n");
+    write(repo, "src/a.js", "function alpha() {\n  return greet(2);\n}\n");
+    write(repo, "src/c.js", "function welcome() {\n  return 3;\n}\n");
+    const map = await createRepoMapProvider().systemContext({
+      cwd: repo,
+      diff: "+greet(welcome)\n",
+      changedFiles: ["src/app.js"],
+    });
+    const order = ["src/c.js:", "src/a.js:", "src/b.js:"].map((header) => map.indexOf(header));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((x, y) => x - y)).toEqual(order);
+    // a caller defines none of the wanted symbols, so its own signatures stand in
+    expect(map).toContain("function alpha() {");
+  });
+
   it("returns nothing when the diff shares no symbols with the repo", () => {
     const repo = makeRepo();
     const map = createRepoMapProvider().systemContext({
@@ -267,6 +284,52 @@ describe("rag provider (experimental)", () => {
     expect(existsSync(cachePath)).toBe(true);
     // the cached index answers the second call identically
     expect(createRagProvider().systemContext(input)).toBe(first);
+  });
+
+  it("leaves oversized and binary files out of the index", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-notgit-"));
+    write(dir, "lib/helper.js", "function helper(value) {\n  return value;\n}\n");
+    write(dir, "lib/huge.js", `function helper() {}\n${"// helper\n".repeat(30000)}`);
+    write(dir, "lib/blob.bin", "helper\u0000helper\n");
+    const text = createRagProvider().systemContext({
+      cwd: dir,
+      diff: "+helper(input)\n",
+      changedFiles: [],
+    });
+    expect(text).toContain("lib/helper.js");
+    expect(text).not.toContain("huge.js");
+    expect(text).not.toContain("blob.bin");
+  });
+
+  it("returns nothing when no chunk shares a term with the diff", () => {
+    const { repo } = makeCrossFileRepo();
+    const text = createRagProvider().systemContext({
+      cwd: repo,
+      diff: "+zzqqxx\n",
+      changedFiles: [],
+    });
+    expect(text).toBe("");
+  });
+
+  it("rebuilds a cache holding malformed entries, with a notice", () => {
+    const { repo, diff } = makeCrossFileRepo();
+    const treeKey = git(repo, "rev-parse", "HEAD^{tree}").trim();
+    const valid = { file: "src/x.js", startLine: 1, text: "x", terms: {} };
+    write(
+      repo,
+      ".delta-peacock-cache/rag-index.json",
+      JSON.stringify({
+        version: 1,
+        treeKey,
+        chunks: [valid, null, "text", { ...valid, terms: null }],
+      }),
+    );
+    const provider = createRagProvider();
+    const text = provider.systemContext({ cwd: repo, diff, changedFiles: [] });
+    expect(text).toContain("consumer.js");
+    expect(provider.notices?.()).toEqual(["rag index cache held malformed entries; rebuilding it"]);
   });
 
   it("yields nothing for an unreadable checkout", () => {
