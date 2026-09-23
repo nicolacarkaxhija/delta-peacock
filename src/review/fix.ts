@@ -51,7 +51,8 @@ export function planFileEdits(
       skipped.push({ file, line, reason: "the file no longer has that line" });
     } else if (suggestion.lineText === undefined) {
       skipped.push({ file, line, reason: "the report carries no anchor text for it" });
-    } else if (current !== suggestion.lineText) {
+    } else if (current !== suggestion.lineText.replace(/\r$/, "")) {
+      // diff anchors of CRLF files keep the CR; the file lines here do not
       skipped.push({ file, line, reason: "the line changed since the review" });
     } else if (taken.has(line)) {
       skipped.push({ file, line, reason: "another suggestion already edits that line" });
