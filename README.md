@@ -6,10 +6,10 @@
 
 **Your guidelines. Any SCM. Any model. One deterministic exit code.**
 
-[![tests](https://img.shields.io/badge/tests-629%20passing-1fb6ba)](#development)
+[![tests](https://img.shields.io/badge/tests-776%20passing-1fb6ba)](#development)
 [![coverage](https://img.shields.io/badge/branch%20coverage-95%25-1fb6ba)](#development)
 [![license](https://img.shields.io/badge/license-Apache--2.0-444)](LICENSE)
-[![node](https://img.shields.io/badge/node-%E2%89%A520-444)](#quick-start)
+[![node](https://img.shields.io/badge/node-%E2%89%A522.12-444)](#quick-start)
 [![telemetry](https://img.shields.io/badge/telemetry-none-37c7a4)](#security-and-privacy)
 
 </div>
@@ -62,7 +62,7 @@ Position it as the **policy gate**, not the general assistant: for teams that al
 
 ## Quick start
 
-Requires [Node.js](https://nodejs.org) 20 or newer.
+Requires [Node.js](https://nodejs.org) 22.12 or newer.
 
 ```bash
 # 1. Scaffold config, an example guideline, and a CI snippet for your host.
@@ -249,6 +249,22 @@ node dist/cli.js --version
 **Coverage measures engineering, not efficacy.** `pnpm test` and the 95% gate exercise the pipeline, parsing, gating, and redaction plumbing with the model faked, so they prove the machinery is correct. They do not measure whether the reviewer catches real violations. That is a separate question, and `bench` answers it: it scores the reviewer against the case corpus in [bench/cases](bench/cases), and the [bench-smoke workflow](.github/workflows/bench-smoke.yml) runs those cases against a live model on demand, failing when the aggregate score regresses. Published precision and recall come from that live run, not from the coverage number.
 
 Commits follow the [conventional commit](https://www.conventionalcommits.org) format, enforced by a hook; the changelog and versioning are generated from them. Contributions are welcome: open an issue to discuss a change, keep the coverage gate green, and match the docs registries.
+
+### Publishing
+
+From a clean checkout of the release commit, after `pnpm install`, the maintainer runs:
+
+```bash
+npm login
+npm publish
+```
+
+`npm publish` rebuilds `dist/` through `prepack` and publishes with public access. Then tag the published commit and push the tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## License
 
