@@ -1,7 +1,0 @@
-<iscontent type="text/html" charset="UTF-8" compact="true"/>
-
-<isif condition="${!empty(pdict.campaignBanner)}">
-    <div class="b-promo_banner">
-        <img class="b-promo_banner-image" src="${URLUtils.staticURL('/images/campaigns/' + pdict.campaignBanner)}" width="1440" height="360" />
-    </div>
-</isif>

@@ -266,6 +266,28 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
+#### History purge before going public
+
+**Do not make this repository public before this purge has run:** early history holds benchmark fixtures copied from a client codebase (18 commits, 32 paths under `bench/cases/*-l360-*`), replaced by synthetic cases since 0.1.1.
+
+Run it only on the owner's explicit order, from a fresh mirror clone, with [git filter-repo](https://github.com/newren/git-filter-repo):
+
+```bash
+git clone --mirror git@github.com:nicolacarkaxhija/delta-peacock.git dp-purge.git
+cd dp-purge.git
+printf 'regex:(?i)\\bl360\\b==>storefront\n' > ../dp-replace.txt
+git filter-repo \
+  --invert-paths --path-glob 'bench/cases/*-l360-*' \
+  --replace-text ../dp-replace.txt \
+  --replace-message ../dp-replace.txt
+git log --all --oneline -i -S l360          # expect no output
+git log --all --oneline -i --grep l360      # expect no output
+git remote add origin git@github.com:nicolacarkaxhija/delta-peacock.git
+git push --force --mirror origin
+```
+
+The force push rewrites every branch and tag: every existing clone must be re-cloned, and open pull requests must be closed first (GitHub keeps `refs/pull/*` and their blobs until GitHub Support purges them). Delete this section in the first commit after the purge.
+
 ## License
 
 [Apache-2.0](LICENSE).

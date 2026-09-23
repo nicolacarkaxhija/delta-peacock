@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_meadow_core/cartridge/scripts/giftcard/giftCardHelpers.js",
+      "line": 173,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    }
+  ]
+}

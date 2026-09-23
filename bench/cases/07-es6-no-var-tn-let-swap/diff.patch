@@ -1,0 +1,36 @@
+diff --git a/cartridges/app_meadow_core/cartridge/scripts/jobs/returns/CloseStaleReturns.js b/cartridges/app_meadow_core/cartridge/scripts/jobs/returns/CloseStaleReturns.js
+index 73e55a3..b7755aa 100644
+--- a/cartridges/app_meadow_core/cartridge/scripts/jobs/returns/CloseStaleReturns.js
++++ b/cartridges/app_meadow_core/cartridge/scripts/jobs/returns/CloseStaleReturns.js
+@@ -66,7 +66,7 @@ function processInput(inputStream) {
+             continue;
+         }
+ 
+-        const order = OrderMgr.getOrder(orderNumber);
++        let order = OrderMgr.getOrder(orderNumber);
+ 
+         if (order === null) {
+             logger.warn('Order "{0}" not found', orderNumber);
+@@ -108,11 +108,11 @@ function execute() {
+     });
+ 
+     for (let i = 0; i < filePaths.getLength(); i++) {
+-        const inputFile = filePaths[i];
++        let inputFile = filePaths[i];
+ 
+         logger.info('Started processing of {0}', inputFile.getFullPath());
+ 
+-        const fileReader = new FileReader(inputFile, 'UTF-8');
++        let fileReader = new FileReader(inputFile, 'UTF-8');
+ 
+         if (!processInput(fileReader)) {
+             success = false;
+@@ -120,7 +120,7 @@ function execute() {
+ 
+         fileReader.close();
+ 
+-        const archiveFile = new File(archiveDirectory, inputFile.getName());
++        let archiveFile = new File(archiveDirectory, inputFile.getName());
+ 
+         inputFile.renameTo(archiveFile);
+ 

@@ -1,0 +1,114 @@
+diff --git a/cartridges/app_meadow_core/cartridge/scripts/jobs/reports/DailySalesReport.js b/cartridges/app_meadow_core/cartridge/scripts/jobs/reports/DailySalesReport.js
+index e849270..52d1efc 100644
+--- a/cartridges/app_meadow_core/cartridge/scripts/jobs/reports/DailySalesReport.js
++++ b/cartridges/app_meadow_core/cartridge/scripts/jobs/reports/DailySalesReport.js
+@@ -73,28 +73,64 @@ function escapeCsvField(value) {
+     return str;
+ }
+ 
++// Filled by the processOrders callback; reset by buildCsv before each run.
++let reportFields = [];
++let rows = [];
++
++/**
++ * Query for the non-failed orders created in a date range. Placeholders:
++ * {0} range start (inclusive), {1} range end (exclusive), {2} failed status.
++ *
++ * @returns {string} Query string for OrderMgr.processOrders
++ */
++function getOrderQuery() {
++    return 'creationDate >= {0} AND creationDate < {1} AND status != {2}';
++}
++
+ /**
+- * Builds a CSV string from the orders of the report day.
++ * OrderMgr.processOrders callback: collects one CSV row per order into the
++ * module-level rows buffer using the configured report fields.
+  *
+- * @param {dw.util.SeekableIterator} orders - Orders iterator
++ * @param {dw.order.Order} order - Order to collect
++ */
++function collectOrderRow(order) {
++    let line = reportFields.map(function (field) {
++        return escapeCsvField(getOrderFieldValue(order, field));
++    }).join(CSV_SEPARATOR);
++
++    rows.push({ createdAt: order.creationDate.getTime(), line: line });
++}
++
++/**
++ * Builds a CSV string from all orders of the report day, sorted by creation
++ * date (processOrders does not sort).
++ *
++ * @param {Date} start - Start of the day (inclusive)
++ * @param {Date} end - End of the day (exclusive)
+  * @param {string[]} fields - Fields to include
+- * @returns {string} Complete CSV content
++ * @returns {{content: string, rowCount: number}} CSV content and row count
+  */
+-function buildCsv(orders, fields) {
+-    const lines = [fields.join(CSV_SEPARATOR)];
+-    let rowCount = 0;
+-
+-    while (orders.hasNext()) {
+-        let order = orders.next();
+-        let row = fields.map(function (field) {
+-            return escapeCsvField(getOrderFieldValue(order, field));
+-        });
+-
+-        lines.push(row.join(CSV_SEPARATOR));
+-        rowCount++;
+-    }
++function buildCsv(start, end, fields) {
++    reportFields = fields;
++    rows = [];
++
++    OrderMgr.processOrders(
++        module.exports.collectOrderRow,
++        module.exports.getOrderQuery(),
++        start,
++        end,
++        Order.ORDER_STATUS_FAILED
++    );
++
++    rows.sort(function (a, b) {
++        return a.createdAt - b.createdAt;
++    });
++
++    const lines = [fields.join(CSV_SEPARATOR)].concat(rows.map(function (row) {
++        return row.line;
++    }));
+ 
+-    return { content: lines.join('\n'), rowCount: rowCount };
++    return { content: lines.join('\n'), rowCount: rows.length };
+ }
+ 
+ /**
+@@ -142,17 +178,8 @@ function execute(params) {
+     }
+ 
+     const day = getReportDay();
+-    const orders = OrderMgr.searchOrders(
+-        'creationDate >= {0} AND creationDate < {1} AND status != {2}',
+-        'creationDate asc',
+-        day.start,
+-        day.end,
+-        Order.ORDER_STATUS_FAILED
+-    );
+-
+-    const csvResult = buildCsv(orders, fields);
++    const csvResult = buildCsv(day.start, day.end, fields);
+ 
+-    orders.close();
+     Logger.info('DailySalesReport: collected ' + csvResult.rowCount + ' orders for ' + day.label);
+ 
+     if (!sendReport(recipients, params.mailFrom, day.label, csvResult.content)) {
+@@ -166,5 +193,7 @@ function execute(params) {
+ 
+ module.exports = {
+     execute: execute,
+-    buildCsv: buildCsv
++    buildCsv: buildCsv,
++    collectOrderRow: collectOrderRow,
++    getOrderQuery: getOrderQuery
+ };

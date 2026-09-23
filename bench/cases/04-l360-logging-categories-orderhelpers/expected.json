@@ -1,9 +1,0 @@
-{
-  "findings": [
-    {
-      "file": "cartridges/app_custom_core/cartridge/scripts/order/orderHelpers.js",
-      "line": 407,
-      "guidelineId": "SFRA-LOGGING-CATEGORIES"
-    }
-  ]
-}

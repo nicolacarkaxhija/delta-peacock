@@ -1,0 +1,20 @@
+diff --git a/cartridges/app_meadow_storefront/cartridge/controllers/Product.js b/cartridges/app_meadow_storefront/cartridge/controllers/Product.js
+index 0c8d15c..0e54f77 100644
+--- a/cartridges/app_meadow_storefront/cartridge/controllers/Product.js
++++ b/cartridges/app_meadow_storefront/cartridge/controllers/Product.js
+@@ -33,6 +33,7 @@ server.replace(
+         const ProductMgr = require('dw/catalog/ProductMgr');
+         const Site = require('dw/system/Site');
+         const product = ProductMgr.getProduct(req.querystring.pid);
++        const shippingEstimator = require('*/cartridge/scripts/shipping/shippingEstimator');
+ 
+         const isOnline = productHelper.isSellable(product);
+         const hideOffline = Site.getCurrent().getCustomPreferenceValue('hideOfflineProducts');
+@@ -57,6 +58,7 @@ server.replace(
+         viewData.product = showProductPageHelperResult.product;
+         viewData.breadcrumbs = showProductPageHelperResult.breadcrumbs;
+         viewData.canonicalUrl = showProductPageHelperResult.canonicalUrl;
++        viewData.deliveryWindow = shippingEstimator.getDeliveryWindow(product, req.locale.id);
+ 
+         res.setViewData(viewData);
+         res.render(showProductPageHelperResult.template);

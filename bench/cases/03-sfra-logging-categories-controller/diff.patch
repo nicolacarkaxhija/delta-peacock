@@ -1,0 +1,68 @@
+diff --git a/cartridges/app_meadow_core/cartridge/controllers/Account.js b/cartridges/app_meadow_core/cartridge/controllers/Account.js
+index 89e3148..4d3f128 100644
+--- a/cartridges/app_meadow_core/cartridge/controllers/Account.js
++++ b/cartridges/app_meadow_core/cartridge/controllers/Account.js
+@@ -68,26 +68,52 @@ server.get(
+     userLoggedIn.validateLoggedIn,
+     function (req, res, next) {
+         const rewardsClient = require('*/cartridge/scripts/rewards/rewardsClient');
++        const Logger = require('dw/system/Logger');
+ 
+         try {
+             const customer = req.currentCustomer.raw;
+ 
+             if (!customer || !customer.profile) {
+                 res.json({ success: false });
++
++                return next();
+             }
+ 
+             const memberId = customer.profile.custom.rewardsMemberId;
+ 
+             if (!memberId) {
+                 res.json({ success: false });
++
++                return next();
+             }
+ 
++            const startedAt = Date.now();
++
++            Logger.info(
++                'Rewards poll started for member {0}',
++                memberId
++            );
+             const vouchers = rewardsClient.fetchVouchers(memberId);
++            const seconds = ((Date.now() - startedAt) / 1000).toFixed(2);
+ 
+             if (!vouchers || vouchers.length === 0) {
++                Logger.info(
++                    'Rewards poll for member {0} took {1}s, no vouchers yet',
++                    memberId,
++                    seconds
++                );
+                 res.json({ success: true, vouchers: [] });
++
++                return next();
+             }
+ 
++            Logger.info(
++                'Rewards poll for member {0} took {1}s, vouchers: {2}',
++                memberId,
++                seconds,
++                vouchers.length
++            );
++
+             const renderTemplateHelper = require('*/cartridge/scripts/renderTemplateHelper');
+ 
+             res.json({
+@@ -96,6 +122,10 @@ server.get(
+                 html: renderTemplateHelper.getRenderedHtml({ vouchers: vouchers }, 'account/rewards/voucherTile')
+             });
+         } catch (e) {
++            Logger.error(
++                'Rewards poll failed: {0}',
++                e.message
++            );
+             res.json({ success: false });
+         }
+ 

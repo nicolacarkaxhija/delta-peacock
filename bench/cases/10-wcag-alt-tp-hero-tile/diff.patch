@@ -1,0 +1,13 @@
+diff --git a/cartridges/app_meadow_core/cartridge/templates/default/content/heroTile.isml b/cartridges/app_meadow_core/cartridge/templates/default/content/heroTile.isml
+new file mode 100644
+index 0000000..843e288
+--- /dev/null
++++ b/cartridges/app_meadow_core/cartridge/templates/default/content/heroTile.isml
+@@ -0,0 +1,7 @@
++<iscontent type="text/html" charset="UTF-8" compact="true"/>
++
++<isif condition="${!empty(pdict.heroImage)}">
++    <section class="c-hero_tile">
++        <img class="c-hero_tile-media" src="${URLUtils.staticURL('/images/hero/' + pdict.heroImage)}" width="960" height="540" loading="lazy" />
++    </section>
++</isif>

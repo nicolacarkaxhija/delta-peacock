@@ -1,0 +1,24 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_meadow_core/cartridge/controllers/Account.js",
+      "line": 92,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    },
+    {
+      "file": "cartridges/app_meadow_core/cartridge/controllers/Account.js",
+      "line": 100,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    },
+    {
+      "file": "cartridges/app_meadow_core/cartridge/controllers/Account.js",
+      "line": 110,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    },
+    {
+      "file": "cartridges/app_meadow_core/cartridge/controllers/Account.js",
+      "line": 125,
+      "guidelineId": "SFRA-LOGGING-CATEGORIES"
+    }
+  ]
+}

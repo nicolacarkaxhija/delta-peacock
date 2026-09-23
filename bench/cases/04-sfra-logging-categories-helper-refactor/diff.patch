@@ -1,0 +1,258 @@
+diff --git a/cartridges/app_meadow_core/cartridge/scripts/giftcard/giftCardHelpers.js b/cartridges/app_meadow_core/cartridge/scripts/giftcard/giftCardHelpers.js
+index f4192a6..0e837ef 100644
+--- a/cartridges/app_meadow_core/cartridge/scripts/giftcard/giftCardHelpers.js
++++ b/cartridges/app_meadow_core/cartridge/scripts/giftcard/giftCardHelpers.js
+@@ -24,24 +24,71 @@ giftCardHelpers.maskCardNumber = function (cardNumber) {
+ };
+ 
+ /**
+- * @description Sums the gift card payment instruments of a basket or order.
++ * @description Sums the payment instruments of one method on a basket or order.
+  * @param {dw.order.LineItemCtnr} lineItemCtnr - basket or order
+- * @returns {number} total amount paid by gift card
++ * @param {string} methodId - payment method id
++ * @returns {number} total amount paid with that method
+  */
+-giftCardHelpers.getGiftCardTotal = function (lineItemCtnr) {
+-    const instruments = lineItemCtnr.getPaymentInstruments('GIFT_CARD').toArray();
++function sumInstruments(lineItemCtnr, methodId) {
++    const instruments = lineItemCtnr.getPaymentInstruments(methodId).toArray();
+ 
+     return instruments.reduce(function (sum, instrument) {
+         return sum + instrument.paymentTransaction.amount.value;
+     }, 0);
++}
++
++/**
++ * @description Sums the gift card payment instruments of a basket or order.
++ * @param {dw.order.LineItemCtnr} lineItemCtnr - basket or order
++ * @returns {number} total amount paid by gift card
++ */
++giftCardHelpers.getGiftCardTotal = function (lineItemCtnr) {
++    return sumInstruments(lineItemCtnr, 'GIFT_CARD');
+ };
+ 
+ /**
+- * @description Get display values for the gift card balance before and after the order.
++ * @description Sums the bonus credit payment instruments of a basket or order.
+  * @param {dw.order.LineItemCtnr} lineItemCtnr - basket or order
+- * @returns {object|null} balance values, or null when no gift card is used
++ * @returns {number} total amount paid by bonus credit
+  */
+-giftCardHelpers.getDisplayBalance = function (lineItemCtnr) {
++giftCardHelpers.getBonusCreditTotal = function (lineItemCtnr) {
++    return sumInstruments(lineItemCtnr, 'BONUS_CREDIT');
++};
++
++/**
++ * @description Builds before/used/after values for one balance bucket.
++ * @param {number} balanceBefore - balance before the order
++ * @param {number} used - amount used by the order
++ * @returns {{before: number, used: number, after: number}} display values
++ */
++function buildBalanceView(balanceBefore, used) {
++    const view = {
++        before: balanceBefore,
++        used: used
++    };
++
++    view.after = balanceBefore - used;
++
++    return view;
++}
++
++/**
++ * @description Tells whether the container is an order that has already been placed.
++ * @param {dw.order.LineItemCtnr} lineItemCtnr - basket or order
++ * @returns {boolean} true for a placed order
++ */
++function isPlacedOrder(lineItemCtnr) {
++    const Order = require('dw/order/Order');
++
++    return lineItemCtnr instanceof Order;
++}
++
++/**
++ * @description Get display values for the card balance bucket.
++ * @param {dw.order.LineItemCtnr} lineItemCtnr - basket or order
++ * @returns {object|null} card balance view, or null when no card amount is used
++ */
++giftCardHelpers.getDisplayCardBalance = function (lineItemCtnr) {
+     const GiftCardMgr = require('*/cartridge/scripts/giftcard/GiftCardMgr');
+     const card = GiftCardMgr.getCardForBasket(lineItemCtnr);
+ 
+@@ -55,64 +102,132 @@ giftCardHelpers.getDisplayBalance = function (lineItemCtnr) {
+         return null;
+     }
+ 
+-    const Order = require('dw/order/Order');
+-    const isPlacedOrder = lineItemCtnr instanceof Order;
+-
+-    if (isPlacedOrder) {
+-        // balance has already been reduced by the redemption
+-        return {
+-            before: card.balance + used,
+-            used: used,
+-            after: card.balance
+-        };
+-    } else {
+-        return {
+-            before: card.balance,
+-            used: used,
+-            after: card.balance - used
+-        };
++    // a placed order has already reduced the balance
++    const before = isPlacedOrder(lineItemCtnr) ? card.balance + used : card.balance;
++
++    return buildBalanceView(before, used);
++};
++
++/**
++ * @description Get display values for the bonus credit bucket.
++ * @param {dw.order.LineItemCtnr} lineItemCtnr - basket or order
++ * @returns {object|null} bonus credit view, or null when no credit is used
++ */
++giftCardHelpers.getDisplayBonusBalance = function (lineItemCtnr) {
++    const GiftCardMgr = require('*/cartridge/scripts/giftcard/GiftCardMgr');
++    const card = GiftCardMgr.getCardForBasket(lineItemCtnr);
++
++    if (!card || !card.bonusEnabled) {
++        return null;
++    }
++
++    const used = giftCardHelpers.getBonusCreditTotal(lineItemCtnr);
++
++    if (used <= 0) {
++        return null;
++    }
++
++    const before = isPlacedOrder(lineItemCtnr) ? card.bonusBalance + used : card.bonusBalance;
++
++    return buildBalanceView(before, used);
++};
++
++/**
++ * @description Get display values for both balance buckets.
++ * @param {dw.order.LineItemCtnr} lineItemCtnr - basket or order
++ * @returns {object|null} balance views, or null when neither bucket is used
++ */
++giftCardHelpers.getDisplayBalance = function (lineItemCtnr) {
++    const card = giftCardHelpers.getDisplayCardBalance(lineItemCtnr);
++    const bonus = giftCardHelpers.getDisplayBonusBalance(lineItemCtnr);
++
++    if (!card && !bonus) {
++        return null;
+     }
++
++    return {
++        card: card,
++        bonus: bonus
++    };
+ };
+ 
+ /**
+- * @description Redeems the gift card amount of a placed order against the card balance.
+- * @param {dw.order.Order} order - placed order
+- * @param {number} amount - amount to redeem
++ * @description Tells whether this session already redeemed a card, logging the caller's trace.
++ * @param {object} card - gift card instance, for the log message
++ * @returns {boolean} true when the redemption must be skipped
++ */
++function isDuplicateRedemption(card) {
++    // a second redemption in the same session would charge the card twice
++    if (!session.privacy.giftCardRedeemed) {
++        return false;
++    }
++
++    let trace = '';
++
++    try {
++        throw new Error('Gift card ' + card.ID + ' already redeemed in this session.');
++    } catch (e) {
++        trace = e.stack.replace(/\n/g, ' | ');
++    }
++
++    Logger.error('Skipping duplicate redemption. Trace: ' + trace);
++
++    return true;
++}
++
++/**
++ * @description Applies the card and bonus redemptions and sets the session guard.
++ * @param {object} card - gift card instance
++ * @param {number} cardAmount - card amount to redeem
++ * @param {number} bonusAmount - bonus credit amount to redeem
+  * @returns {void}
+  */
+-function redeemBalance(order, amount) {
+-    if (!order || amount <= 0) {
+-        return;
++function applyRedemption(card, cardAmount, bonusAmount) {
++    if (cardAmount > 0) {
++        card.redeem(cardAmount);
+     }
+ 
+-    const GiftCardMgr = require('*/cartridge/scripts/giftcard/GiftCardMgr');
+-    const card = GiftCardMgr.getCardForBasket(order);
++    if (bonusAmount > 0) {
++        card.redeemBonus(bonusAmount);
++    }
+ 
+-    if (card) {
+-        const Transaction = require('dw/system/Transaction');
++    session.privacy.giftCardRedeemed = cardAmount > 0 || bonusAmount > 0;
++}
+ 
+-        // a second redemption in the same session would charge the card twice
+-        if (session.privacy.giftCardRedeemed) {
+-            let trace = '';
++/**
++ * @description Redeems the card and bonus amounts of a placed order.
++ * @param {dw.order.Order} order - placed order
++ * @returns {void}
++ * @throws {Error} when an order paid by gift card has no card
++ */
++function redeemBalance(order) {
++    if (!order) {
++        return;
++    }
+ 
+-            try {
+-                throw new Error('Gift card ' + card.ID + ' already redeemed in this session.');
+-            } catch (e) {
+-                trace = e.stack.replace(/\n/g, ' | ');
+-            }
++    const cardAmount = giftCardHelpers.getGiftCardTotal(order);
++    const bonusAmount = giftCardHelpers.getBonusCreditTotal(order);
+ 
+-            Logger.error('Skipping duplicate redemption. Trace: ' + trace);
++    if (cardAmount <= 0 && bonusAmount <= 0) {
++        return;
++    }
+ 
+-            return;
+-        }
++    const GiftCardMgr = require('*/cartridge/scripts/giftcard/GiftCardMgr');
++    const card = GiftCardMgr.getCardForBasket(order);
+ 
+-        Transaction.wrap(function () {
+-            card.redeem(amount);
+-            session.privacy.giftCardRedeemed = true;
+-        });
+-    } else {
++    if (!card) {
+         throw new Error('No gift card found for order ' + order.orderNo);
+     }
++
++    if (isDuplicateRedemption(card)) {
++        return;
++    }
++
++    const Transaction = require('dw/system/Transaction');
++
++    Transaction.wrap(function () {
++        applyRedemption(card, cardAmount, bonusAmount);
++    });
+ }
+ 
+ /**

@@ -1,0 +1,29 @@
+<iscontent type="text/html" charset="UTF-8" compact="true" />
+
+<isset name="reviewsConfig" value="${require('*/cartridge/scripts/reviews/reviewsConfig')}" scope="page" />
+<isset name="siteLocale" value="${request.getLocale()}" scope="page" />
+
+<isif condition="${reviewsConfig.isEnabled(siteLocale) && reviewsConfig.isConversionPixelEnabled(siteLocale)}">
+    <isset name="storeKey" value="${reviewsConfig.getStoreKey(siteLocale)}" scope="page" />
+    <isif condition="${!empty(pdict.order)}">
+        <script type="text/plain" data-consent-category="marketing">
+            (function () {
+                var s = document.createElement('script');
+                s.async = true;
+                s.src = 'https://widgets.starling-reviews.example/${storeKey}/loader.js';
+                document.head.appendChild(s);
+            })();
+        </script>
+        <script>
+            window.starlingConversion = {orderId: '${pdict.order.orderNumber}', amount: ${pdict.order.totals.grandTotal.value}, currency: '${request.session.currency.currencyCode}'};
+        </script>
+        <noscript>
+            <img
+                src="https://pixel.starling-reviews.example/convert.gif?store=${storeKey}&order=${pdict.order.orderNumber}&amount=${pdict.order.totals.grandTotal.value}&currency=${request.session.currency.currencyCode}"
+                width="1"
+                height="1"
+                alt="${Resource.msg('img.alt.conversion.pixel', 'imgAltText', null)}"
+            />
+        </noscript>
+    </isif>
+</isif>

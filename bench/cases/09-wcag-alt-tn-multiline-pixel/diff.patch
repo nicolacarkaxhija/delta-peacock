@@ -1,0 +1,18 @@
+diff --git a/cartridges/app_meadow_core/cartridge/templates/default/tracking/reviewsConversionPixel.isml b/cartridges/app_meadow_core/cartridge/templates/default/tracking/reviewsConversionPixel.isml
+index 2141ff3..b304ec1 100644
+--- a/cartridges/app_meadow_core/cartridge/templates/default/tracking/reviewsConversionPixel.isml
++++ b/cartridges/app_meadow_core/cartridge/templates/default/tracking/reviewsConversionPixel.isml
+@@ -15,11 +15,11 @@
+             })();
+         </script>
+         <script>
+-            window.starlingConversion = {orderId: '${pdict.order.orderNumber}', amount: ${pdict.order.totals.subTotal.value}, currency: '${request.session.currency.currencyCode}'};
++            window.starlingConversion = {orderId: '${pdict.order.orderNumber}', amount: ${pdict.order.totals.grandTotal.value}, currency: '${request.session.currency.currencyCode}'};
+         </script>
+         <noscript>
+             <img
+-                src="https://pixel.starling-reviews.example/convert.gif?store=${storeKey}&order=${pdict.order.orderNumber}&amount=${pdict.order.totals.subTotal.value}&currency=${request.session.currency.currencyCode}"
++                src="https://pixel.starling-reviews.example/convert.gif?store=${storeKey}&order=${pdict.order.orderNumber}&amount=${pdict.order.totals.grandTotal.value}&currency=${request.session.currency.currencyCode}"
+                 width="1"
+                 height="1"
+                 alt="${Resource.msg('img.alt.conversion.pixel', 'imgAltText', null)}"

@@ -75,9 +75,9 @@ describe("scoring", () => {
 describe("harness", () => {
   it("loads the seed cases with diffs and expectations", () => {
     const cases = loadCases(CASES_DIR);
-    // the corpus has grown with L360-grounded cases alongside the two
-    // synthetic seed cases this test was written against; only the seed
-    // cases' own shape is this test's concern, not the corpus's final size
+    // the corpus has grown with SFRA-style storefront cases alongside the two
+    // seed cases this test was written against; only the seed cases' own
+    // shape is this test's concern, not the corpus's final size
     expect(cases.length).toBeGreaterThanOrEqual(2);
     expect(cases.slice(0, 2).map((benchCase) => benchCase.name)).toEqual([
       "01-single-file",
@@ -222,8 +222,8 @@ describe("bench command discriminates context strategies", () => {
   });
 
   it("passes the min-f1 gate when the corpus scores above the threshold", async () => {
-    // the toy model only answers the two synthetic seed cases; scope this
-    // run to just those two so the corpus's L360 cases (which it cannot
+    // the toy model only answers the two seed cases; scope this run to just
+    // those two so the corpus's storefront cases (which it cannot
     // answer) do not drag the aggregate below the gate's threshold
     const { mkdtempSync, cpSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -349,8 +349,8 @@ describe("bench survives a case whose model reply crashes", () => {
   // observed twice against the real corpus: one case's reply held no
   // parseable JSON, and the ToolError out of parseReviewResponse aborted the
   // whole run -- discarding the other cases' scores and printing no table at
-  // all. Scope to the two synthetic seed cases so this test's call-order
-  // assumption (01 before 02) never drifts as L360 cases are added elsewhere.
+  // all. Scope to the two seed cases so this test's call-order assumption
+  // (01 before 02) never drifts as more cases are added elsewhere.
   async function seedCasesDir(): Promise<string> {
     const { mkdtempSync, cpSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
