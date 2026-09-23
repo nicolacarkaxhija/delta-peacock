@@ -1,0 +1,40 @@
+#!/usr/bin/env sh
+# The branch name and last subject first, then the lint, format, spell and typecheck scripts defined.
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+# a push of tags or of deletions only checks nothing
+zero=0000000000000000000000000000000000000000
+branches=0
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/tags/*) ;;
+    *) [ "$local_sha" = "$zero" ] || branches=1 ;;
+  esac
+done
+[ "$branches" -eq 1 ] || exit 0
+
+if command -v node >/dev/null 2>&1 && [ -f scripts/pr-check.mjs ]; then
+  node scripts/pr-check.mjs --local || exit 1
+fi
+
+# a repository outside the node flavour puts its own checks in scripts/check.sh
+if [ -x scripts/check.sh ]; then
+  exec scripts/check.sh
+fi
+[ -f package.json ] || exit 0
+
+pm=npm
+[ -f pnpm-lock.yaml ] && pm=pnpm
+[ -f yarn.lock ] && pm=yarn
+has_script() {
+  node -e "const p = JSON.parse(require('fs').readFileSync('package.json', 'utf8')); process.exit(p.scripts && p.scripts[process.argv[1]] ? 0 : 1)" "$1"
+}
+for script in lint format:check spell typecheck; do
+  has_script "$script" || continue
+  echo "pre-push: $pm run $script"
+  "$pm" run "$script" || {
+    echo "pre-push: $script failed; fix it and push again"
+    exit 1
+  }
+done

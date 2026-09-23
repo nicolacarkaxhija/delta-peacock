@@ -1,0 +1,32 @@
+# The reviewer reviewing its own pull requests; secrets come from the workflow, never from this file.
+# The scm provider, the model and the cost caps come from dogfood.yml's environment: two tests load
+# the configuration from the repository root and expect neither set here.
+scm:
+  comments: true
+  commitStatus: true
+# Files fetched on demand for everything the diff does not show.
+context:
+  providers: [agentic]
+  maxTokens: 12000
+  maxToolRounds: 10
+review:
+  target: main
+  guidelinesDir: guidelines
+  # The general pass cost precision on the consumer bench; uncited findings are harvested instead.
+  generalPass: false
+  harvestUncited: true
+  exclude:
+    - "**/pnpm-lock.yaml"
+    - "dist/**"
+    - "coverage/**"
+    - "bench/cases/**"
+    - "schema/**"
+    - "CHANGELOG.md"
+gate:
+  failOn: MAJOR
+calibration:
+  enabled: false
+cache:
+  enabled: true
+stats:
+  enabled: true

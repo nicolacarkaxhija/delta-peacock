@@ -1,0 +1,20 @@
+# Template, not active: copy to .github/workflows/pr.yml once GitHub Actions are back on.
+# ci.yml already runs the lint set and dogfood.yml the review, so only pr-check is new here.
+name: pr
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/pr-check.mjs

@@ -1,0 +1,34 @@
+#!/usr/bin/env sh
+# The subject rule of docs/contributing.md: one conventional line, no body, no trailer.
+msg_file="$1"
+max_length=100
+text=$(grep -v '^#' "$msg_file")
+subject=$(printf '%s\n' "$text" | grep -m 1 .)
+lines=$(printf '%s\n' "$text" | grep -c .)
+
+fail() {
+  echo "commit-msg: $1"
+  echo "  rule: type(scope): summary, one line, see docs/contributing.md"
+  exit 1
+}
+
+# git's own merge and autosquash subjects stay local and never reach main
+case "$subject" in
+  'Merge '* | 'fixup! '* | 'squash! '* | 'amend! '*) exit 0 ;;
+esac
+
+[ -n "$subject" ] || fail 'the message is empty'
+[ "$lines" -eq 1 ] || fail 'one subject line only: no body and no trailer such as Co-Authored-By'
+printf '%s' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: [^ ]' ||
+  fail "'$subject' is not type(scope): summary"
+[ "${#subject}" -le "$max_length" ] || fail "the subject is longer than $max_length characters"
+
+# git config baseline.dashes allow switches the dash rule off for one clone
+if [ "$(git config --get baseline.dashes)" != allow ]; then
+  em=$(printf '\342\200\224')
+  en=$(printf '\342\200\223')
+  case "$subject" in
+    *"$em"* | *"$en"* | *' -- '*) fail 'no em dash, en dash or double hyphen as punctuation; use a comma or a colon' ;;
+  esac
+fi
+exit 0
