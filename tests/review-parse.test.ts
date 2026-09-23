@@ -422,6 +422,22 @@ describe("rendering and reporting edges", () => {
     });
   });
 
+  it("renders a notice for pinned lines and malformed drops", async () => {
+    const { renderReview } = await import("../src/review/render.js");
+    const text = renderReview({
+      violations: [],
+      observations: [],
+      proposals: [],
+      droppedUncited: 0,
+      adjustedLines: 2,
+      droppedMalformed: 4,
+      filtered: 0,
+      gate,
+    });
+    expect(text).toContain("2 finding(s) had no usable line and were pinned to line 1");
+    expect(text).toContain("4 malformed finding(s) dropped");
+  });
+
   it("renders each waived finding with its reason and expiry state", async () => {
     const { renderReview } = await import("../src/review/render.js");
     const text = renderReview({
