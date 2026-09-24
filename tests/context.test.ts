@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ToolSet } from "ai";
@@ -191,6 +192,25 @@ describe("agentic provider", () => {
       "no matches found",
     );
   });
+
+  it.skipIf(process.platform === "win32")(
+    "never follows a symlink, and refuses paths resolving outside the checkout",
+    async () => {
+      const { repo } = makeCrossFileRepo();
+      const outside = mkdtempSync(path.join(tmpdir(), "peacock-outside-"));
+      writeFileSync(path.join(outside, "environ"), "AWS_SECRET_ACCESS_KEY=leaked\n");
+      symlinkSync(path.join(outside, "environ"), path.join(repo, "env-link"));
+      symlinkSync(outside, path.join(repo, "dir-link"));
+      symlinkSync(path.join(repo, "src/callers/consumer.js"), path.join(repo, "inside-link"));
+      const tools = toolsFor(repo);
+      const read = (target: string): Promise<string> =>
+        call(tools, "read_file_range", { path: target, startLine: 1, endLine: 5 });
+      expect(await read("env-link")).toBe("refusing to read a symlink");
+      expect(await read("inside-link")).toBe("refusing to read a symlink");
+      expect(await read("dir-link/environ")).toBe("path is outside the repository");
+      expect(await call(tools, "search", { text: "leaked" })).toBe("no matches found");
+    },
+  );
 
   it("clips oversized tool answers", async () => {
     const { repo } = makeCrossFileRepo();
