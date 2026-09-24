@@ -248,6 +248,8 @@ pnpm build         # bundle the CLI to dist/
 node dist/cli.js --version
 ```
 
+After `pnpm install`, git hooks rerun `pnpm install` on a checkout or merge that changes `pnpm-lock.yaml`, and stay a no-op otherwise. For a guided read of the code in VS Code, open the CodeTour in `.tours/` (the recommended `vsls-contrib.codetour` extension).
+
 **Coverage measures engineering, not efficacy.** `pnpm test` and the 95% gate exercise the pipeline, parsing, gating, and redaction plumbing with the model faked, so they prove the machinery is correct. They do not measure whether the reviewer catches real violations. That is a separate question, and `bench` answers it: it scores the reviewer against the case corpus in [bench/cases](bench/cases), and the [bench-smoke workflow](.github/workflows/bench-smoke.yml) runs those cases against a live model on demand, failing when the aggregate score regresses. Published precision and recall come from that live run, not from the coverage number.
 
 Commits follow the [conventional commit](https://www.conventionalcommits.org) format, enforced by a hook; the changelog and versioning are generated from them. Contributions are welcome: open an issue to discuss a change, keep the coverage gate green, and match the docs registries.
