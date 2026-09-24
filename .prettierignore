@@ -4,4 +4,3 @@ pnpm-lock.yaml
 CHANGELOG.md
 schema/*.json
 bench/cases/**/files/
-site/index.html
