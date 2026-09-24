@@ -12,6 +12,8 @@ import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guideline
 import { buildModelPort } from "../model/build.js";
 import { parseReviewResponse } from "../review/parse.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
+import { readSourceForStructuralCheck } from "../review/run-review.js";
+import { verifyStructural } from "../review/structural.js";
 
 /**
  * Each case is self-contained: its own guidelines, its own optional files/
@@ -75,12 +77,17 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
 
     const port = deps.modelPort ?? buildModelPort(config, deps.credentials);
     const reply = await port.complete(request);
+    const guidelinesById = new Map(guidelines.map((guideline) => [guideline.id, guideline]));
     const parsed = parseReviewResponse(reply.text, {
-      guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),
+      guidelinesById,
       generalPass: config.review.generalPass,
       observationSeverityCap: config.review.observationSeverityCap,
     });
-    return parsed.findings.map((finding) => ({
+    // score only what a live review would publish; it drops these findings too
+    const structural = verifyStructural(parsed.findings, guidelinesById, (file) =>
+      readSourceForStructuralCheck(filesRoot, file),
+    );
+    return structural.kept.map((finding) => ({
       file: finding.file,
       line: finding.line,
       ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),

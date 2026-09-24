@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadCases, runBench } from "../src/bench/harness.js";
@@ -430,5 +433,68 @@ describe("bench survives a case whose model reply crashes", () => {
     expect(code).toBe(1); // every case crashing is a genuine failure, not a clean pass
     expect(stderr).toContain("every case");
     expect(stdout).not.toContain("| aggregate |"); // no partial table on total failure
+  });
+});
+
+describe("bench applies the structural verifier like a real review does", () => {
+  function replying(findings: object[]): ModelPort {
+    return { complete: () => Promise.resolve({ text: JSON.stringify({ findings }) }) };
+  }
+
+  async function benchRows(casesDir: string, port: ModelPort): Promise<string[]> {
+    let stdout = "";
+    const code = await runCli(["bench", "--cases", casesDir, "--context", "none"], {
+      cwd: makeRepo(),
+      env: {},
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: port,
+    });
+    expect(code).toBe(0);
+    return stdout.split("\n");
+  }
+
+  it("keeps a finding the AST confirms", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-structural-"));
+    const caseDir = path.join(dir, "loop");
+    mkdirSync(path.join(caseDir, "guidelines"), { recursive: true });
+    mkdirSync(path.join(caseDir, "files", "src"), { recursive: true });
+    writeFileSync(
+      path.join(caseDir, "guidelines", "rule.md"),
+      "---\nid: no-const-in-loop\nseverity: BLOCKER\nstructural: no-declaration-in-loop\n---\nbody\n",
+    );
+    const source = [
+      "function f(items) {",
+      "  for (var i = 0; i < items.length; i++) {",
+      "    const total = items[i];",
+      "  }",
+      "  items.forEach(function (item) {",
+      "    const id = item;",
+      "  });",
+      "}",
+    ];
+    writeFileSync(path.join(caseDir, "files", "src", "app.js"), `${source.join("\n")}\n`);
+    writeFileSync(
+      path.join(caseDir, "diff.patch"),
+      [
+        "diff --git a/src/app.js b/src/app.js",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/src/app.js",
+        `@@ -0,0 +1,${String(source.length)} @@`,
+        ...source.map((line) => `+${line}`),
+        "",
+      ].join("\n"),
+    );
+    const rows = await benchRows(
+      dir,
+      replying([
+        { guidelineId: "no-const-in-loop", file: "src/app.js", line: 3, title: "t", body: "b" },
+        { guidelineId: "no-const-in-loop", file: "src/app.js", line: 6, title: "t", body: "b" },
+      ]),
+    );
+    expect(rows.find((line) => line.startsWith("| loop |"))).toContain("| 1 |");
   });
 });
