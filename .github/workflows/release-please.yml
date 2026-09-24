@@ -38,8 +38,9 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: npm publish
+      # runtime dependencies ship bundled, so consumers install offline
+      - run: pnpm pack:bundled
+      - run: npm publish delta-peacock-*.tgz
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

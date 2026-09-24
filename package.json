@@ -57,6 +57,7 @@
     "docs:check": "node scripts/check-docs.mjs",
     "schema:update": "vitest run tests/config-schema.test.ts -u",
     "prepack": "tsup",
+    "pack:bundled": "sh scripts/pack-bundled.sh",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -88,5 +89,18 @@
     "picomatch": "^4.0.5",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
-  }
+  },
+  "bundleDependencies": [
+    "@ai-sdk/amazon-bedrock",
+    "@ai-sdk/anthropic",
+    "@ai-sdk/openai",
+    "@aws-sdk/client-cost-explorer",
+    "acorn",
+    "acorn-walk",
+    "ai",
+    "commander",
+    "picomatch",
+    "yaml",
+    "zod"
+  ]
 }
