@@ -424,7 +424,7 @@ export async function runReview(
 }
 
 /** The checkout's current text of a finding's file, for the structural verifier; undefined if unreadable. */
-function readSourceForStructuralCheck(cwd: string, file: string): string | undefined {
+export function readSourceForStructuralCheck(cwd: string, file: string): string | undefined {
   try {
     return readFileSync(path.resolve(cwd, file), "utf8");
   } catch {

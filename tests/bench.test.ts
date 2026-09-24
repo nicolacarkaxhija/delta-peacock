@@ -1,6 +1,10 @@
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadCases, runBench } from "../src/bench/harness.js";
+import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../src/guidelines/loader.js";
 import { overlapMatrix, scoreFindings } from "../src/bench/scoring.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
@@ -430,5 +434,103 @@ describe("bench survives a case whose model reply crashes", () => {
     expect(code).toBe(1); // every case crashing is a genuine failure, not a clean pass
     expect(stderr).toContain("every case");
     expect(stdout).not.toContain("| aggregate |"); // no partial table on total failure
+  });
+});
+
+describe("bench applies the structural verifier like a real review does", () => {
+  const BADGES =
+    "cartridges/int_meadow_badges/cartridge/scripts/models/decorators/badgeDecorators.js";
+  const PRODUCT = "cartridges/app_meadow_storefront/cartridge/controllers/Product.js";
+
+  function replying(findings: object[]): ModelPort {
+    return { complete: () => Promise.resolve({ text: JSON.stringify({ findings }) }) };
+  }
+
+  async function benchRows(casesDir: string, port: ModelPort): Promise<string[]> {
+    let stdout = "";
+    const code = await runCli(["bench", "--cases", casesDir, "--context", "none"], {
+      cwd: makeRepo(),
+      env: {},
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: port,
+    });
+    expect(code).toBe(0);
+    return stdout.split("\n");
+  }
+
+  it("declares a structural check on every corpus guideline shaped like one", () => {
+    const expected: Record<string, string> = {
+      "05-sfra-const-in-loop-tn-callback": "no-declaration-in-loop",
+      "06-sfra-top-require-tn-deferred": "module-scope-only",
+      "08-sfra-const-in-loop-tn-process-callback": "no-declaration-in-loop",
+    };
+    for (const [name, check] of Object.entries(expected)) {
+      const { guidelines } = loadGuidelinesFromFiles(
+        readWorkingTreeGuidelines(path.join(CASES_DIR, name, "guidelines")),
+      );
+      expect(guidelines.map((guideline) => guideline.structural)).toEqual([check]);
+    }
+  });
+
+  it("drops corpus false positives the AST contradicts", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-structural-"));
+    for (const name of ["05-sfra-const-in-loop-tn-callback", "06-sfra-top-require-tn-deferred"]) {
+      cpSync(path.join(CASES_DIR, name), path.join(dir, name), { recursive: true });
+    }
+    // const in a forEach callback, and a require already deferred into a route
+    const rows = await benchRows(
+      dir,
+      replying([
+        { guidelineId: "SFRA-NO-CONST-IN-LOOP", file: BADGES, line: 87, title: "t", body: "b" },
+        { guidelineId: "SFRA-NO-TOP-REQUIRE", file: PRODUCT, line: 36, title: "t", body: "b" },
+      ]),
+    );
+    expect(rows.find((line) => line.includes("05-sfra"))).toContain("| 0 |");
+    expect(rows.find((line) => line.includes("06-sfra"))).toContain("| 0 |");
+  });
+
+  it("keeps a finding the AST confirms", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-structural-"));
+    const caseDir = path.join(dir, "loop");
+    mkdirSync(path.join(caseDir, "guidelines"), { recursive: true });
+    mkdirSync(path.join(caseDir, "files", "src"), { recursive: true });
+    writeFileSync(
+      path.join(caseDir, "guidelines", "rule.md"),
+      "---\nid: no-const-in-loop\nseverity: BLOCKER\nstructural: no-declaration-in-loop\n---\nbody\n",
+    );
+    const source = [
+      "function f(items) {",
+      "  for (var i = 0; i < items.length; i++) {",
+      "    const total = items[i];",
+      "  }",
+      "  items.forEach(function (item) {",
+      "    const id = item;",
+      "  });",
+      "}",
+    ];
+    writeFileSync(path.join(caseDir, "files", "src", "app.js"), `${source.join("\n")}\n`);
+    writeFileSync(
+      path.join(caseDir, "diff.patch"),
+      [
+        "diff --git a/src/app.js b/src/app.js",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/src/app.js",
+        `@@ -0,0 +1,${String(source.length)} @@`,
+        ...source.map((line) => `+${line}`),
+        "",
+      ].join("\n"),
+    );
+    const rows = await benchRows(
+      dir,
+      replying([
+        { guidelineId: "no-const-in-loop", file: "src/app.js", line: 3, title: "t", body: "b" },
+        { guidelineId: "no-const-in-loop", file: "src/app.js", line: 6, title: "t", body: "b" },
+      ]),
+    );
+    expect(rows.find((line) => line.startsWith("| loop |"))).toContain("| 1 |");
   });
 });

@@ -2,6 +2,7 @@
 id: SFRA-NO-TOP-REQUIRE
 name: Defer Service-Module require() in Controllers and Models
 severity: MAJOR
+structural: module-scope-only
 language:
   - javascript
 paths:

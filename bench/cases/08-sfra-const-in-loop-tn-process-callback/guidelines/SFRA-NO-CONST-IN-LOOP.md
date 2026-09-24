@@ -2,6 +2,7 @@
 id: SFRA-NO-CONST-IN-LOOP
 name: Do Not Declare const Directly in a Loop Body (Rhino Bug)
 severity: BLOCKER
+structural: no-declaration-in-loop
 language:
   - javascript
 paths:
