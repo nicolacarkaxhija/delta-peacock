@@ -1,0 +1,63 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Getting around delta-peacock",
+  "description": "From the CLI entrypoint through one review to the gate, the bench and the docs registry.",
+  "isPrimary": true,
+  "steps": [
+    {
+      "file": "src/cli.ts",
+      "pattern": "runCli\\(process",
+      "description": "The binary. It wires process I/O into `runCli`; everything below takes injected deps, so tests drive the same path with fakes."
+    },
+    {
+      "file": "src/program.ts",
+      "pattern": "\\.command\\(\"review\"\\)",
+      "description": "Every verb is registered here with commander. `delta-peacock --help` prints this list."
+    },
+    {
+      "file": "src/config/schema.ts",
+      "pattern": "^export const ReviewSchema",
+      "description": "The config shape. Defaults, then `delta-peacock.config.yaml`, then `DELTA_PEACOCK_*` env, then flags. Run `pnpm schema:update` after changing it."
+    },
+    {
+      "file": "src/guidelines/loader.ts",
+      "pattern": "^export function loadGuidelinesFromFiles",
+      "description": "Guidelines are markdown with frontmatter: `id`, `severity`, optional `languages`, `paths` and `structural`. By default they are read from the merge target, not the branch."
+    },
+    {
+      "file": "src/review/run-review.ts",
+      "pattern": "^export async function runReview",
+      "description": "One review end to end: diff, redaction, context, prompt, model call, parse, relocation, structural check, gate, outputs."
+    },
+    {
+      "file": "src/review/prompt.ts",
+      "pattern": "^export function buildReviewPrompt",
+      "description": "The prompt. A stable prefix keeps provider-side caching hitting."
+    },
+    {
+      "file": "src/review/parse.ts",
+      "pattern": "^export function parseReviewResponse",
+      "description": "The model's reply becomes findings. A violation must cite a known guideline and inherits its severity; anything else is rejected with a reason."
+    },
+    {
+      "file": "src/review/structural.ts",
+      "pattern": "^export function verifyStructural",
+      "description": "The deterministic AST gate: a guideline that opts in via `structural:` has findings the parsed source contradicts dropped."
+    },
+    {
+      "file": "src/commands/bench.ts",
+      "pattern": "^export async function runBenchCommand",
+      "description": "The efficacy check. Cases live in `bench/cases`, each with a diff, guidelines, optional files and expected findings."
+    },
+    {
+      "file": "docs/guides/INDEX.md",
+      "pattern": "^# Guides",
+      "description": "The docs registry: every doc under `docs/` is listed in its directory's INDEX.md."
+    },
+    {
+      "file": "scripts/check-docs.mjs",
+      "pattern": "Registry rule",
+      "description": "`pnpm docs:check` enforces the registry and every relative link. Run it with lint and typecheck before a commit."
+    }
+  ]
+}

@@ -5,6 +5,7 @@
     "esbenp.prettier-vscode",
     "editorconfig.editorconfig",
     "eamodio.gitlens",
-    "vitest.explorer"
+    "vitest.explorer",
+    "vsls-contrib.codetour"
   ]
 }
