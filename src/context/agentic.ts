@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
@@ -11,6 +11,12 @@ const MAX_FILE_BYTES = 512 * 1024;
 
 function clip(text: string): string {
   return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n[clipped]` : text;
+}
+
+/** path.relative catches prefix tricks like ../repo-secrets. */
+function isOutside(root: string, target: string): boolean {
+  const relation = path.relative(root, target);
+  return relation.startsWith("..") || path.isAbsolute(relation);
 }
 
 function textFilesUnder(root: string, limit = 2000): string[] {
@@ -95,9 +101,12 @@ export function createAgenticProvider(): ContextProvider {
           execute: ({ path: relPath, startLine, endLine }) => {
             try {
               const full = path.resolve(cwd, relPath);
-              // path.relative catches prefix tricks like ../repo-secrets
-              const relation = path.relative(path.resolve(cwd), full);
-              if (relation.startsWith("..") || path.isAbsolute(relation))
+              if (isOutside(path.resolve(cwd), full))
+                return Promise.resolve("path is outside the repository");
+              // a committed symlink (say to /proc/self/environ) must never reach the model
+              if (lstatSync(full).isSymbolicLink())
+                return Promise.resolve("refusing to read a symlink");
+              if (isOutside(realpathSync(cwd), realpathSync(full)))
                 return Promise.resolve("path is outside the repository");
               const lines = readFileSync(full, "utf8").split("\n");
               const slice = lines.slice(startLine - 1, Math.min(endLine, startLine + 200));
