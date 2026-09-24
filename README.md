@@ -256,18 +256,15 @@ Commits follow the [conventional commit](https://www.conventionalcommits.org) fo
 
 ### Publishing
 
-From a clean checkout of the release commit, after `pnpm install`, the maintainer runs:
+release-please cuts releases from the conventional commits; the [release checklist](docs/guides/release-checklist.md) is the human part. A release builds the GHCR image, and publishes to npm once the `NPM_PUBLISH` repository variable is `true` (off until the public flip).
+
+The npm tarball bundles every runtime dependency at its lockfile version, so it installs with no registry access and with `--ignore-scripts`. Build it with `pnpm pack:bundled`, never a plain `npm pack`, which would sweep in the whole pnpm store. To publish by hand from a clean checkout of the release commit, after `pnpm install`:
 
 ```bash
-npm login
-npm publish
-```
-
-`npm publish` rebuilds `dist/` through `prepack` and publishes with public access. Then tag the published commit and push the tag:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
+pnpm pack:bundled
+npm publish delta-peacock-<version>.tgz
+git tag v<version>
+git push origin v<version>
 ```
 
 #### History purge before going public

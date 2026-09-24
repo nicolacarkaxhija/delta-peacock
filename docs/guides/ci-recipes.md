@@ -132,4 +132,8 @@ On Bitbucket the native equivalent is Code Insights: `DELTA_PEACOCK_SCM_CODE_INS
 npx delta-peacock review --staged --fail-on MAJOR
 ```
 
-Clone fully (no shallow clone) so the merge base resolves; when it cannot, the reviewer falls back to the SCM's own PR diff with a notice, and incremental features degrade. Pass `DELTA_PEACOCK_REVIEW_LAST_REVIEWED_COMMIT` (the last green commit) to review only new changes on re-pushes.
+Clone fully (no shallow clone) so the merge base resolves; when it cannot, the reviewer falls back to the SCM's own PR diff with a notice, and incremental features degrade. Pass `--last-reviewed-commit <sha>` or `DELTA_PEACOCK_REVIEW_LAST_REVIEWED_COMMIT` (the last green commit) to review only new changes on re-pushes.
+
+## Air-gapped runners
+
+The npm tarball bundles its runtime dependencies, so a runner with no registry access installs a vendored copy directly: `npm install --ignore-scripts --no-save ./delta-peacock-<version>.tgz`, then run `node_modules/.bin/delta-peacock`. The model endpoint and the SCM API still need to be reachable for a posting review.
