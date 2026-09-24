@@ -6,7 +6,7 @@
 
 **Your guidelines. Any SCM. Any model. One deterministic exit code.**
 
-[![tests](https://img.shields.io/badge/tests-776%20passing-1fb6ba)](#development)
+[![tests](https://img.shields.io/badge/tests-818%20passing-1fb6ba)](#development)
 [![coverage](https://img.shields.io/badge/branch%20coverage-95%25-1fb6ba)](#development)
 [![license](https://img.shields.io/badge/license-Apache--2.0-444)](LICENSE)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.12-444)](#quick-start)
