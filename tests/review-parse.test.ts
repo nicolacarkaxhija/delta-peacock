@@ -147,6 +147,23 @@ describe("parseReviewResponse", () => {
     expect(adjustedLines).toBe(1);
   });
 
+  it("skips braces in leading prose and takes the first findings object", () => {
+    const text = `Checked \`expect(x, { timeout })\` and {curly} notes.\n${response([finding])}\nDone {ok}.`;
+    expect(parseReviewResponse(text, options()).findings).toHaveLength(1);
+  });
+
+  it("accepts a bare array of findings, fenced or in prose", () => {
+    const bare = JSON.stringify([finding]);
+    expect(parseReviewResponse(bare, options()).findings).toHaveLength(1);
+    const fenced = "Findings below.\n```json\n" + bare + "\n```";
+    expect(parseReviewResponse(fenced, options()).findings).toHaveLength(1);
+    expect(parseReviewResponse("```json\n[]\n```", options()).findings).toEqual([]);
+  });
+
+  it("never reads an empty array in prose as a clean review", () => {
+    expect(() => parseReviewResponse("the list stays [] for now", options())).toThrow(ToolError);
+  });
+
   it("recovers the JSON when a chatty response holds several fenced blocks", () => {
     const chatty = ["```md", "some notes", "```", "and the result:", response([finding])].join(
       "\n",
