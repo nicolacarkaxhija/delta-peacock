@@ -1,6 +1,6 @@
 # CI recipes
 
-Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. Each tagged release publishes a Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` that carries node and git, plus an npm package that runs wherever node 22.12+ does. Pin the version in CI (`npx delta-peacock@0.1.4`) so a new release never changes a gate unannounced. The composite action below builds from source instead.
+Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. Each tagged release publishes a Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` that carries node and git, plus an npm package that runs wherever node 22.12+ does. Pin the version in CI (`npx delta-peacock@0.1.5`) so a new release never changes a gate unannounced. The composite action below builds from source instead.
 
 ## GitHub Action (one line)
 
@@ -90,7 +90,7 @@ pipelines:
           clone:
             depth: full
           script:
-            - npx delta-peacock@0.1.4 review
+            - npx delta-peacock@0.1.5 review
           # set in repository variables:
           # ANTHROPIC_API_KEY, BITBUCKET_TOKEN, DELTA_PEACOCK_MODEL_ID
           # DELTA_PEACOCK_SCM_PROVIDER=bitbucket

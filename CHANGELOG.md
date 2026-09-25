@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.5 (2026-09-25)
+
+### Features
+
+- `review.displayName` (default `Code review`) names the summary heading, the commit status on every host and the Bitbucket Code Insights report title, so the tool's own name never reaches the pull request's readers. `review.guidePath` (default `docs/reviews.md`) is linked from a blocked summary when the file exists.
+- The summary reads `No issues found in this change.` when clean, otherwise a count line (`2 findings: 1 major, 1 minor`) and one line per finding. The gate appears only when it blocks (`Blocked: 1 major finding must be resolved.`); the commit status description says the same.
+- Inline comments open with the severity as a bold word and the guideline id linked to `<guidelinesDir>/<id>.md` on the target branch, give the reason in at most two sentences, and fence a suggested change (one-click `suggestion` on GitHub, a plain block on Bitbucket).
+- Code Insights publish by default on Bitbucket (`scm.codeInsights: false` opts out): the display name as title, `PASSED` or `FAILED`, a total plus per-severity counts, and one annotation per finding linked to its guideline. All-clear runs publish the report too.
+
+### Bug Fixes
+
+- Bitbucket printed the hidden `<!-- delta-peacock:... -->` markers as text. There the reviewer now recognises its own comments by author (the token's user) plus their fixed first line and posts no marker; a repository access token, which cannot call `GET /user`, learns its user from a draft comment deleted at once. Pre 0.1.5 summaries and inline comments are replaced in place, never duplicated. GitHub and GitLab keep the marker.
+- `learn` and `stats --backfill` read the new comment format and Bitbucket's unmarked comments.
+- An all-clear run honours `scm.comments: false`.
+
+### Notices
+
+- The GitHub status context and the GitLab status name change from `delta-peacock` to the display name; update a required status check that names the old one.
+
 ## 0.1.4 (2026-09-25)
 
 ### Bug Fixes
