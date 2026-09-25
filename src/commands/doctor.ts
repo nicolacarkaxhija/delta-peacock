@@ -111,7 +111,7 @@ async function checkScm(deps: RuntimeDeps, config: Config): Promise<CheckResult>
     return check("scm", "ok", "local mode; nothing will be posted, checks skipped");
   }
   try {
-    const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
+    const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
     await scm.listSummaryComments(); // read-only probe
     return check(
       "scm",

@@ -776,7 +776,7 @@ async function apiDiffFallback(
   cause: unknown,
 ): Promise<AcquiredDiff> {
   if (config.scm.provider === "local") throw cause;
-  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
+  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
   if (scm.fetchPullRequestDiff === undefined) throw cause;
   const causeMessage = cause instanceof Error ? cause.message.split("\n")[0] : String(cause);
   const raw = await scm.fetchPullRequestDiff();
@@ -816,7 +816,7 @@ async function publishIfConfigured(
   if (config.scm.provider === "local") return;
   // publishReview itself holds the hard guarantee now: a dry run trips zero
   // adapter writes even if this caller got the plumbing wrong.
-  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
+  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
   const outcome = await publishReview(scm, input);
   for (const notice of outcome.notices) deps.err(`${notice}\n`);
   if (!input.dryRun) {

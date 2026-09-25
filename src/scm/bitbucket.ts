@@ -16,6 +16,19 @@ export interface BitbucketPortOptions {
   token: string;
   /** Defaults to api.bitbucket.org/2.0; tests override it. */
   baseUrl?: string;
+  /** Absolute link a build status points at; the pull request page when absent or invalid. */
+  statusUrl?: string;
+}
+
+/** Bitbucket requires a build status url and rejects anything but an absolute http(s) one. */
+function absoluteHttpUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -49,7 +62,9 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
   const base = normalizeBaseUrl(options.baseUrl, "https://api.bitbucket.org/2.0");
   const repo = options.repository;
   const pr = String(options.pullRequest);
-  let sourceSha: string | undefined;
+  const statusUrl =
+    absoluteHttpUrl(options.statusUrl) ?? `https://bitbucket.org/${repo}/pull-requests/${pr}`;
+  let source: { sha: string; branch: string | undefined } | undefined;
 
   async function request(method: string, url: string, body?: unknown): Promise<Response> {
     return httpRequest(
@@ -77,7 +92,8 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
           toMessage: () => "Bitbucket rate limit exhausted; retry after the limit resets",
         },
       ],
-      (status) => `Bitbucket responded ${String(status)} to ${method} ${url}`,
+      (status, detail) =>
+        `Bitbucket responded ${String(status)} to ${method} ${url}${detail !== "" ? `: ${detail}` : ""}`,
     );
   }
 
@@ -106,14 +122,18 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     return { title: meta.title, body: meta.description ?? "" };
   }
 
-  async function resolveSourceSha(): Promise<string> {
-    if (sourceSha === undefined) {
+  async function resolveSource(): Promise<{ sha: string; branch: string | undefined }> {
+    if (source === undefined) {
       const meta = (await (
         await request("GET", `${base}/repositories/${repo}/pullrequests/${pr}`)
-      ).json()) as { source: { commit: { hash: string } } };
-      sourceSha = meta.source.commit.hash;
+      ).json()) as { source: { commit: { hash: string }; branch?: { name?: string } } };
+      source = { sha: meta.source.commit.hash, branch: meta.source.branch?.name };
     }
-    return sourceSha;
+    return source;
+  }
+
+  async function resolveSourceSha(): Promise<string> {
+    return (await resolveSource()).sha;
   }
 
   return {
@@ -148,11 +168,15 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
       });
     },
     async postStatus(state: StatusState, description: string): Promise<void> {
-      const sha = await resolveSourceSha();
+      const { sha, branch } = await resolveSource();
+      // the real API answers 400 without an absolute url; refname ties the status to the PR
       await request("POST", `${base}/repositories/${repo}/commit/${sha}/statuses/build`, {
         state: STATUS_STATES[state],
         key: "delta-peacock",
+        name: "delta-peacock",
+        url: statusUrl,
         description,
+        ...(branch !== undefined ? { refname: branch } : {}),
       });
     },
     async publishInsights(report: InsightReport): Promise<void> {

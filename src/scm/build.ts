@@ -7,7 +7,11 @@ import { createGitLabPort } from "./gitlab.js";
 import type { ScmPort } from "./port.js";
 
 /** Callers guarantee the provider is not local; the schema guarantees the fields. */
-export function buildScmPort(config: Config, credentials: Credentials): ScmPort {
+export function buildScmPort(
+  config: Config,
+  credentials: Credentials,
+  ciBuildUrl?: string,
+): ScmPort {
   const repository = config.scm.repository ?? "";
   const pullRequest = config.scm.pullRequest ?? 0;
   if (config.scm.provider === "github") {
@@ -31,6 +35,7 @@ export function buildScmPort(config: Config, credentials: Credentials): ScmPort 
       repository,
       pullRequest,
       token,
+      ...(ciBuildUrl !== undefined ? { statusUrl: ciBuildUrl } : {}),
       ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
     });
   }

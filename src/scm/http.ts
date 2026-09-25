@@ -32,7 +32,7 @@ export async function httpRequest(
   url: string,
   init: RequestInit,
   statusHandlers: readonly StatusHandler[],
-  fallback: (status: number) => string,
+  fallback: (status: number, detail: string) => string,
 ): Promise<Response> {
   const response = await fetch(url, init);
   for (const handler of statusHandlers) {
@@ -41,9 +41,21 @@ export async function httpRequest(
     }
   }
   if (!response.ok) {
-    throw new ToolError(fallback(response.status));
+    throw new ToolError(fallback(response.status, await errorDetail(response)));
   }
   return response;
+}
+
+const DETAIL_LIMIT = 300;
+
+/** The start of an error body, one line, so a 400 names the rejected fields. */
+async function errorDetail(response: Response): Promise<string> {
+  try {
+    const text = (await response.text()).replace(/\s+/g, " ").trim();
+    return text.length > DETAIL_LIMIT ? `${text.slice(0, DETAIL_LIMIT)}...` : text;
+  } catch {
+    return "";
+  }
 }
 
 /**

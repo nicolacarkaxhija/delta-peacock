@@ -26,6 +26,8 @@ export interface FakeBitbucket {
   diffText: string;
   prText: { title: string; body: string };
   insightReport: Record<string, unknown> | undefined;
+  /** The last accepted build status body, as sent. */
+  readonly lastStatusBody: Record<string, unknown> | undefined;
   insightAnnotations: FakeInsightAnnotation[];
   /** Simulates a workspace with Code Insights switched off (404s). */
   insightsDisabled: boolean;
@@ -33,6 +35,24 @@ export interface FakeBitbucket {
 }
 
 const PER_PAGE = 2;
+
+const BUILD_STATES = ["SUCCESSFUL", "FAILED", "INPROGRESS", "STOPPED"];
+
+/** The field rules api.bitbucket.org enforces on a build status, as observed on 2026-09-25. */
+export function buildStatusFieldErrors(body: Record<string, unknown>): Record<string, string[]> {
+  const fields: Record<string, string[]> = {};
+  const { key, state, url } = body;
+  if (typeof key !== "string" || key === "") fields["key"] = ["This field is required."];
+  if (typeof state !== "string" || !BUILD_STATES.includes(state)) {
+    fields["state"] = [`"state" must be one of {'${BUILD_STATES.join("', '")}'}`];
+  }
+  if (url === undefined || url === "") {
+    fields["url"] = ["This field is required."];
+  } else if (typeof url !== "string" || !/^https?:\/\/[^/\s]+/.test(url)) {
+    fields["url"] = ["Enter a valid URL."];
+  }
+  return fields;
+}
 
 async function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
@@ -58,6 +78,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
     writes: [] as { method: string; url: string }[],
     prText: { title: "original title", body: "author prose" },
     insightAnnotations: [] as FakeInsightAnnotation[],
+    lastStatusBody: undefined as Record<string, unknown> | undefined,
   };
   const holder = {
     diffText: "",
@@ -101,7 +122,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
 
       if (method === "GET" && prMeta.test(path)) {
         send(response, 200, {
-          source: { commit: { hash: "srcsha7890123" } },
+          source: { commit: { hash: "srcsha7890123" }, branch: { name: "feature/widgets" } },
           title: state.prText.title,
           description: state.prText.body,
           author: { nickname: "bbuser" },
@@ -170,6 +191,12 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
         }
       } else if (method === "POST" && statusRoute.test(path)) {
         const body = await readBody(request);
+        const fields = buildStatusFieldErrors(body);
+        if (Object.keys(fields).length > 0) {
+          send(response, 400, { type: "error", error: { message: "Bad request", fields } });
+          return;
+        }
+        state.lastStatusBody = body;
         state.statuses.push({
           state: body["state"] as string,
           description: body["description"] as string,
@@ -200,6 +227,9 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
     insightAnnotations: state.insightAnnotations,
     get insightReport() {
       return holder.insightReport;
+    },
+    get lastStatusBody() {
+      return state.lastStatusBody;
     },
     get insightsDisabled() {
       return holder.insightsDisabled;
