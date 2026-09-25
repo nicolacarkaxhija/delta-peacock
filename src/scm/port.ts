@@ -31,7 +31,8 @@ export interface InsightAnnotation {
   summary: string;
   severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
   path: string;
-  line: number;
+  /** Absent when the finding could not be tied to a line. */
+  line?: number;
   /** The cited guideline on the host, when it has a web link. */
   link?: string;
 }

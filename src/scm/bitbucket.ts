@@ -259,7 +259,7 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
             summary: annotation.summary,
             severity: annotation.severity,
             path: annotation.path,
-            line: annotation.line,
+            ...(annotation.line !== undefined ? { line: annotation.line } : {}),
             ...(annotation.link !== undefined ? { link: annotation.link } : {}),
           })),
         );

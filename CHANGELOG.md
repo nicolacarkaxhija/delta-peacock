@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.7 (2026-09-25)
+
+Root causes of the first reviewed pull requests on a Bitbucket consumer, each with a contract test.
+
+### Bug Fixes
+
+- The answering step after the last tool round sees the fetched files. Bedrock drops every tool call and result from a step that declares no tools, so the model answered from memory and invented a tag. That step is now one plain message: the review prompt, every fetched result as data, and the instruction that no further tool calls are allowed. The captured 0.1.4 reply fixture proves the request carries all six results.
+- Every finding quotes its source line (`quote`). The reviewer looks the line up in the file at the reviewed commit and moves the finding there. A quote that is missing, absent from the file or found on several lines puts the finding in the summary with a note, never on a line it may not mean, and an Insights annotation on its file only. A suggestion replaces exactly the quoted line or is left out with a note. This replaces the backtick snippet relocation.
+- Code that a guideline's own Good example shows verbatim is never a finding under that guideline; the prompt says so for structural matches too. A suggestion that names a tag the repository does not declare, or imports a file or package the repository does not have, is left out with a note.
+- The declared feature tags and axis tags of the reviewed repository's `test-runner.config.ts` go into the prompt as the only tags that exist. The file is read as text, never run; `review.repoConfigPath` names another file, and an empty value turns it off.
+- A reply with no JSON is asked once more, tools off, with the fetched files as text. If that fails too, or the model call fails, the summary says `The review could not complete: <reason>.` and the commit status fails, instead of the step exiting with no word on the pull request.
+- `delta-peacock.config.yaml` is read from the target branch whenever the host names it (`DELTA_PEACOCK_REVIEW_TARGET` or `--target`), like the guidelines, so a pull request cannot loosen its own review. The working tree serves while the target has no config yet, and `DELTA_PEACOCK_CONFIG_FROM=source` keeps it for local runs.
+
+### Wording
+
+- One summary template for every outcome, opening with its verdict and no heading: `No issues found in this change.`, `Nothing in scope was changed.`, `The review could not complete: <reason>.`, or a count line with one line per finding. The display name stays in the commit status and the Insights report title only.
+- Where an Insights card carries the result (Bitbucket), a run without findings posts no summary comment and only turns an earlier summary clean; `review.summaryWhenClean: true` posts it anyway.
+- Finding titles and reasons lose dashes as punctuation, a trailing guideline id and openers such as "According to the guideline". The `Not posted` footnote names only what was actually held back.
+
+### Documentation
+
+- CI recipes: verify a committed release tarball against the checksum file from the target branch.
+
 ## 0.1.6 (2026-09-25)
 
 ### Bug Fixes

@@ -12,6 +12,7 @@ context:
 review:
   target: main
   displayName: Review
+  summaryWhenClean: false
   guidelinesDir: guidelines
   # The general pass cost precision on the consumer bench; uncited findings are harvested instead.
   generalPass: false

@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { parse as parseYaml } from "yaml";
+import { resolveTargetRef } from "../git/diff.js";
+import { runGit } from "../git/git.js";
 import { ConfigSchema, type Config } from "./schema.js";
 
 export const CONFIG_FILE_NAME = "delta-peacock.config.yaml";
@@ -33,6 +35,8 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_MAX_TOKENS_PER_BATCH: "review.maxTokensPerBatch",
   DELTA_PEACOCK_REVIEW_DISPLAY_NAME: "review.displayName",
   DELTA_PEACOCK_REVIEW_GUIDE_PATH: "review.guidePath",
+  DELTA_PEACOCK_REVIEW_REPO_CONFIG_PATH: "review.repoConfigPath",
+  DELTA_PEACOCK_REVIEW_SUMMARY_WHEN_CLEAN: "review.summaryWhenClean",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",
@@ -107,6 +111,7 @@ const BOOLEAN_PATHS = new Set([
   "review.fetchTarget",
   "review.generalPass",
   "review.harvestUncited",
+  "review.summaryWhenClean",
   "scm.commitStatus",
   "scm.comments",
   "scm.codeInsights",
@@ -167,6 +172,8 @@ export interface LoadConfigOptions {
   env?: Readonly<Record<string, string | undefined>>;
   /** Highest-precedence overrides as dot-path keys, e.g. { "gate.failOn": "MAJOR" }. */
   flags?: Readonly<Record<string, string>>;
+  /** Where the file came from, when it was not the working tree; told once per read. */
+  onNotice?: (notice: string) => void;
 }
 
 const CREDENTIAL_SHAPES = [
@@ -242,10 +249,76 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-function readFileLayer(root: string): { layer: Record<string, unknown>; problems: string[] } {
+/** Per process: one fetch and one read per repository and target. */
+interface TargetConfig {
+  text?: string;
+  notices: string[];
+}
+const targetConfigs = new Map<string, TargetConfig>();
+
+/**
+ * The config file as the target branch holds it, so a pull request cannot
+ * loosen its own review. Undefined text means the target has none (the
+ * working tree then serves, as while the reviewer is first set up).
+ */
+function readTargetConfig(root: string, target: string, fetchTarget: boolean): TargetConfig {
+  const key = `${root}\u0000${target}\u0000${String(fetchTarget)}`;
+  const cached = targetConfigs.get(key);
+  if (cached !== undefined) return cached;
+  let entry: TargetConfig;
+  try {
+    runGit(root, ["rev-parse", "--git-dir"]);
+    const resolved = resolveTargetRef(root, target, fetchTarget);
+    try {
+      runGit(root, ["rev-parse", "--verify", "--quiet", `${resolved.ref}^{commit}`]);
+    } catch {
+      return remember(key, {
+        notices: [
+          `could not read ${resolved.ref}; using ${CONFIG_FILE_NAME} from the working tree`,
+        ],
+      });
+    }
+    try {
+      entry = {
+        text: runGit(root, ["show", `${resolved.ref}:${CONFIG_FILE_NAME}`]),
+        notices: [`${CONFIG_FILE_NAME} read from ${resolved.ref}`],
+      };
+    } catch {
+      entry = {
+        notices: [`${resolved.ref} holds no ${CONFIG_FILE_NAME}; using the working tree`],
+      };
+    }
+  } catch {
+    // not a git checkout, or a ref git refuses: the working tree is all there is
+    entry = { notices: [] };
+  }
+  return remember(key, entry);
+}
+
+function remember(key: string, entry: TargetConfig): TargetConfig {
+  targetConfigs.set(key, entry);
+  return entry;
+}
+
+function readFileLayer(
+  root: string,
+  fromTarget?: { target: string; fetchTarget: boolean },
+  onNotice?: (notice: string) => void,
+): { layer: Record<string, unknown>; problems: string[] } {
   const filePath = path.join(root, CONFIG_FILE_NAME);
-  if (!existsSync(filePath)) return { layer: {}, problems: [] };
-  const parsed: unknown = parseYaml(readFileSync(filePath, "utf8")) ?? {};
+  let text: string | undefined;
+  if (fromTarget !== undefined) {
+    const read = readTargetConfig(root, fromTarget.target, fromTarget.fetchTarget);
+    if (onNotice !== undefined) {
+      for (const notice of read.notices.splice(0)) onNotice(notice);
+    }
+    text = read.text;
+  }
+  if (text === undefined) {
+    if (!existsSync(filePath)) return { layer: {}, problems: [] };
+    text = readFileSync(filePath, "utf8");
+  }
+  const parsed: unknown = parseYaml(text) ?? {};
   if (!isPlainObject(parsed)) {
     throw new ConfigError([`${CONFIG_FILE_NAME} must hold a mapping of settings`]);
   }
@@ -291,7 +364,15 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     setPath(flagsLayer, dotPath, coerceStringValue(dotPath, value));
   }
 
-  const file = readFileLayer(root);
+  // the host naming the target (env or flag, never the file itself) moves the
+  // file's source to that branch; DELTA_PEACOCK_CONFIG_FROM=source opts out
+  const target = flags["review.target"] ?? env["DELTA_PEACOCK_REVIEW_TARGET"];
+  const fetchFlag = flags["review.fetchTarget"] ?? env["DELTA_PEACOCK_REVIEW_FETCH_TARGET"];
+  const fromTarget =
+    target !== undefined && target !== "" && env["DELTA_PEACOCK_CONFIG_FROM"] !== "source"
+      ? { target, fetchTarget: fetchFlag !== "false" }
+      : undefined;
+  const file = readFileLayer(root, fromTarget, options.onNotice);
   const problems = [...file.problems];
   const flaggedKeys = new Set(
     file.problems.map((problem) => problem.split(":")[0]?.split(".").at(-1) ?? ""),

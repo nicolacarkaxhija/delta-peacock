@@ -30,6 +30,7 @@ function findingLines(finding: Finding, badge: string): string[] {
     finding.kind === "violation" ? `[${finding.guidelineId}]` : "[observation]"
   } ${finding.title}`;
   const lines = finding.body === "" ? [head] : [head, `         ${finding.body}`];
+  if (finding.note !== undefined) lines.push(`         note: ${finding.note}`);
   // advisory only (ADR 0008): calibration never changed this finding's gate
   // membership, so its note is surfaced here for a human to triage, not acted on
   if (finding.calibration !== undefined) {

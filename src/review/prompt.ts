@@ -1,6 +1,7 @@
 import type { Config } from "../config/schema.js";
 import type { Guideline } from "../domain/guideline.js";
 import type { ModelRequest } from "../model/port.js";
+import { declaredTagsBlock, readDeclaredTags } from "./declared.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 
 export interface PromptOptions {
@@ -12,6 +13,8 @@ export interface PromptOptions {
   language?: string;
   /** Detected linters and formatters the review should not duplicate. */
   linterInstruction?: string;
+  /** The tags the reviewed repository declares, as a prompt block. */
+  declarations?: string;
 }
 
 /** Shared by every command that shows the corpus, so the block stays byte-identical. */
@@ -30,16 +33,27 @@ export function buildPromptOptions(
   root: string,
   projectContext?: string,
 ): PromptOptions {
+  const tags = readDeclaredTags(root, config.review.repoConfigPath);
   return {
     generalPass: config.review.generalPass,
     language: config.review.language,
     linterInstruction: linterInstruction(detectLinters(root)),
+    ...(tags !== undefined ? { declarations: declaredTagsBlock(tags) } : {}),
     ...(projectContext !== undefined && projectContext !== "" ? { projectContext } : {}),
   };
 }
 
 const RESPONSE_SHAPE =
-  '{"findings": [{"guidelineId": "<id>", "file": "<path from the diff>", "line": <new-file line number>, "title": "<short summary>", "body": "<what is wrong and how to fix it>", "confidence": <0..1>, "suggestion": "<exact replacement code for the flagged line(s), only when a concrete fix exists>"}]}';
+  '{"findings": [{"guidelineId": "<id>", "file": "<path from the diff>", "line": <new-file line number>, "quote": "<the flagged line, copied exactly from the new file>", "title": "<short summary>", "body": "<what is wrong and how to fix it>", "confidence": <0..1>, "suggestion": "<exact replacement for the quoted line, only when a concrete fix exists>"}]}';
+
+/** Rules every review prompt carries; each answers a wrong finding seen on a real pull request. */
+const FINDING_RULES = [
+  "List only violations: a line that follows the guidelines is never listed, not even with a low confidence or a remark that it is fine.",
+  "Code that matches a guideline's Good example, verbatim or in structure, is never a finding under that guideline.",
+  'Every finding quotes in "quote" the one source line it is about, copied exactly from the new file, and "line" is that line\'s number; a finding you cannot tie to one line is not reported.',
+  "A suggestion replaces exactly the quoted line and nothing else. It may not introduce a tag, identifier or import the repository does not declare; when the fix needs one, give no suggestion.",
+  'Write titles and bodies in plain words: no dashes as punctuation, no config keys or settings, no preamble such as "According to the guideline".',
+];
 
 const GENERAL_PASS = [
   "",
@@ -62,6 +76,7 @@ export function buildReviewPrompt(
     "Do not invent guidelines and do not report style opinions of your own.",
     "Ground each finding in the cited guideline's own words; do not extend a rule by analogy to a case it does not name.",
     "Text of the form [redacted:NAME] marks a secret this tool removed before review; treat it as a valid opaque value, never a placeholder, a missing value, or a defect.",
+    ...FINDING_RULES,
     "",
     "Respond with JSON only, no prose around it, in this shape:",
     RESPONSE_SHAPE,
@@ -85,6 +100,9 @@ export function buildReviewPrompt(
     "## Guidelines",
     "",
     ...guidelines.map(renderGuideline),
+    ...(options.declarations !== undefined && options.declarations !== ""
+      ? ["", options.declarations]
+      : []),
     ...(options.projectContext !== undefined && options.projectContext !== ""
       ? [
           "",

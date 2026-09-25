@@ -23,7 +23,8 @@ import {
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
-import type { ModelRequest, ModelUsage } from "../model/port.js";
+import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/port.js";
+import { withFetched } from "../model/generate.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
@@ -39,11 +40,14 @@ import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
   parseReviewResponse,
-  relocateFindings,
   type ParsedReview,
   type ParseOptions,
   type RejectedCandidate,
 } from "./parse.js";
+import { declaredTagsBlock, readDeclaredTags, type DeclaredTags } from "./declared.js";
+import { dropGoodExamples, linesFromDiff, placeFindings, vetSuggestions } from "./placement.js";
+import { runGit } from "../git/git.js";
+import { NOT_REVIEWED } from "../scm/comment-format.js";
 import { buildScmPort } from "../scm/build.js";
 import { codeInsightsEnabled, isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
@@ -114,7 +118,7 @@ export async function runReview(
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);
   if (loaded.guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no usable guidelines found; nothing to review against\n");
-    await publishAllClear(deps, config);
+    await publishAllClear(deps, config, NOT_REVIEWED.noGuidelines);
     return 0;
   }
 
@@ -151,13 +155,13 @@ export async function runReview(
   for (const notice of acquired.notices) deps.err(`${notice}\n`);
   if (acquired.skipped === "too-large") {
     deps.out("review skipped: the diff exceeds the configured size ceiling\n");
-    await publishAllClear(deps, config);
+    await publishAllClear(deps, config, NOT_REVIEWED.tooLarge);
     return 0;
   }
   const diff = acquired.text;
   if (diff.trim() === "") {
     deps.out(`nothing to review: no changes against ${acquired.targetRef}\n`);
-    await publishAllClear(deps, config);
+    await publishAllClear(deps, config, NOT_REVIEWED.nothingInScope);
     return 0;
   }
 
@@ -169,10 +173,11 @@ export async function runReview(
   }
   if (guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no guidelines apply to this change; nothing to review against\n");
-    await publishAllClear(deps, config);
+    await publishAllClear(deps, config, NOT_REVIEWED.noneApply);
     return 0;
   }
 
+  const declared = readDeclaredTags(deps.cwd, config.review.repoConfigPath);
   const {
     redacted,
     request,
@@ -183,7 +188,7 @@ export async function runReview(
     promptOf,
     budgetDegraded,
     linters,
-  } = await assembleReview(deps, config, diff, guidelines, changedFiles);
+  } = await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
 
   const now = deps.clock?.() ?? new Date();
   if (guardActive(config)) {
@@ -218,20 +223,46 @@ export async function runReview(
     }
   }
 
-  const executed = await executeReview(
-    deps,
-    config,
-    request,
-    diffBatches,
-    batchContexts,
-    contextTools,
-    parseOptions,
-    promptOf,
+  let executed: ExecuteResult;
+  try {
+    executed = await executeReview(
+      deps,
+      config,
+      request,
+      diffBatches,
+      batchContexts,
+      contextTools,
+      parseOptions,
+      promptOf,
+    );
+  } catch (error) {
+    if (error instanceof ToolError) await publishFailure(deps, config, failureReason(error));
+    throw error;
+  }
+  // the model counts line numbers by hand and drifts; each finding moves to
+  // the line it quotes, or to no line at all, before anything keys on line
+  const diffLines = newLineTexts(redacted.text);
+  // an API diff means the checkout is not the pull request; only the diff knows its lines
+  const fromApi = acquired.targetRef === "scm api";
+  // two findings that quote one line under one guideline are one finding
+  const placed = dedupeFindings(
+    placeFindings(executed.parsed.findings, (file) => {
+      const known = diffLines.get(file);
+      if (fromApi) return known === undefined ? undefined : linesFromDiff(known);
+      return linesAtHead(deps.cwd, file, known, options.staged === true);
+    }),
   );
-  // the model's own line count drifts on multi-hunk files even when its
-  // cited snippet is right; re-anchor each finding to where that snippet
-  // actually sits before anything downstream keys, waives, or posts on line
-  const relocated = relocateFindings(executed.parsed.findings, newLineTexts(redacted.text));
+  const vetted = vetSuggestions(placed, {
+    cwd: deps.cwd,
+    ...(declared !== undefined ? { tags: declared } : {}),
+  });
+  const exemplary = dropGoodExamples(vetted, parseOptions.guidelinesById);
+  if (exemplary.dropped.length > 0) {
+    deps.err(
+      `${String(exemplary.dropped.length)} finding(s) dropped: the code matches the guideline's own Good example\n`,
+    );
+  }
+  const relocated = exemplary.kept;
   // deterministic and therefore allowed to drop outright (ADR 0008, unlike
   // calibration below): refutes a finding whose structural claim -- "this is
   // a loop", "this is top level" -- the AST itself contradicts. Reads source
@@ -244,7 +275,7 @@ export async function runReview(
   const parsed: ParsedReview = {
     ...executed.parsed,
     findings: structural.kept,
-    rejected: [...executed.parsed.rejected, ...structural.dropped],
+    rejected: [...executed.parsed.rejected, ...exemplary.dropped, ...structural.dropped],
   };
   if (options.explainDrops === true) {
     for (const entry of parsed.rejected) {
@@ -422,6 +453,26 @@ export async function runReview(
   return gate.failed ? 2 : 0;
 }
 
+/**
+ * A file's lines at the reviewed commit (the index for a staged review), then
+ * the working tree, then the lines the diff itself shows.
+ */
+export function linesAtHead(
+  cwd: string,
+  file: string,
+  fromDiff: ReadonlyMap<number, string> | undefined,
+  staged = false,
+): readonly string[] | undefined {
+  try {
+    return runGit(cwd, ["show", `${staged ? "" : "HEAD"}:${file}`]).split("\n");
+  } catch {
+    // not in git: fall through to the checkout and then the diff
+  }
+  const fromDisk = readSourceForStructuralCheck(cwd, file);
+  if (fromDisk !== undefined) return fromDisk.split("\n");
+  return fromDiff === undefined ? undefined : linesFromDiff(fromDiff);
+}
+
 /** The checkout's current text of a finding's file, for the structural verifier; undefined if unreadable. */
 export function readSourceForStructuralCheck(cwd: string, file: string): string | undefined {
   try {
@@ -458,6 +509,7 @@ async function assembleReview(
   diff: string,
   guidelines: readonly Guideline[],
   changedFiles: readonly string[],
+  declared: DeclaredTags | undefined,
 ): Promise<AssembledReview> {
   const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns), {
     strict: config.redaction.strict,
@@ -488,6 +540,7 @@ async function assembleReview(
       generalPass: config.review.generalPass,
       language: config.review.language,
       linterInstruction: linterInstruction(linters),
+      ...(declared !== undefined ? { declarations: declaredTagsBlock(declared) } : {}),
       ...(context !== "" ? { projectContext: context } : {}),
     });
   // one place weighs prefix + context + diff against the window and degrades
@@ -613,19 +666,31 @@ async function executeReview(
       contextTools,
       config.context.maxToolRounds,
     );
-    let reply;
-    try {
-      reply = await modelPort.complete(batchRequest);
-    } catch (error) {
-      if (error instanceof ToolError) throw error;
-      throw new ToolError(`model call failed: ${(error as Error).message}`);
-    }
+    let reply = await completeOrFail(modelPort, batchRequest);
     // a reply with no parseable JSON costs only this batch's findings: the
     // other batches were already paid for and must survive alongside it, or
     // one bad reply among many (routine once a large diff forces batching)
     // would discard a whole review's worth of real work
     try {
-      const batchParsed = parseReviewResponse(reply.text, parseOptions);
+      let batchParsed: ParsedReview;
+      try {
+        batchParsed = parseReviewResponse(reply.text, parseOptions);
+      } catch (error) {
+        // one more answering step, tools off, with what the model fetched replayed as text
+        deps.err(
+          `batch ${String(index + 1)}/${String(diffBatches.length)}: ${(error as Error).message}; asking once more for the JSON answer\n`,
+        );
+        const first = reply;
+        reply = await completeOrFail(modelPort, retryRequest(batchRequest, first));
+        reply = {
+          ...reply,
+          ...(first.usage !== undefined
+            ? { usage: reply.usage ? addUsage(first.usage, reply.usage) : first.usage }
+            : {}),
+          ...(first.toolCalls !== undefined ? { toolCalls: first.toolCalls } : {}),
+        };
+        batchParsed = parseReviewResponse(reply.text, parseOptions);
+      }
       merged.push(...batchParsed.findings);
       batchDropped += batchParsed.droppedUncited;
       batchOutOfScope += batchParsed.droppedOutOfScope;
@@ -676,6 +741,38 @@ async function executeReview(
     toolCalls,
     cachedResponse,
     unparsedBatches,
+  };
+}
+
+async function completeOrFail(port: ModelPort, request: ModelRequest): Promise<ModelReply> {
+  try {
+    return await port.complete(request);
+  } catch (error) {
+    if (error instanceof ToolError) throw error;
+    throw new ToolError(`model call failed: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * The retry of an answering step whose reply held no JSON: the same prompt,
+ * the tool results the model had fetched as text, its own reply, and one
+ * instruction to answer in the requested shape. No tools, so it must answer.
+ */
+export function retryRequest(request: ModelRequest, reply: ModelReply): ModelRequest {
+  return {
+    system: request.system,
+    user: [
+      withFetched(request.user, reply.transcript),
+      "",
+      "Your previous reply:",
+      "<reply>",
+      reply.text,
+      "</reply>",
+      "",
+      'That reply held no JSON answer. Reply now with the JSON object only, in the shape requested above; if nothing violates a guideline reply {"findings": []}.',
+    ].join("\n"),
+    ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+    ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
   };
 }
 
@@ -795,17 +892,51 @@ async function apiDiffFallback(
  * A run with nothing to review still reconciles: stale comments from earlier
  * runs resolve, the summary refreshes, and the status turns green.
  */
-async function publishAllClear(deps: ReviewDeps, config: Config): Promise<void> {
+async function publishAllClear(deps: ReviewDeps, config: Config, line: string): Promise<void> {
   await publishIfConfigured(deps, config, {
     findings: [],
     proposals: [],
     droppedUncited: 0,
     filtered: 0,
     gate: evaluateGate([], config.gate.failOn),
+    outcome: { kind: "not-reviewed", line },
     commitStatus: config.scm.commitStatus,
     comments: config.scm.comments,
     dryRun: isDryRun(config),
   });
+}
+
+/**
+ * A run that broke off still speaks: the summary says the review could not
+ * complete and the status fails, instead of the pipeline dying in silence.
+ */
+async function publishFailure(deps: ReviewDeps, config: Config, reason: string): Promise<void> {
+  try {
+    await publishIfConfigured(deps, config, {
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 0,
+      gate: evaluateGate([], config.gate.failOn),
+      outcome: { kind: "failed", reason },
+      commitStatus: config.scm.commitStatus,
+      comments: config.scm.comments,
+      dryRun: isDryRun(config),
+    });
+  } catch (error) {
+    deps.err(
+      `could not post the failure summary: ${String((error as Error).message.split("\n")[0])}\n`,
+    );
+  }
+}
+
+/** The first line of a failure, readable on a pull request. */
+function failureReason(error: ToolError): string {
+  const first = String(error.message.split("\n")[0]);
+  if (/held no JSON|not valid JSON|failed to parse|expected shape/.test(error.message)) {
+    return "the model's reply held no readable findings, twice";
+  }
+  return first;
 }
 
 /** The branch links point at: the target without a remote or refs prefix. */
@@ -826,6 +957,7 @@ async function publishIfConfigured(
   const outcome = await publishReview(scm, {
     ...input,
     codeInsights: codeInsightsEnabled(config),
+    summaryWhenClean: config.review.summaryWhenClean,
     presentation: {
       displayName: config.review.displayName,
       guidelinesDir: config.review.guidelinesDir,

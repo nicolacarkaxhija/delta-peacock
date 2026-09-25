@@ -76,6 +76,7 @@ export function renderCommentBody(
   if (finding.suggestion !== undefined) {
     lines.push("", `\`\`\`${presentation.suggestionFence}`, finding.suggestion, "```");
   }
+  if (finding.note !== undefined) lines.push("", `_${finding.note}_`);
   if (presentation.markers) lines.push("", `<!-- delta-peacock:finding:${fingerprint} -->`);
   return lines.join("\n");
 }
@@ -141,8 +142,48 @@ export function reviewerComment(signal: {
   return { fingerprint: fingerprintFrom(signal.path ?? "", anchor, signal.line ?? 0), parsed };
 }
 
+/** The heading 0.1.5 and 0.1.6 summaries opened with; only read back, never written. */
 export function summaryHeading(presentation: Presentation): string {
   return `## ${presentation.displayName}`;
+}
+
+/**
+ * What a run amounts to. Every outcome renders through the same summary
+ * template; only the state line differs.
+ */
+export type ReviewOutcome =
+  | { kind: "reviewed" }
+  /** Nothing was reviewed, for a reason that is not a fault. */
+  | { kind: "not-reviewed"; line: string }
+  /** The review broke off; the pull request must not read as reviewed. */
+  | { kind: "failed"; reason: string };
+
+/** Why nothing was reviewed; each is the whole state line of its summary. */
+export const NOT_REVIEWED = {
+  nothingInScope: "Nothing in scope was changed.",
+  noGuidelines: "No guidelines were found to review against.",
+  noneApply: "No guideline applies to the changed files.",
+  tooLarge: "The change is too large to review.",
+} as const;
+
+export const NO_ISSUES = "No issues found in this change.";
+const FAILED_LEAD = "The review could not complete: ";
+const COUNT_LEAD = /^\d+ findings?: [a-z0-9, ]+$/;
+
+/**
+ * The reviewer's own summary, by its first line: a state line this template
+ * writes, or the heading an earlier version wrote. Hosts without markers pair
+ * this with the author, so a person's comment never matches.
+ */
+export function isSummaryBody(body: string, presentation: Presentation): boolean {
+  const first = String(body.split("\n")[0]);
+  return (
+    first === summaryHeading(presentation) ||
+    first === NO_ISSUES ||
+    first.startsWith(FAILED_LEAD) ||
+    COUNT_LEAD.test(first) ||
+    Object.values(NOT_REVIEWED).some((line) => line === first)
+  );
 }
 
 export interface SummaryInput {
@@ -151,6 +192,18 @@ export interface SummaryInput {
   droppedUncited: number;
   filtered: number;
   gate: GateDecision;
+  /** Absent means reviewed. */
+  outcome?: ReviewOutcome;
+}
+
+/** The one line that says how the run ended. */
+export function stateLine(input: Pick<SummaryInput, "findings" | "outcome">): string {
+  const outcome = input.outcome ?? { kind: "reviewed" };
+  if (outcome.kind === "not-reviewed") return outcome.line;
+  if (outcome.kind === "failed") {
+    return `${FAILED_LEAD}${outcome.reason.replace(/[.\s]+$/, "")}.`;
+  }
+  return countLine(input.findings);
 }
 
 function plural(count: number, word: string): string {
@@ -169,7 +222,7 @@ function severityCounts(findings: readonly Finding[]): [Severity, number][] {
 
 /** "No issues found in this change." or "2 findings: 1 major, 1 minor". */
 export function countLine(findings: readonly Finding[]): string {
-  if (findings.length === 0) return "No issues found in this change.";
+  if (findings.length === 0) return NO_ISSUES;
   const parts = severityCounts(findings).map(
     ([severity, count]) => `${String(count)} ${severity.toLowerCase()}`,
   );
@@ -196,14 +249,22 @@ export function blockedLine(input: Pick<SummaryInput, "findings" | "gate">): str
 }
 
 function listItem(finding: Finding, presentation: Presentation): string {
-  return `- **${severityWord(finding.severity)}** ${citation(finding, presentation)} in \`${finding.file}\` line ${String(finding.line)}: ${finding.title}`;
+  const head = `- **${severityWord(finding.severity)}** ${citation(finding, presentation)} in \`${finding.file}\``;
+  if (finding.unplaced === true) {
+    return `${head}: ${finding.title.replace(/[.\s]+$/, "")}. ${String(finding.note)}`;
+  }
+  return `${head} line ${String(finding.line)}: ${finding.title}`;
 }
 
 export function renderSummaryBody(
   input: SummaryInput,
   presentation: Presentation = DEFAULT_PRESENTATION,
 ): string {
-  const lines = [summaryHeading(presentation), "", countLine(input.findings)];
+  // no heading: the author, the status and the card already name the reviewer
+  const lines = [stateLine(input)];
+  if (input.outcome?.kind === "failed") {
+    lines.push("", "Nothing was reviewed on this run. Run the pipeline again to retry.");
+  }
   if (input.findings.length > 0) {
     lines.push("", ...input.findings.map((finding) => listItem(finding, presentation)));
   }
@@ -229,12 +290,13 @@ export function renderSummaryBody(
       );
     }
   }
-  if (input.filtered > 0 || input.droppedUncited > 0) {
-    lines.push(
-      "",
-      `_Not posted: ${plural(input.filtered, "low-confidence finding")}, ${plural(input.droppedUncited, "finding")} citing no guideline._`,
-    );
-  }
+  const unposted = [
+    ...(input.filtered > 0 ? [plural(input.filtered, "low-confidence finding")] : []),
+    ...(input.droppedUncited > 0
+      ? [`${plural(input.droppedUncited, "finding")} citing no guideline`]
+      : []),
+  ];
+  if (unposted.length > 0) lines.push("", `_Not posted: ${unposted.join(", ")}._`);
   if (presentation.markers) lines.push("", SUMMARY_MARKER);
   return lines.join("\n");
 }
