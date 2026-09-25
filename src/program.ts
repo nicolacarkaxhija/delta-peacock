@@ -330,6 +330,40 @@ export function buildProgram(deps: RuntimeDeps): Command {
       },
     );
 
+  program
+    .command("backtest")
+    .description("replay real pull requests and hold the reviewer to the human judgement")
+    .requiredOption("--cases <dir>", "directory of case folders (base, diff.patch, expected.json)")
+    .option("--repeats <n>", "reviews per case, for the stability check", "3")
+    .option("--config <file>", "run every case under this config instead of its own")
+    .option("--only <names>", "comma-separated case names; the baseline is left as it was")
+    .option("--concurrency <n>", "reviews in flight at once", "3")
+    .option("--report <path>", "write the outcome as JSON")
+    .action(
+      async (options: {
+        cases: string;
+        repeats: string;
+        config?: string;
+        only?: string;
+        concurrency: string;
+        report?: string;
+      }) => {
+        const { runBacktestCommand } = await import("./commands/backtest.js");
+        const code = await runBacktestCommand(deps, {
+          cases: options.cases,
+          repeats: Number(options.repeats),
+          concurrency: Number(options.concurrency),
+          version: manifest.version,
+          ...(options.config !== undefined ? { config: options.config } : {}),
+          ...(options.only !== undefined
+            ? { only: options.only.split(",").map((name) => name.trim()) }
+            : {}),
+          ...(options.report !== undefined ? { report: options.report } : {}),
+        });
+        if (code !== 0) throw new ExitCodeError(code);
+      },
+    );
+
   const guidelines = program.command("guidelines").description("guideline corpus utilities");
   guidelines
     .command("lint")

@@ -138,21 +138,22 @@ Credentials, tokens and API keys must come from the environment, never a literal
 
 **The command surface** (`delta-peacock --help`):
 
-| Command      | What it does                                                                                                                                    |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `review`     | Gate a branch against its guidelines. `--staged` for pre-commit, `--bootstrap` for an empty corpus, `--write-baseline` to adopt on legacy code. |
-| `audit`      | Review the whole tree, not just a diff.                                                                                                         |
-| `describe`   | Generate the PR description from the change, idempotently.                                                                                      |
-| `ask`        | Question the changeset in the terminal, one-shot or a session.                                                                                  |
-| `fix`        | Apply report suggestions to the working tree or a patch file.                                                                                   |
-| `waive`      | Insert an in-code waiver for a finding: a person's deliberate, always-reported exception.                                                       |
-| `learn`      | Turn team reactions into proposed guideline drafts.                                                                                             |
-| `stats`      | Per-contributor findings, normalized per changed line. A coaching aid.                                                                          |
-| `guidelines` | `lint`, coverage `stats`, `pack` authoring, and legacy `import`.                                                                                |
-| `doctor`     | Validate the whole install without reviewing anything.                                                                                          |
-| `init`       | Scaffold config, a guideline, and a CI snippet. `--walkthrough`, `--starter`.                                                                   |
-| `bench`      | Score the reviewer against benchmark cases.                                                                                                     |
-| `config`     | Resolve and print the effective configuration.                                                                                                  |
+| Command      | What it does                                                                                                                                          |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review`     | Gate a branch against its guidelines. `--staged` for pre-commit, `--bootstrap` for an empty corpus, `--write-baseline` to adopt on legacy code.       |
+| `audit`      | Review the whole tree, not just a diff.                                                                                                               |
+| `describe`   | Generate the PR description from the change, idempotently.                                                                                            |
+| `ask`        | Question the changeset in the terminal, one-shot or a session.                                                                                        |
+| `fix`        | Apply report suggestions to the working tree or a patch file.                                                                                         |
+| `waive`      | Insert an in-code waiver for a finding: a person's deliberate, always-reported exception.                                                             |
+| `learn`      | Turn team reactions into proposed guideline drafts.                                                                                                   |
+| `stats`      | Per-contributor findings, normalized per changed line. A coaching aid.                                                                                |
+| `guidelines` | `lint`, coverage `stats`, `pack` authoring, and legacy `import`.                                                                                      |
+| `doctor`     | Validate the whole install without reviewing anything.                                                                                                |
+| `init`       | Scaffold config, a guideline, and a CI snippet. `--walkthrough`, `--starter`.                                                                         |
+| `bench`      | Score the reviewer against benchmark cases.                                                                                                           |
+| `backtest`   | Replay real pull requests and fail on any finding a person judged wrong, on drift, or on recall under the last run. [Guide](docs/guides/backtest.md). |
+| `config`     | Resolve and print the effective configuration.                                                                                                        |
 
 <details>
 <summary><b>See it in motion</b> — recorded command sessions</summary>
