@@ -80,18 +80,25 @@ describe("publishing to github", () => {
       const comment = fake.reviewComments[0];
       expect(comment?.path).toBe("src/app.js");
       expect(comment?.line).toBe(2);
-      expect(comment?.body).toContain("**MAJOR** Console call added");
+      expect(comment?.body).toContain(
+        `**Major** · [no-console](${fake.baseUrl}/acme/widgets/blob/main/guidelines/no-console.md)`,
+      );
+      expect(comment?.body).toContain("Replace the console.log with the logger.");
       expect(comment?.body).toContain("```suggestion");
       expect(comment?.body).toContain("logger.info(name);");
+      // github hides html comments, so the marker still carries identity there
       expect(comment?.body).toContain("<!-- delta-peacock:finding:");
 
       expect(fake.issueComments).toHaveLength(1);
-      expect(fake.issueComments[0]?.body).toContain("delta-peacock review");
-      expect(fake.issueComments[0]?.body).toContain("| MAJOR | 1 |");
+      const summary = fake.issueComments[0]?.body ?? "";
+      expect(summary.startsWith("## Code review\n\n1 finding: 1 major\n")).toBe(true);
+      expect(summary).toContain("in `src/app.js` line 2: Console call added");
+      expect(summary).not.toContain("Blocked");
+      expect(summary).toContain("<!-- delta-peacock:summary -->");
 
       expect(fake.statuses).toHaveLength(1);
       expect(fake.statuses[0]?.state).toBe("success"); // advisory
-      expect(fake.statuses[0]?.description).toContain("advisory");
+      expect(fake.statuses[0]?.description).toBe("1 finding: 1 major");
     } finally {
       await fake.close();
     }
@@ -134,7 +141,7 @@ describe("publishing to github", () => {
       expect(fourth.stderr).toContain("1 resolved");
       expect(fake.reviewComments).toHaveLength(0);
       expect(fake.issueComments).toHaveLength(1);
-      expect(fake.issueComments[0]?.body).toContain("No findings.");
+      expect(fake.issueComments[0]?.body).toContain("No issues found in this change.");
     } finally {
       await fake.close();
     }
@@ -268,13 +275,65 @@ describe("publishing to github", () => {
     }
   });
 
-  it("a passed gate posts a success status naming the threshold", async () => {
+  it("a passed gate posts a success status with the counts", async () => {
     const fake = await startFakeGitHub();
     try {
       const repo = makeScenario();
       await reviewAgainst(fake, repo, FINDING_WITH_SUGGESTION, "--fail-on", "CRITICAL");
       expect(fake.statuses[0]?.state).toBe("success");
-      expect(fake.statuses[0]?.description).toContain("passed at failOn=CRITICAL");
+      expect(fake.statuses[0]?.description).toBe("1 finding: 1 major");
+      expect(fake.statuses[0]?.context).toBe("Code review");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("a blocked gate names what must be resolved and points at the reviews doc", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      write(repo, "docs/reviews.md", "# Reviews\n");
+      const { code } = await reviewAgainst(
+        fake,
+        repo,
+        FINDING_WITH_SUGGESTION,
+        "--fail-on",
+        "MAJOR",
+      );
+      expect(code).toBe(2);
+      const summary = fake.issueComments[0]?.body ?? "";
+      expect(summary).toContain("**Blocked: 1 major finding must be resolved.**");
+      expect(summary).toContain(
+        `[docs/reviews.md](${fake.baseUrl}/acme/widgets/blob/main/docs/reviews.md)`,
+      );
+      expect(fake.statuses[0]?.description).toBe("Blocked: 1 major finding must be resolved");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("uses the configured display name everywhere a reader looks", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      await runCli(["review"], {
+        cwd: repo,
+        env: {
+          DELTA_PEACOCK_SCM_PROVIDER: "github",
+          DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+          DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+          DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
+          DELTA_PEACOCK_REVIEW_DISPLAY_NAME: "Automated review",
+          DELTA_PEACOCK_REVIEW_TARGET: "origin/main",
+          GITHUB_TOKEN: "test-token",
+        },
+        out: () => undefined,
+        err: () => undefined,
+        modelPort: model(FINDING_WITH_SUGGESTION),
+      });
+      expect(fake.issueComments[0]?.body.startsWith("## Automated review\n")).toBe(true);
+      expect(fake.statuses[0]?.context).toBe("Automated review");
+      expect(fake.reviewComments[0]?.body).toContain("/blob/main/guidelines/no-console.md");
     } finally {
       await fake.close();
     }

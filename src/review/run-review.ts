@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { ToolSet } from "ai";
 import type { Config } from "../config/schema.js";
@@ -45,7 +45,7 @@ import {
   type RejectedCandidate,
 } from "./parse.js";
 import { buildScmPort } from "../scm/build.js";
-import { isDryRun, publishReview } from "../scm/publish.js";
+import { codeInsightsEnabled, isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { harvestUncited } from "./harvest.js";
@@ -400,7 +400,6 @@ export async function runReview(
     gate,
     commitStatus: config.scm.commitStatus,
     comments: config.scm.comments,
-    codeInsights: config.scm.codeInsights,
     dryRun: isDryRun(config),
   });
 
@@ -804,20 +803,36 @@ async function publishAllClear(deps: ReviewDeps, config: Config): Promise<void> 
     filtered: 0,
     gate: evaluateGate([], config.gate.failOn),
     commitStatus: config.scm.commitStatus,
+    comments: config.scm.comments,
     dryRun: isDryRun(config),
   });
+}
+
+/** The branch links point at: the target without a remote or refs prefix. */
+function targetBranch(target: string): string {
+  return target.replace(/^refs\/heads\//, "").replace(/^origin\//, "");
 }
 
 async function publishIfConfigured(
   deps: ReviewDeps,
   config: Config,
-  input: Parameters<typeof publishReview>[1],
+  input: Omit<Parameters<typeof publishReview>[1], "codeInsights" | "presentation">,
 ): Promise<void> {
   if (config.scm.provider === "local") return;
   // publishReview itself holds the hard guarantee now: a dry run trips zero
   // adapter writes even if this caller got the plumbing wrong.
   const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
-  const outcome = await publishReview(scm, input);
+  const { guidePath } = config.review;
+  const outcome = await publishReview(scm, {
+    ...input,
+    codeInsights: codeInsightsEnabled(config),
+    presentation: {
+      displayName: config.review.displayName,
+      guidelinesDir: config.review.guidelinesDir,
+      targetBranch: targetBranch(config.review.target),
+      ...(existsSync(path.resolve(deps.cwd, guidePath)) ? { guidePath } : {}),
+    },
+  });
   for (const notice of outcome.notices) deps.err(`${notice}\n`);
   if (!input.dryRun) {
     deps.err(

@@ -99,6 +99,19 @@ pipelines:
           # DELTA_PEACOCK_REVIEW_TARGET=$BITBUCKET_PR_DESTINATION_BRANCH
 ```
 
+What each Bitbucket variable does:
+
+| Variable                                                                                       | Where it comes from                                                                                    | Needed for                                                          |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| `BITBUCKET_TOKEN`                                                                              | a repository access token with the Pull requests: Write scope, stored as a secured variable            | comments, the build status and the Code Insights report             |
+| `DELTA_PEACOCK_SCM_PROVIDER`, `DELTA_PEACOCK_SCM_REPOSITORY`, `DELTA_PEACOCK_SCM_PULL_REQUEST` | the values above, from Bitbucket's own `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_SLUG`, `BITBUCKET_PR_ID` | knowing which pull request to review                                |
+| `DELTA_PEACOCK_REVIEW_TARGET`                                                                  | `$BITBUCKET_PR_DESTINATION_BRANCH`                                                                     | the diff base, and the branch guideline links point at              |
+| `BITBUCKET_BUILD_NUMBER`                                                                       | set by Pipelines                                                                                       | the build status links the pipeline run instead of the pull request |
+| `DELTA_PEACOCK_SCM_CODE_INSIGHTS`                                                              | optional; `false` switches the report off                                                              | Code Insights is on by default for Bitbucket                        |
+| `DELTA_PEACOCK_REVIEW_DISPLAY_NAME`                                                            | optional, or `review.displayName` in the config file                                                   | the name readers see on the summary, status and report              |
+
+The Code Insights report appears in the pull request's Reports panel with the display name as its title, `PASSED` or `FAILED` from the gate, the finding counts per severity, and one annotation per finding on its file and line, linked to the cited guideline.
+
 ## Jenkins
 
 Any pipeline step works; a declarative example:
@@ -122,7 +135,7 @@ stage('delta-peacock review') {
 
 `DELTA_PEACOCK_OUTPUT_SARIF_PATH=findings.sarif` writes a SARIF 2.1.0 artifact; upload it on GitHub with `github/codeql-action/upload-sarif@v3` and findings land in the Security tab. `DELTA_PEACOCK_OUTPUT_CODE_QUALITY_PATH=code-quality.json` writes GitLab's Code Quality artifact; declare it under `artifacts:reports:codequality` and the MR widget diffs it between pipelines. Both are plain files: they work in dry run, local mode, and commentless setups.
 
-On Bitbucket the native equivalent is Code Insights: `DELTA_PEACOCK_SCM_CODE_INSIGHTS=true` publishes a report card with the gate result plus inline annotations upserted by finding fingerprint. Pair it with `DELTA_PEACOCK_SCM_COMMENTS=false` for a commentless review that still gates and annotates. Workspaces with insights disabled degrade to a notice, never a failed review.
+On Bitbucket the native equivalent is Code Insights, published by default there (`DELTA_PEACOCK_SCM_CODE_INSIGHTS=false` turns it off): a report card with the gate result plus inline annotations upserted by finding fingerprint. Pair it with `DELTA_PEACOCK_SCM_COMMENTS=false` for a commentless review that still gates and annotates. Workspaces with insights disabled degrade to a notice, never a failed review.
 
 ## Pre-commit hook
 

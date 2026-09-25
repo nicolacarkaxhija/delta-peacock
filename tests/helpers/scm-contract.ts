@@ -58,11 +58,17 @@ export function runScmContract(name: string, harness: ScmContractHarness): void 
     it("posts a commit status on the pull request head", async () => {
       const fake = await harness.make();
       try {
-        await fake.port.postStatus("failure", "2 finding(s) at or above MAJOR");
-        const status = fake.statuses()[0];
-        expect(status?.state).toBe("failure");
-        expect(status?.context).toBe("delta-peacock");
-        expect(status?.sha.length).toBeGreaterThan(0);
+        await fake.port.postStatus("failure", "Blocked: 2 major findings must be resolved");
+        await fake.port.postStatus(
+          "success",
+          "No issues found in this change.",
+          "Automated review",
+        );
+        const [unnamed, named] = fake.statuses();
+        expect(unnamed?.state).toBe("failure");
+        expect(unnamed?.context).toBe("Code review");
+        expect(named?.context).toBe("Automated review");
+        expect(unnamed?.sha.length).toBeGreaterThan(0);
       } finally {
         await fake.close();
       }

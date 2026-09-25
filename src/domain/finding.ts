@@ -64,7 +64,15 @@ export type Finding = Violation | Observation;
  * on every re-run.
  */
 export function fingerprintOf(finding: Finding): string {
-  const anchor = finding.kind === "violation" ? finding.guidelineId : finding.kind;
-  const material = [finding.file, anchor, String(finding.line)].join("\u0000");
+  return fingerprintFrom(
+    finding.file,
+    finding.kind === "violation" ? finding.guidelineId : finding.kind,
+    finding.line,
+  );
+}
+
+/** The same identity rebuilt from a posted comment's path, cited anchor and line. */
+export function fingerprintFrom(file: string, anchor: string, line: number): string {
+  const material = [file, anchor, String(line)].join("\u0000");
   return createHash("sha256").update(material).digest("hex").slice(0, 12);
 }

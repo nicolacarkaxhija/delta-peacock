@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { SEVERITIES } from "../domain/severity.js";
 
+export const DEFAULT_DISPLAY_NAME = "Code review";
+
 export const ModelSchema = z.strictObject({
   provider: z
     .enum(["anthropic", "bedrock", "openrouter", "openai-compatible"])
@@ -56,6 +58,10 @@ export const ReviewSchema = z.strictObject({
   maxFilesPerBatch: z.number().int().positive().default(25),
   /** Attention budget: a batch never reviews more (approximate) tokens than this, independent of windowTokens. */
   maxTokensPerBatch: z.number().int().positive().default(30_000),
+  /** The reviewer's name on the pull request: summary heading, commit status, insights report. */
+  displayName: z.string().trim().min(1).max(40).default(DEFAULT_DISPLAY_NAME),
+  /** Repository doc explaining how reviews work; a blocked summary links it when the file exists. */
+  guidePath: z.string().min(1).default("docs/reviews.md"),
 });
 
 export const GateSchema = z.strictObject({
@@ -165,8 +171,8 @@ export const ScmSchema = z.strictObject({
   commitStatus: z.boolean().default(true),
   /** Post inline and summary comments; off means commentless publication. */
   comments: z.boolean().default(true),
-  /** Publish a native report card with annotations (Bitbucket Code Insights). */
-  codeInsights: z.boolean().default(false),
+  /** Publish a native report card with annotations (Bitbucket Code Insights); unset means on for Bitbucket. */
+  codeInsights: z.boolean().optional(),
   /** API base override for enterprise hosts and tests. */
   baseUrl: z.url().optional(),
   /** The hard guarantee: no write of any kind leaves the process. */

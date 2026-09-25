@@ -217,6 +217,19 @@ cost:
   maxPerReview: 0.50 # block a review estimated above this, before any model call
 ```
 
+### How the review reads on a pull request
+
+The reviewer posts under a name your readers see instead of the tool's: `review.displayName` (default `Code review`, env `DELTA_PEACOCK_REVIEW_DISPLAY_NAME`) heads the summary comment and names the commit status and the Bitbucket Code Insights report. `review.guidePath` (default `docs/reviews.md`, env `DELTA_PEACOCK_REVIEW_GUIDE_PATH`) is the repository doc a blocked summary links to; when the file does not exist the link is left out.
+
+```yaml
+review:
+  displayName: Automated review
+```
+
+The summary says `No issues found in this change.` on a clean change, otherwise a count line (`2 findings: 1 major, 1 minor`) and one line per finding. A gate line appears only when the gate blocks (`Blocked: 1 major finding must be resolved.`), followed by the link to the guide. Each inline comment opens with the severity in bold and the guideline id linked to `<guidelinesDir>/<id>.md` on the target branch, gives the reason in one or two sentences, and shows a suggested change in a fenced block.
+
+Re-runs update comments in place. GitHub and GitLab hide HTML comments, so an invisible marker identifies the reviewer's comments there. Bitbucket prints them as text, so there the reviewer's comments are recognised by their author (the token's user) plus their fixed first line, and carry no marker. A repository access token cannot call Bitbucket's `GET /user`, so the reviewer learns its own user from a draft comment it deletes at once; nobody sees it.
+
 ## Security and privacy
 
 - **No telemetry, no phone home.** Nothing about your code or your review leaves the process except the model call you configured.

@@ -31,6 +31,8 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_WINDOW_TOKENS: "review.windowTokens",
   DELTA_PEACOCK_REVIEW_MAX_FILES_PER_BATCH: "review.maxFilesPerBatch",
   DELTA_PEACOCK_REVIEW_MAX_TOKENS_PER_BATCH: "review.maxTokensPerBatch",
+  DELTA_PEACOCK_REVIEW_DISPLAY_NAME: "review.displayName",
+  DELTA_PEACOCK_REVIEW_GUIDE_PATH: "review.guidePath",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",

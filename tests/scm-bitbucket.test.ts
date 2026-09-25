@@ -44,7 +44,7 @@ runScmContract("bitbucket", {
         fake.statuses.map((status) => ({
           state: STATE_MAP[status.state] ?? status.state,
           description: status.description,
-          context: status.key,
+          context: status.name,
           sha: status.sha,
         })),
       close: () => fake.close(),
@@ -112,7 +112,7 @@ describe("bitbucket build status contract", () => {
       await portAgainst(fake.baseUrl).postStatus("failure", "1 MAJOR");
       expect(fake.lastStatusBody).toEqual({
         key: "delta-peacock",
-        name: "delta-peacock",
+        name: "Code review",
         state: "FAILED",
         url: "https://bitbucket.org/acme/widgets/pull-requests/7",
         description: "1 MAJOR",
