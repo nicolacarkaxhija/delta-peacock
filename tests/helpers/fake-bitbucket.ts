@@ -5,7 +5,12 @@ export interface FakeBitbucketComment {
   content: { raw: string };
   inline?: { path: string; to: number };
   parent?: { id: number };
+  user?: { uuid: string };
+  pending?: boolean;
 }
+
+/** The fake token's own user, like a repository access token's bot. */
+export const BOT_UUID = "{bot-0000}";
 
 export interface FakeInsightAnnotation {
   external_id: string;
@@ -15,13 +20,18 @@ export interface FakeInsightAnnotation {
   severity: string;
   path: string;
   line: number;
+  link?: string;
 }
 
 export interface FakeBitbucket {
   baseUrl: string;
   comments: FakeBitbucketComment[];
-  statuses: { state: string; description: string; key: string; sha: string }[];
+  statuses: { state: string; description: string; key: string; name: string; sha: string }[];
   writes: { method: string; url: string }[];
+  /** "forbidden" mirrors an access token (GET /user answers 403); "ok" an API token. */
+  userEndpoint: "forbidden" | "ok";
+  /** Pending draft comments ever created. */
+  readonly drafts: number;
   /** Served by the PR diff endpoint. */
   diffText: string;
   prText: { title: string; body: string };
@@ -82,6 +92,8 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
   };
   const holder = {
     diffText: "",
+    drafts: 0,
+    userEndpoint: "forbidden" as "forbidden" | "ok",
     insightsDisabled: false,
     insightReport: undefined as Record<string, unknown> | undefined,
   };
@@ -120,7 +132,14 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
       const annotationsRoute =
         /^\/repositories\/[^/]+\/[^/]+\/commit\/[^/]+\/reports\/[^/]+\/annotations$/;
 
-      if (method === "GET" && prMeta.test(path)) {
+      if (method === "GET" && path === "/user") {
+        if (holder.userEndpoint === "ok") send(response, 200, { uuid: BOT_UUID });
+        else
+          send(response, 403, {
+            type: "error",
+            error: { message: "This API is not accessible by this authentication mechanism" },
+          });
+      } else if (method === "GET" && prMeta.test(path)) {
         send(response, 200, {
           source: { commit: { hash: "srcsha7890123" }, branch: { name: "feature/widgets" } },
           title: state.prText.title,
@@ -146,12 +165,15 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
         });
       } else if (method === "POST" && commentsRoute.test(path)) {
         const body = await readBody(request);
+        if (body["pending"] === true) holder.drafts += 1;
         state.comments.push({
           id: nextId++,
           content: body["content"] as { raw: string },
           ...(body["inline"] !== undefined
             ? { inline: body["inline"] as { path: string; to: number } }
             : {}),
+          user: { uuid: BOT_UUID },
+          ...(body["pending"] === true ? { pending: true } : {}),
         });
         send(response, 201, state.comments.at(-1));
       } else if (commentRoute.test(path) && (method === "PUT" || method === "DELETE")) {
@@ -201,6 +223,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
           state: body["state"] as string,
           description: body["description"] as string,
           key: body["key"] as string,
+          name: body["name"] as string,
           sha: statusRoute.exec(path)?.[1] ?? "",
         });
         send(response, 201, state.statuses.at(-1));
@@ -236,6 +259,15 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
     },
     set insightsDisabled(value: boolean) {
       holder.insightsDisabled = value;
+    },
+    get drafts() {
+      return holder.drafts;
+    },
+    get userEndpoint() {
+      return holder.userEndpoint;
+    },
+    set userEndpoint(value: "forbidden" | "ok") {
+      holder.userEndpoint = value;
     },
     get diffText() {
       return holder.diffText;

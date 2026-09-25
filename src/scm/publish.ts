@@ -1,32 +1,52 @@
 import type { Config } from "../config/schema.js";
-import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
-import type { GateDecision } from "../domain/gate.js";
-import { SEVERITIES } from "../domain/severity.js";
-import type { InsightReport, ScmPort, StatusState } from "./port.js";
+import { fingerprintFrom, fingerprintOf, type Finding } from "../domain/finding.js";
+import {
+  blockedLine,
+  countLine,
+  DEFAULT_PRESENTATION,
+  guidelineUrl,
+  headingAnchor,
+  markerFingerprint,
+  renderCommentBody,
+  renderSummaryBody,
+  summaryHeading,
+  SUMMARY_MARKER,
+  twoSentences,
+  type Presentation,
+  type SummaryInput,
+} from "./comment-format.js";
+import type { InsightReport, ScmComment, ScmPort, StatusState } from "./port.js";
 
-const MARKER_PREFIX = "<!-- delta-peacock:";
-const SUMMARY_MARKER = "<!-- delta-peacock:summary -->";
-const FINDING_MARKER = /^<!-- delta-peacock:finding:([0-9a-f]+(?:-\d+)?) -->$/;
+export { renderCommentBody, renderSummaryBody, type SummaryInput } from "./comment-format.js";
 
-function findingMarker(fingerprint: string): string {
-  return `${MARKER_PREFIX}finding:${fingerprint} -->`;
+/** What the configuration contributes to a presentation; the host adds the rest. */
+export interface PresentationSettings {
+  displayName: string;
+  guidelinesDir: string;
+  /** Branch guideline and docs links point at. */
+  targetBranch: string;
+  /** Repository doc on how reviews work; absent when the file does not exist. */
+  guidePath?: string;
 }
 
-/** Only a marker on the comment's final line counts; quoting one in prose does not. */
-function markerFingerprint(body: string): string | undefined {
-  const lastLine = String(body.trimEnd().split("\n").at(-1));
-  return FINDING_MARKER.exec(lastLine)?.[1];
-}
-
-export function renderCommentBody(finding: Finding, fingerprint: string): string {
-  const cite =
-    finding.kind === "violation" ? `\`${finding.guidelineId}\`` : "observation (general pass)";
-  const lines = [`**${finding.severity}** ${finding.title} — ${cite}`, "", finding.body];
-  if (finding.suggestion !== undefined) {
-    lines.push("", "```suggestion", finding.suggestion, "```");
-  }
-  lines.push("", findingMarker(fingerprint));
-  return lines.join("\n");
+/** Combines the settings with what the host can render. */
+export function presentationFor(scm: ScmPort, settings?: PresentationSettings): Presentation {
+  const base = settings ?? {
+    displayName: DEFAULT_PRESENTATION.displayName,
+    guidelinesDir: DEFAULT_PRESENTATION.guidelinesDir,
+    targetBranch: "main",
+  };
+  const fileUrl = scm.fileUrl?.bind(scm);
+  return {
+    displayName: base.displayName,
+    markers: scm.hidesHtmlComments !== false,
+    suggestionFence: scm.suggestionFence ?? "suggestion",
+    guidelinesDir: base.guidelinesDir,
+    ...(fileUrl !== undefined
+      ? { fileLink: (file: string) => fileUrl(file, base.targetBranch) }
+      : {}),
+    ...(base.guidePath !== undefined ? { guidePath: base.guidePath } : {}),
+  };
 }
 
 /** One unique fingerprint per finding, suffixing genuine collisions. */
@@ -40,54 +60,6 @@ export function fingerprintEntries(
     used.set(base, count + 1);
     return { fingerprint: count === 0 ? base : `${base}-${String(count)}`, finding };
   });
-}
-
-function gateSummaryLine(gate: GateDecision): string {
-  if (gate.threshold === "none") return "Gate: advisory.";
-  if (gate.failed) {
-    return `Gate: failOn=${gate.threshold} FAILED (${String(gate.failing)}).`;
-  }
-  return `Gate: failOn=${gate.threshold} passed.`;
-}
-
-export interface SummaryInput {
-  findings: readonly Finding[];
-  proposals: readonly ProposedGuideline[];
-  droppedUncited: number;
-  filtered: number;
-  gate: GateDecision;
-}
-
-export function renderSummaryBody(input: SummaryInput): string {
-  const bySeverity = new Map<string, number>();
-  for (const finding of input.findings) {
-    bySeverity.set(finding.severity, (bySeverity.get(finding.severity) ?? 0) + 1);
-  }
-  const rows = SEVERITIES.filter((severity) => bySeverity.has(severity)).map(
-    (severity) => `| ${severity} | ${String(bySeverity.get(severity))} |`,
-  );
-  const lines = [
-    "## delta-peacock review",
-    "",
-    input.findings.length === 0 ? "No findings." : "| Severity | Findings |\n| --- | --- |",
-    ...rows,
-    "",
-    gateSummaryLine(input.gate),
-  ];
-  if (input.proposals.length > 0) {
-    lines.push("", "### Proposed guidelines", "");
-    for (const proposal of input.proposals) {
-      lines.push(`- \`${proposal.id}\` (${proposal.severity}): ${proposal.rationale}`);
-    }
-  }
-  if (input.filtered > 0 || input.droppedUncited > 0) {
-    lines.push(
-      "",
-      `_${String(input.filtered)} finding(s) under the confidence floor; ${String(input.droppedUncited)} uncited finding(s) dropped._`,
-    );
-  }
-  lines.push("", SUMMARY_MARKER);
-  return lines.join("\n");
 }
 
 export interface PublishOutcome {
@@ -110,44 +82,101 @@ const INSIGHT_SEVERITIES: Record<
   INFO: "LOW",
 };
 
-export function buildInsightReport(input: SummaryInput): InsightReport {
-  const bySeverity = new Map<string, number>();
+export function buildInsightReport(
+  input: SummaryInput,
+  presentation: Presentation = DEFAULT_PRESENTATION,
+): InsightReport {
+  const counts = new Map<string, number>();
   for (const finding of input.findings) {
-    bySeverity.set(finding.severity, (bySeverity.get(finding.severity) ?? 0) + 1);
+    counts.set(finding.severity, (counts.get(finding.severity) ?? 0) + 1);
   }
+  const blocked = blockedLine(input);
   return {
+    title: presentation.displayName,
     result: input.gate.failed ? "FAILED" : "PASSED",
-    details: gateSummaryLine(input.gate),
-    counts: SEVERITIES.flatMap((severity) => {
-      const value = bySeverity.get(severity);
-      return value === undefined ? [] : [{ label: severity, value }];
+    details:
+      blocked === undefined
+        ? countLine(input.findings)
+        : `${countLine(input.findings)}. ${blocked}.`,
+    counts: [
+      { label: "Findings", value: input.findings.length },
+      ...(["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFO"] as const).flatMap((severity) => {
+        const value = counts.get(severity);
+        return value === undefined
+          ? []
+          : [{ label: `${severity.charAt(0)}${severity.slice(1).toLowerCase()}`, value }];
+      }),
+    ],
+    annotations: fingerprintEntries(input.findings).map(({ fingerprint, finding }) => {
+      const link =
+        finding.kind === "violation" && finding.pack === undefined
+          ? guidelineUrl(finding.guidelineId, presentation)
+          : undefined;
+      return {
+        externalId: fingerprint,
+        title: finding.title,
+        summary: twoSentences(finding.body === "" ? finding.title : finding.body).slice(0, 450),
+        severity: INSIGHT_SEVERITIES[finding.severity],
+        path: finding.file,
+        line: finding.line,
+        ...(link !== undefined ? { link } : {}),
+      };
     }),
-    annotations: fingerprintEntries(input.findings).map(({ fingerprint, finding }) => ({
-      externalId: fingerprint,
-      title: finding.title,
-      summary: finding.body.slice(0, 450),
-      severity: INSIGHT_SEVERITIES[finding.severity],
-      path: finding.file,
-      line: finding.line,
-    })),
   };
+}
+
+/**
+ * The reviewer's own comments among candidates that look like its output. On
+ * a host that prints markers the look is the identity; elsewhere the author
+ * must also be the token's user, asked only when a candidate exists.
+ */
+async function ownComments(
+  scm: ScmPort,
+  presentation: Presentation,
+  candidates: ScmComment[],
+): Promise<ScmComment[]> {
+  if (presentation.markers || candidates.length === 0 || scm.currentUserId === undefined) {
+    return candidates;
+  }
+  const self = await scm.currentUserId();
+  return candidates.filter((comment) => comment.authorId === self);
+}
+
+/** A comment's fingerprint: its marker, or on marker-less hosts its heading, path and line. */
+function commentFingerprint(comment: ScmComment, presentation: Presentation): string | undefined {
+  const marked = markerFingerprint(comment.body);
+  if (marked !== undefined || presentation.markers) return marked;
+  const anchor = headingAnchor(comment.body);
+  if (anchor === undefined || comment.path === undefined || comment.line === undefined) {
+    return undefined;
+  }
+  return fingerprintFrom(comment.path, anchor, comment.line);
+}
+
+function looksLikeFinding(comment: ScmComment, presentation: Presentation): boolean {
+  return (
+    markerFingerprint(comment.body) !== undefined ||
+    (!presentation.markers && headingAnchor(comment.body) !== undefined)
+  );
 }
 
 async function reconcileInlineComments(
   scm: ScmPort,
+  presentation: Presentation,
   findings: readonly Finding[],
   outcome: PublishOutcome,
 ): Promise<void> {
   const desired = new Map(
     fingerprintEntries(findings).map(({ fingerprint, finding }) => [fingerprint, finding]),
   );
-  const existing = (await scm.listInlineComments()).filter(
-    (comment) => markerFingerprint(comment.body) !== undefined,
+  const existing = await ownComments(
+    scm,
+    presentation,
+    (await scm.listInlineComments()).filter((comment) => looksLikeFinding(comment, presentation)),
   );
   const seen = new Set<string>();
   for (const comment of existing) {
-    const fingerprint = markerFingerprint(comment.body);
-    /* v8 ignore next -- the filter above guarantees a marker; the guard survives refactors */
+    const fingerprint = commentFingerprint(comment, presentation);
     const finding = fingerprint === undefined ? undefined : desired.get(fingerprint);
     if (fingerprint === undefined || finding === undefined || seen.has(fingerprint)) {
       await scm.deleteComment(comment.id);
@@ -155,7 +184,7 @@ async function reconcileInlineComments(
       continue;
     }
     seen.add(fingerprint);
-    const body = renderCommentBody(finding, fingerprint);
+    const body = renderCommentBody(finding, fingerprint, presentation);
     if (body === comment.body) {
       outcome.unchanged += 1;
     } else {
@@ -166,7 +195,7 @@ async function reconcileInlineComments(
   for (const [fingerprint, finding] of desired) {
     if (seen.has(fingerprint)) continue;
     await scm.createInlineComment({
-      body: renderCommentBody(finding, fingerprint),
+      body: renderCommentBody(finding, fingerprint, presentation),
       path: finding.file,
       line: finding.line,
     });
@@ -174,25 +203,31 @@ async function reconcileInlineComments(
   }
 }
 
-async function upsertSummary(scm: ScmPort, body: string): Promise<void> {
-  const summary = (await scm.listSummaryComments()).find((comment) =>
-    comment.body.includes(SUMMARY_MARKER),
+async function upsertSummary(
+  scm: ScmPort,
+  presentation: Presentation,
+  body: string,
+): Promise<void> {
+  const heading = summaryHeading(presentation);
+  // the marker also finds a pre 0.1.5 summary, so an upgrade replaces it in place
+  const candidates = (await scm.listSummaryComments()).filter(
+    (comment) =>
+      comment.body.trimEnd().split("\n").at(-1) === SUMMARY_MARKER ||
+      (!presentation.markers && comment.body.split("\n")[0] === heading),
   );
+  const [summary, ...extra] = await ownComments(scm, presentation, candidates);
   if (summary === undefined) {
     await scm.createSummaryComment(body);
-  } else if (summary.body !== body) {
-    await scm.updateSummaryComment(summary.id, body);
+    return;
   }
+  if (summary.body !== body) await scm.updateSummaryComment(summary.id, body);
+  for (const duplicate of extra) await scm.deleteComment(duplicate.id);
 }
 
 function statusDescription(input: SummaryInput): string {
-  if (input.gate.threshold === "none") {
-    return `advisory: ${String(input.findings.length)} finding(s)`;
-  }
-  if (input.gate.failed) {
-    return `${String(input.gate.failing)} finding(s) at or above ${input.gate.threshold}`;
-  }
-  return `passed at failOn=${input.gate.threshold}`;
+  const blocked = blockedLine(input);
+  if (blocked !== undefined) return blocked;
+  return countLine(input.findings);
 }
 
 /** The one place every command asks whether a write is suppressed; nothing else reads config.scm.dryRun directly. */
@@ -200,9 +235,15 @@ export function isDryRun(config: Pick<Config, "scm">): boolean {
   return config.scm.dryRun;
 }
 
+/** Code Insights default on where the host has them (Bitbucket); an explicit setting wins. */
+export function codeInsightsEnabled(config: Pick<Config, "scm">): boolean {
+  return config.scm.codeInsights ?? config.scm.provider === "bitbucket";
+}
+
 /**
- * Idempotent publication: comments carry a fingerprint marker, so re-runs
- * update what changed, delete what resolved, and never duplicate.
+ * Idempotent publication: comments are recognised on re-runs (by marker, or
+ * by author plus heading where markers would show), so re-runs update what
+ * changed, delete what resolved, and never duplicate.
  */
 export async function publishReview(
   scm: ScmPort,
@@ -210,6 +251,7 @@ export async function publishReview(
     commitStatus: boolean;
     comments?: boolean;
     codeInsights?: boolean;
+    presentation?: PresentationSettings;
     /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
     dryRun: boolean;
   },
@@ -219,20 +261,21 @@ export async function publishReview(
     outcome.notices.push("dry run: no comments, summary or status will be posted");
     return outcome;
   }
+  const presentation = presentationFor(scm, input.presentation);
   if (input.comments !== false) {
-    await reconcileInlineComments(scm, input.findings, outcome);
-    await upsertSummary(scm, renderSummaryBody(input));
+    await reconcileInlineComments(scm, presentation, input.findings, outcome);
+    await upsertSummary(scm, presentation, renderSummaryBody(input, presentation));
   }
   if (input.commitStatus) {
     const state: StatusState = input.gate.failed ? "failure" : "success";
-    await scm.postStatus(state, statusDescription(input));
+    await scm.postStatus(state, statusDescription(input), presentation.displayName);
   }
   if (input.codeInsights === true) {
     if (scm.publishInsights === undefined) {
       outcome.notices.push("this provider has no code insights; skipping them");
     } else {
       try {
-        await scm.publishInsights(buildInsightReport(input));
+        await scm.publishInsights(buildInsightReport(input, presentation));
       } catch (error) {
         // a workspace with insights disabled must not lose its review
         outcome.notices.push(

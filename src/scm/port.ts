@@ -3,6 +3,8 @@ export interface ScmComment {
   body: string;
   path?: string;
   line?: number;
+  /** Stable id of the comment's author, where the host exposes one. */
+  authorId?: string;
 }
 
 export interface NewInlineComment {
@@ -26,10 +28,13 @@ export interface InsightAnnotation {
   severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
   path: string;
   line: number;
+  /** The cited guideline on the host, when it has a web link. */
+  link?: string;
 }
 
 /** A native report card plus inline annotations (Bitbucket Code Insights). */
 export interface InsightReport {
+  title: string;
   result: "PASSED" | "FAILED";
   details: string;
   counts: { label: string; value: number }[];
@@ -40,6 +45,9 @@ export interface InsightReport {
 export interface CommentSignal {
   body: string;
   path?: string;
+  line?: number;
+  /** True when the token's own user wrote it; set by hosts that identify by author. */
+  own?: boolean;
   reactions: { up: number; down: number };
   replies: string[];
 }
@@ -49,6 +57,18 @@ export interface CommentSignal {
  * real HTTP; tests point them at a request-asserting fake server.
  */
 export interface ScmPort {
+  /**
+   * False where the host prints HTML comments verbatim (Bitbucket): the
+   * reviewer's comments are then known by author plus heading, not by marker.
+   * Absent means the host hides them.
+   */
+  readonly hidesHtmlComments?: boolean;
+  /** Fence language for a suggested change; absent means GitHub's one-click `suggestion`. */
+  readonly suggestionFence?: string;
+  /** The token's own user id, matched against ScmComment.authorId. */
+  currentUserId?(): Promise<string>;
+  /** Web link to a repository file on a branch, for guideline and docs links. */
+  fileUrl?(path: string, branch: string): string;
   /** Inline review comments previously posted (any author; callers filter by marker). */
   listInlineComments(): Promise<ScmComment[]>;
   createInlineComment(comment: NewInlineComment): Promise<void>;
@@ -58,8 +78,8 @@ export interface ScmPort {
   listSummaryComments(): Promise<ScmComment[]>;
   createSummaryComment(body: string): Promise<void>;
   updateSummaryComment(id: string, body: string): Promise<void>;
-  /** Commit status on the PR head, reflecting the gate. */
-  postStatus(state: StatusState, description: string): Promise<void>;
+  /** Commit status on the PR head, reflecting the gate; name is what readers see. */
+  postStatus(state: StatusState, description: string, name?: string): Promise<void>;
   /** The PR diff as the host computes it; the fallback when no usable clone exists. */
   fetchPullRequestDiff?(): Promise<string>;
   /** Inline comments with reactions and replies attached; degrades per host. */

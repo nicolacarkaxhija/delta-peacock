@@ -2,12 +2,9 @@ import { SEVERITIES, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import type { ModelRequest } from "../model/port.js";
 import { parseJson } from "../review/parse.js";
+import { reviewerComment } from "../scm/comment-format.js";
 import type { CommentSignal } from "../scm/port.js";
 import type { Draft } from "./draft.js";
-
-const FINDING_MARKER = /<!-- delta-peacock:finding:([0-9a-f]+(?:-\d+)?) -->/;
-const SEVERITY_LEAD = /^\*\*(BLOCKER|CRITICAL|MAJOR|MINOR|INFO)\*\*\s*/;
-const CITED_ID = /`([a-z0-9][a-z0-9-]*)`/;
 
 export interface Evidence {
   fingerprint: string;
@@ -20,21 +17,18 @@ export interface Evidence {
   replies: string[];
 }
 
-/** Only the reviewer's own comments count; the marker is the identity check. */
+/** Only the reviewer's own comments count: its marker, or its author plus heading. */
 export function evidenceFrom(signals: readonly CommentSignal[]): Evidence[] {
   const evidence: Evidence[] = [];
   for (const signal of signals) {
-    const fingerprint = FINDING_MARKER.exec(signal.body)?.[1];
-    if (fingerprint === undefined) continue;
-    const firstLine = signal.body.split("\n")[0] ?? "";
-    const severity = SEVERITY_LEAD.exec(firstLine)?.[1];
-    const guidelineId = CITED_ID.exec(firstLine)?.[1];
-    const title = firstLine.replace(SEVERITY_LEAD, "").split(" — ")[0]?.trim();
+    const own = reviewerComment(signal);
+    if (own === undefined) continue;
+    const { fingerprint, parsed } = own;
     evidence.push({
       fingerprint,
-      ...(guidelineId !== undefined ? { guidelineId } : {}),
-      ...(severity !== undefined ? { severity } : {}),
-      title: title === undefined || title === "" ? "(untitled)" : title,
+      ...(parsed?.guidelineId !== undefined ? { guidelineId: parsed.guidelineId } : {}),
+      ...(parsed !== undefined ? { severity: parsed.severity } : {}),
+      title: parsed === undefined || parsed.title === "" ? "(untitled)" : parsed.title,
       ...(signal.path !== undefined ? { path: signal.path } : {}),
       up: signal.reactions.up,
       down: signal.reactions.down,

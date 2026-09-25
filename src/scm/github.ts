@@ -6,6 +6,7 @@ import type {
   ScmPort,
   StatusState,
 } from "./port.js";
+import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface GitHubPortOptions {
@@ -124,12 +125,18 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
     async updateSummaryComment(id: string, body: string): Promise<void> {
       await request("PATCH", `/repos/${repo}/issues/comments/${id}`, { body });
     },
-    async postStatus(state: StatusState, description: string): Promise<void> {
+    async postStatus(state: StatusState, description: string, name?: string): Promise<void> {
       await request("POST", `/repos/${repo}/statuses/${await resolveHeadSha()}`, {
         state,
         description,
-        context: "delta-peacock",
+        context: name ?? DEFAULT_DISPLAY_NAME,
       });
+    },
+    fileUrl(file: string, branch: string): string {
+      // api.github.com serves github.com; an enterprise API lives under <host>/api/v3
+      const web =
+        base === "https://api.github.com" ? "https://github.com" : base.replace(/\/api\/v3$/, "");
+      return `${web}/${repo}/blob/${encodeURIComponent(branch)}/${encodeURI(file)}`;
     },
     async listCommentSignals(): Promise<CommentSignal[]> {
       const all = await paginate(`/repos/${repo}/pulls/${pr}/comments`);

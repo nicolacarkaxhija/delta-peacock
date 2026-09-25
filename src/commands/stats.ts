@@ -4,6 +4,7 @@ import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { addedLineCount } from "../git/diff.js";
 import { buildScmPort } from "../scm/build.js";
+import { reviewerComment } from "../scm/comment-format.js";
 import type { CommentSignal } from "../scm/port.js";
 import { SEVERITIES, type Severity } from "../domain/severity.js";
 import {
@@ -13,10 +14,6 @@ import {
   summarize,
   type StatsRecord,
 } from "../stats/record.js";
-
-const FINDING_MARKER = /<!-- delta-peacock:finding:[0-9a-f]+(?:-\d+)? -->/;
-const SEVERITY_LEAD = /^\*\*(BLOCKER|CRITICAL|MAJOR|MINOR|INFO)\*\*/;
-const CITED_ID = /`([a-z0-9][a-z0-9-]*)`/;
 
 export interface StatsOptions {
   report?: string;
@@ -33,11 +30,11 @@ export function recordFromSignals(
   const bySeverity: Partial<Record<Severity, number>> = {};
   const byGuideline: Record<string, number> = {};
   for (const signal of signals) {
-    if (!FINDING_MARKER.test(signal.body)) continue;
-    const firstLine = String(signal.body.split("\n")[0]);
-    const severity = SEVERITY_LEAD.exec(firstLine)?.[1] as Severity | undefined;
+    const own = reviewerComment(signal);
+    if (own === undefined) continue;
+    const severity = own.parsed?.severity;
     if (severity !== undefined) bySeverity[severity] = (bySeverity[severity] ?? 0) + 1;
-    const guidelineId = CITED_ID.exec(firstLine)?.[1] ?? "(observation)";
+    const guidelineId = own.parsed?.guidelineId ?? "(observation)";
     byGuideline[guidelineId] = (byGuideline[guidelineId] ?? 0) + 1;
   }
   return { at, author, addedLines, bySeverity, byGuideline };
@@ -53,7 +50,7 @@ async function backfill(deps: RuntimeDeps, cwd: string, statsPath: string): Prom
     throw new ToolError(`the ${config.scm.provider} provider cannot back stats out yet`);
   }
   const signals = await scm.listCommentSignals();
-  const marked = signals.filter((signal) => FINDING_MARKER.test(signal.body));
+  const marked = signals.filter((signal) => reviewerComment(signal) !== undefined);
   if (marked.length === 0) {
     deps.out("nothing to backfill: no marked reviewer comments on this pull request\n");
     return 0;

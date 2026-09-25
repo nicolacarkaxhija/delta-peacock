@@ -36,7 +36,6 @@ function bitbucketEnv(fake: FakeBitbucket, extra: Record<string, string> = {}) {
     DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
     DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
     DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
-    DELTA_PEACOCK_SCM_CODE_INSIGHTS: "true",
     BITBUCKET_TOKEN: "test-token",
     ...extra,
   };
@@ -67,15 +66,21 @@ describe("bitbucket code insights", () => {
       const { code } = await review(fake, { DELTA_PEACOCK_GATE_FAIL_ON: "MAJOR" });
       expect(code).toBe(2);
       expect(fake.insightReport).toMatchObject({
-        title: "delta-peacock review",
+        title: "Code review",
         report_type: "BUG",
         result: "FAILED",
+        details:
+          "2 findings: 1 blocker, 1 major. Blocked: 2 findings (1 blocker, 1 major) must be resolved.",
       });
       const data = fake.insightReport?.["data"] as { title: string; value: number }[];
       expect(data).toEqual([
-        { title: "BLOCKER", type: "NUMBER", value: 1 },
-        { title: "MAJOR", type: "NUMBER", value: 1 },
+        { title: "Findings", type: "NUMBER", value: 2 },
+        { title: "Blocker", type: "NUMBER", value: 1 },
+        { title: "Major", type: "NUMBER", value: 1 },
       ]);
+      expect(fake.insightAnnotations[0]?.link).toBe(
+        "https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md",
+      );
       expect(fake.insightAnnotations.map((a) => a.severity)).toEqual(["CRITICAL", "MEDIUM"]);
       expect(fake.insightAnnotations[0]).toMatchObject({
         annotation_type: "CODE_SMELL",
@@ -87,6 +92,24 @@ describe("bitbucket code insights", () => {
       expect(fake.comments.length).toBeGreaterThan(0);
     } finally {
       await fake.close();
+    }
+  });
+
+  it("publishes by default on bitbucket, and an explicit false switches it off", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      await review(fake, { DELTA_PEACOCK_REVIEW_DISPLAY_NAME: "Automated review" });
+      expect(fake.insightReport?.["title"]).toBe("Automated review");
+      expect(fake.statuses.at(-1)?.name).toBe("Automated review");
+    } finally {
+      await fake.close();
+    }
+    const off = await startFakeBitbucket();
+    try {
+      await review(off, { DELTA_PEACOCK_SCM_CODE_INSIGHTS: "false" });
+      expect(off.insightReport).toBeUndefined();
+    } finally {
+      await off.close();
     }
   });
 

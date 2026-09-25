@@ -11,6 +11,7 @@ context:
   maxToolRounds: 10
 review:
   target: main
+  displayName: Review
   guidelinesDir: guidelines
   # The general pass cost precision on the consumer bench; uncited findings are harvested instead.
   generalPass: false

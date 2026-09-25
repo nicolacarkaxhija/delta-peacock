@@ -5,6 +5,7 @@ import type {
   ScmPort,
   StatusState,
 } from "./port.js";
+import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface GitLabPortOptions {
@@ -133,13 +134,17 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
     async updateSummaryComment(id: string, body: string): Promise<void> {
       await request("PUT", `${mr}/notes/${id}`, { body });
     },
-    async postStatus(state: StatusState, description: string): Promise<void> {
+    async postStatus(state: StatusState, description: string, name?: string): Promise<void> {
       const sha = (await resolveMeta()).sha;
       await request("POST", `${base}/projects/${project}/statuses/${sha}`, {
         state: STATUS_STATES[state],
-        name: "delta-peacock",
+        name: name ?? DEFAULT_DISPLAY_NAME,
         description,
       });
+    },
+    fileUrl(file: string, branch: string): string {
+      const web = base.replace(/\/api\/v4$/, "");
+      return `${web}/${options.repository}/-/blob/${encodeURIComponent(branch)}/${encodeURI(file)}`;
     },
     async getPullRequestAuthor(): Promise<string> {
       const current = (await (await request("GET", mr)).json()) as {

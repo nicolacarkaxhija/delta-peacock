@@ -7,6 +7,7 @@ import type {
   ScmPort,
   StatusState,
 } from "./port.js";
+import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface BitbucketPortOptions {
@@ -39,6 +40,7 @@ interface BitbucketComment {
   inline?: { path: string; to?: number | null };
   parent?: { id: number };
   deleted?: boolean;
+  user?: { uuid?: string };
 }
 
 interface Page<T> {
@@ -65,6 +67,7 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
   const statusUrl =
     absoluteHttpUrl(options.statusUrl) ?? `https://bitbucket.org/${repo}/pull-requests/${pr}`;
   let source: { sha: string; branch: string | undefined } | undefined;
+  let self: Promise<string> | undefined;
 
   async function request(method: string, url: string, body?: unknown): Promise<Response> {
     return httpRequest(
@@ -113,7 +116,27 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     body: comment.content.raw,
     ...(comment.inline !== undefined ? { path: comment.inline.path } : {}),
     ...(typeof comment.inline?.to === "number" ? { line: comment.inline.to } : {}),
+    ...(comment.user?.uuid !== undefined ? { authorId: comment.user.uuid } : {}),
   });
+
+  /**
+   * GET /user answers 403 to repository and workspace access tokens, so for
+   * those a draft comment (visible to nobody, deleted at once) names the bot.
+   */
+  async function resolveSelf(): Promise<string> {
+    const commentsUrl = `${base}/repositories/${repo}/pullrequests/${pr}/comments`;
+    try {
+      const user = (await (await request("GET", `${base}/user`)).json()) as { uuid: string };
+      return user.uuid;
+    } catch (error) {
+      if (!(error instanceof Error) || !/\b403\b|denied/.test(error.message)) throw error;
+    }
+    const draft = (await (
+      await request("POST", commentsUrl, { content: { raw: "identity check" }, pending: true })
+    ).json()) as BitbucketComment;
+    await request("DELETE", `${commentsUrl}/${String(draft.id)}`);
+    return draft.user?.uuid ?? "";
+  }
 
   async function getText(): Promise<PullRequestText> {
     const meta = (await (
@@ -136,7 +159,19 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     return (await resolveSource()).sha;
   }
 
+  function currentUserId(): Promise<string> {
+    self ??= resolveSelf();
+    return self;
+  }
+
   return {
+    // Bitbucket prints HTML comments as text and has no one-click suggestions
+    hidesHtmlComments: false,
+    suggestionFence: "",
+    currentUserId,
+    fileUrl(file: string, branch: string): string {
+      return `https://bitbucket.org/${repo}/src/${encodeURIComponent(branch)}/${encodeURI(file)}`;
+    },
     async listInlineComments(): Promise<ScmComment[]> {
       return (await listComments()).filter((c) => c.inline !== undefined).map(toComment);
     },
@@ -167,13 +202,14 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
         content: { raw: body },
       });
     },
-    async postStatus(state: StatusState, description: string): Promise<void> {
+    async postStatus(state: StatusState, description: string, name?: string): Promise<void> {
       const { sha, branch } = await resolveSource();
       // the real API answers 400 without an absolute url; refname ties the status to the PR
       await request("POST", `${base}/repositories/${repo}/commit/${sha}/statuses/build`, {
         state: STATUS_STATES[state],
+        // the key is the status identity across runs; readers see only the name
         key: "delta-peacock",
-        name: "delta-peacock",
+        name: name ?? DEFAULT_DISPLAY_NAME,
         url: statusUrl,
         description,
         ...(branch !== undefined ? { refname: branch } : {}),
@@ -183,7 +219,7 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
       const sha = await resolveSourceSha();
       const reportUrl = `${base}/repositories/${repo}/commit/${sha}/reports/delta-peacock`;
       await request("PUT", reportUrl, {
-        title: "delta-peacock review",
+        title: report.title,
         details: report.details,
         report_type: "BUG",
         result: report.result,
@@ -206,6 +242,7 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
             severity: annotation.severity,
             path: annotation.path,
             line: annotation.line,
+            ...(annotation.link !== undefined ? { link: annotation.link } : {}),
           })),
         );
       }
@@ -213,6 +250,7 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     async listCommentSignals(): Promise<CommentSignal[]> {
       // Bitbucket exposes no comment reactions; replies are the whole signal
       const all = await listComments();
+      const me = await currentUserId();
       const repliesTo = new Map<number, string[]>();
       for (const comment of all) {
         if (comment.parent === undefined) continue;
@@ -225,6 +263,8 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
         .map((comment) => ({
           body: comment.content.raw,
           ...(comment.inline !== undefined ? { path: comment.inline.path } : {}),
+          ...(typeof comment.inline?.to === "number" ? { line: comment.inline.to } : {}),
+          own: comment.user?.uuid === me,
           reactions: { up: 0, down: 0 },
           replies: repliesTo.get(comment.id) ?? [],
         }));
