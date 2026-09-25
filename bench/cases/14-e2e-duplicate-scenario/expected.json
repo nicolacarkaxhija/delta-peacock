@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/smoke/homepage-locale-copies.spec.ts",
+      "line": 12,
+      "guidelineId": "data-rows-not-copies"
+    }
+  ]
+}

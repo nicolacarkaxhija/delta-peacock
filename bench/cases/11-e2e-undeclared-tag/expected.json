@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/smoke/homepage-quick-tag.spec.ts",
+      "line": 5,
+      "guidelineId": "axis-tags"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+diff --git a/tests/smoke/homepage-quick-tag.spec.ts b/tests/smoke/homepage-quick-tag.spec.ts
+new file mode 100644
+index 0000000..9e037c3
+--- /dev/null
++++ b/tests/smoke/homepage-quick-tag.spec.ts
+@@ -0,0 +1,10 @@
++import { expect, test } from '../../support/fixtures.js';
++
++test(
++  'The homepage renders its hero carousel',
++  { tag: ['@homepage', '@quickwin'] },
++  async ({ home }) => {
++    await home.open();
++    await expect(home.heroCarousel(), 'a healthy homepage renders its hero carousel').toBeVisible();
++  },
++);

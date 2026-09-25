@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "support/test-accounts.ts",
+      "line": 4,
+      "guidelineId": "no-secrets-in-files"
+    }
+  ]
+}

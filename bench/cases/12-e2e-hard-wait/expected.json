@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/journeys/homepage-carousel-autoplay.spec.ts",
+      "line": 5,
+      "guidelineId": "no-inline-timeouts"
+    }
+  ]
+}

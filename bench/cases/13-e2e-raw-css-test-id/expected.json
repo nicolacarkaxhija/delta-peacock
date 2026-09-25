@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "pages/home.ts",
+      "line": 18,
+      "guidelineId": "prefer-test-ids"
+    }
+  ]
+}

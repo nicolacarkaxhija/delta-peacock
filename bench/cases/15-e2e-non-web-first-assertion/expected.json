@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/smoke/homepage-visibility-check.spec.ts",
+      "line": 5,
+      "guidelineId": "web-first-assertions"
+    }
+  ]
+}

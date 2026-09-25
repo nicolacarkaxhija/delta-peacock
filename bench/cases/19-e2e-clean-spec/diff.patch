@@ -1,0 +1,15 @@
+diff --git a/tests/smoke/homepage-hero-slide-count.spec.ts b/tests/smoke/homepage-hero-slide-count.spec.ts
+new file mode 100644
+index 0000000..d534fbc
+--- /dev/null
++++ b/tests/smoke/homepage-hero-slide-count.spec.ts
+@@ -0,0 +1,9 @@
++import { expect, test } from '../../support/fixtures.js';
++
++test('The homepage hero carousel renders more than one slide', { tag: ['@homepage'] }, async ({ home }) => {
++  await home.open();
++  await expect(
++    home.heroSlides(),
++    'the carousel gives the shopper more than one slide to browse',
++  ).not.toHaveCount(1);
++});

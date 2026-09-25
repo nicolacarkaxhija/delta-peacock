@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/smoke/homepage-promo-bar.spec.ts",
+      "line": 5,
+      "guidelineId": "locators-live-in-pages"
+    }
+  ]
+}

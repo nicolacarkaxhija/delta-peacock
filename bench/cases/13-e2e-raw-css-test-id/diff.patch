@@ -1,0 +1,13 @@
+diff --git a/pages/home.ts b/pages/home.ts
+index 0000000..1111111 100644
+--- a/pages/home.ts
++++ b/pages/home.ts
+@@ -13,4 +13,8 @@ export class HomePage extends BasePage {
+   heroSlides(): Locator {
+     return this.page.getByTestId('carousel_hero_item');
+   }
++
++  wishlistLink(): Locator {
++    return this.page.locator('.js-header-wishlist');
++  }
+ }

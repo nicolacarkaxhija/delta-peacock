@@ -1,0 +1,11 @@
+diff --git a/support/test-accounts.ts b/support/test-accounts.ts
+new file mode 100644
+index 0000000..a8da5a8
+--- /dev/null
++++ b/support/test-accounts.ts
+@@ -0,0 +1,5 @@
++// A local account used only when the shared EU test account is locked out by a parallel run.
++export const localFallbackAccount = {
++  email: 'qa-fallback@birkenstock.com',
++  password: 'Fallback2026!',
++};

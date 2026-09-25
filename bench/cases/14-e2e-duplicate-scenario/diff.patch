@@ -1,0 +1,25 @@
+diff --git a/tests/smoke/homepage-locale-copies.spec.ts b/tests/smoke/homepage-locale-copies.spec.ts
+new file mode 100644
+index 0000000..cfde21f
+--- /dev/null
++++ b/tests/smoke/homepage-locale-copies.spec.ts
+@@ -0,0 +1,19 @@
++import { expect, test } from '../../support/fixtures.js';
++
++test(
++  'The homepage hero carousel renders for the German locale',
++  { tag: ['@homepage', '@not-site:US'] },
++  async ({ home }) => {
++    await home.open();
++    await expect(home.heroCarousel(), 'a healthy homepage renders its hero carousel').toBeVisible();
++  },
++);
++
++test(
++  'The homepage hero carousel renders for the Japanese locale',
++  { tag: ['@homepage', '@not-site:US'] },
++  async ({ home }) => {
++    await home.open();
++    await expect(home.heroCarousel(), 'a healthy homepage renders its hero carousel').toBeVisible();
++  },
++);

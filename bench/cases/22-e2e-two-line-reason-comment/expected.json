@@ -1,0 +1,10 @@
+{
+  "findings": [
+    {
+      "file": "pages/home.ts",
+      "line": 17,
+      "guidelineId": "natural-comments",
+      "suggestionIncludes": ["every language"]
+    }
+  ]
+}

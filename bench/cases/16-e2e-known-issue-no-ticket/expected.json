@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/smoke/homepage-second-slide.spec.ts",
+      "line": 3,
+      "guidelineId": "known-issues-with-ticket"
+    }
+  ]
+}
