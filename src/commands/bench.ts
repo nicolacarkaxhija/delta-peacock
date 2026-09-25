@@ -15,17 +15,21 @@ import { addUsage } from "../model/usage.js";
 import { calibrate } from "../review/calibrate.js";
 import { runEnsemble } from "../review/ensemble.js";
 import type { ParsedReview } from "../review/parse.js";
-import { retryRequest } from "../review/run-review.js";
+import { planPasses, runPasses, type PromptOf } from "../review/run-review.js";
 import { formatTable } from "../bench/harness.js";
 import { overlapMatrix, type ProducedFinding } from "../bench/scoring.js";
 import { attachContextTools, resolveContext } from "../context/build.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import type { RuntimeDeps } from "../deps.js";
 import { changedFilesFromDiff, newLineTexts } from "../git/diff.js";
-import { dropGoodExamples, linesFromDiff, placeFindings } from "../review/placement.js";
+import {
+  dropCommentMoves,
+  dropGoodExamples,
+  linesFromDiff,
+  placeFindings,
+} from "../review/placement.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
-import { parseReviewResponse } from "../review/parse.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { readSourceForStructuralCheck } from "../review/run-review.js";
 import { verifyStructural } from "../review/structural.js";
@@ -80,17 +84,17 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       contextTools = resolved.tools;
     }
 
+    // files/ is the case's repository root: its declared tags and linters count
+    const promptOptions = buildPromptOptions(
+      config,
+      existsSync(filesRoot) ? filesRoot : benchCase.dir,
+      projectContext,
+    );
+    const promptOf: PromptOf = (diffText) => buildReviewPrompt(guidelines, diffText, promptOptions);
+    // the same call a live review plans for a one batch diff
+    const passes = planPasses(config, [benchCase.diff], [projectContext], contextTools, promptOf);
     const request = attachContextTools(
-      buildReviewPrompt(
-        guidelines,
-        benchCase.diff,
-        // files/ is the case's repository root: its declared tags and linters count
-        buildPromptOptions(
-          config,
-          existsSync(filesRoot) ? filesRoot : benchCase.dir,
-          projectContext,
-        ),
-      ),
+      promptOf(benchCase.diff, projectContext),
       contextTools,
       config.context.maxToolRounds,
     );
@@ -127,27 +131,22 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       parsed = ensemble.parsed;
     } else {
       const port = deps.modelPort ?? buildModelPort(config, deps.credentials);
-      const model = config.model.id ?? config.model.provider;
-      let reply = await port.complete(request);
-      addTo(usage, model, reply.usage);
-      try {
-        parsed = parseReviewResponse(reply.text, parseOptions);
-      } catch {
-        // the one retry a live review makes, tools off, fetched files as text
-        reply = await port.complete(retryRequest(request, reply));
-        addTo(usage, model, reply.usage);
-        parsed = parseReviewResponse(reply.text, parseOptions);
-      }
+      // the passes, retry and merge a live review runs
+      const executed = await runPasses(deps, port, passes, parseOptions);
+      addTo(usage, config.model.id ?? config.model.provider, executed.usage);
+      parsed = executed.parsed;
     }
     // the same placement and Good example gate a live review applies
     const diffLines = newLineTexts(benchCase.diff);
-    const placed = placeFindings(parsed.findings, (file) => {
+    const linesOf = (file: string): readonly string[] | undefined => {
       const source = readSourceForStructuralCheck(filesRoot, file);
       if (source !== undefined) return source.split("\n");
       const known = diffLines.get(file);
       return known === undefined ? undefined : linesFromDiff(known);
-    });
-    const kept = dropGoodExamples(placed, guidelinesById).kept;
+    };
+    const placed = placeFindings(parsed.findings, linesOf);
+    // the same comment move and Good example gates a live review applies
+    const kept = dropGoodExamples(dropCommentMoves(placed, linesOf).kept, guidelinesById).kept;
     // same AST gate a live review applies, reading the case's files/ tree
     const structural = verifyStructural(kept, guidelinesById, (file) =>
       readSourceForStructuralCheck(filesRoot, file),

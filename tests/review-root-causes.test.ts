@@ -223,8 +223,19 @@ describe("PR 1 root causes, replayed", () => {
       expect(system).toContain('"quote"');
       expect(system).toContain("may not introduce a tag, identifier or import");
       expect(system).toContain("## Tags declared in test-runner.config.ts");
-      expect(system).toContain("Feature tags: @checkout, @cart, @pdp-types");
+      expect(system).toContain(
+        [
+          "Feature tags, each with what it covers:",
+          "- @checkout: the checkout funnel, from the guest choice screen",
+          "- @cart: the cart page",
+          "- @pdp-types: the pinned product types",
+        ].join("\n"),
+      );
+      expect(system).toContain("when no description covers it, there is no finding");
       expect(system).toContain("@not-site:US");
+      // a fix keeps what the original checks; a heading binds like a sentence
+      expect(system).toContain("a check on the page's URL stays a check on the URL");
+      expect(system).toContain("a comment spanning two lines is not one line");
     } finally {
       await fake.close();
     }

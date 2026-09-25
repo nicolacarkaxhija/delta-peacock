@@ -27,7 +27,7 @@ import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/p
 import { withFetched } from "../model/generate.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
-import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
+import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
 import { withResponseCache } from "../model/cache.js";
@@ -37,6 +37,7 @@ import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
+import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
   parseReviewResponse,
@@ -45,7 +46,13 @@ import {
   type RejectedCandidate,
 } from "./parse.js";
 import { declaredTagsBlock, readDeclaredTags, type DeclaredTags } from "./declared.js";
-import { dropGoodExamples, linesFromDiff, placeFindings, vetSuggestions } from "./placement.js";
+import {
+  dropCommentMoves,
+  dropGoodExamples,
+  linesFromDiff,
+  placeFindings,
+  vetSuggestions,
+} from "./placement.js";
 import { runGit } from "../git/git.js";
 import { NOT_REVIEWED } from "../scm/comment-format.js";
 import { buildScmPort } from "../scm/build.js";
@@ -178,21 +185,12 @@ export async function runReview(
   }
 
   const declared = readDeclaredTags(deps.cwd, config.review.repoConfigPath);
-  const {
-    redacted,
-    request,
-    diffBatches,
-    batchContexts,
-    contextTools,
-    parseOptions,
-    promptOf,
-    budgetDegraded,
-    linters,
-  } = await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
+  const { redacted, request, passes, batchCount, parseOptions, budgetDegraded, linters } =
+    await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
 
   const now = deps.clock?.() ?? new Date();
   if (guardActive(config)) {
-    const decision = await checkCostGuard(config, request, now, { batches: diffBatches.length });
+    const decision = await checkCostGuard(config, request, now, { batches: batchCount });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
@@ -226,16 +224,7 @@ export async function runReview(
 
   let executed: ExecuteResult;
   try {
-    executed = await executeReview(
-      deps,
-      config,
-      request,
-      diffBatches,
-      batchContexts,
-      contextTools,
-      parseOptions,
-      promptOf,
-    );
+    executed = await executeReview(deps, config, request, passes, batchCount, parseOptions);
   } catch (error) {
     if (error instanceof ToolError) await publishFailure(deps, config, failureReason(error));
     throw error;
@@ -253,7 +242,18 @@ export async function runReview(
       return linesAtHead(deps.cwd, file, known, options.staged === true);
     }),
   );
-  const vetted = vetSuggestions(placed, {
+  // a fix that only repeats a reason already written just above is no fix
+  const moved = dropCommentMoves(placed, (file) =>
+    fromApi
+      ? linesFromDiff(diffLines.get(file) ?? new Map<number, string>())
+      : linesAtHead(deps.cwd, file, diffLines.get(file), options.staged === true),
+  );
+  if (moved.dropped.length > 0) {
+    deps.err(
+      `${String(moved.dropped.length)} finding(s) dropped: the reason they ask for already sits above the line\n`,
+    );
+  }
+  const vetted = vetSuggestions(moved.kept, {
     cwd: deps.cwd,
     ...(declared !== undefined ? { tags: declared } : {}),
   });
@@ -276,7 +276,12 @@ export async function runReview(
   const parsed: ParsedReview = {
     ...executed.parsed,
     findings: structural.kept,
-    rejected: [...executed.parsed.rejected, ...exemplary.dropped, ...structural.dropped],
+    rejected: [
+      ...executed.parsed.rejected,
+      ...moved.dropped,
+      ...exemplary.dropped,
+      ...structural.dropped,
+    ],
   };
   if (options.explainDrops === true) {
     for (const entry of parsed.rejected) {
@@ -438,9 +443,8 @@ export async function runReview(
     dryRun: isDryRun(config),
   });
 
-  if (usage && anyRateConfigured(config.cost)) {
-    const spent = computeCost(usage, config.cost).total;
-    await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
+  if (usage !== undefined) {
+    deps.err(`${await spendLine(config, usage, now)}\n`);
   }
 
   if (config.stats.enabled) {
@@ -454,9 +458,29 @@ export async function runReview(
       // an invented rule is a reviewer error, counted apart from the author's findings
       ...(parsed.droppedMisquoted > 0 ? { errors: { misquoted: parsed.droppedMisquoted } } : {}),
     });
+    deps.err(`stats: review recorded in ${config.stats.path}\n`);
   }
 
   return gate.failed ? 2 : 0;
+}
+
+/**
+ * Records the spend when rates are set and returns the one log line a run
+ * prints about it: tokens in and out, the cost, and the month on the counter.
+ */
+export async function spendLine(config: Config, usage: ModelUsage, now: Date): Promise<string> {
+  const tokens = `${String(usage.inputTokens)} tokens in, ${String(usage.outputTokens)} out`;
+  if (!anyRateConfigured(config.cost)) return `usage: ${tokens}; no cost rates configured`;
+  const spent = computeCost(usage, config.cost).total;
+  const counterPath = config.cost.counterPath ?? defaultCounterPath();
+  const month = monthKey(now);
+  await recordSpend(counterPath, month, spent);
+  const cap = config.cost.monthlyCap > 0 ? ` of ${String(config.cost.monthlyCap)}` : "";
+  return `cost: ${tokens}, ${usd(spent)} USD; ${month} spend ${usd(readMonthSpend(counterPath, month))} USD${cap} on ${counterPath}`;
+}
+
+function usd(amount: number): string {
+  return amount.toFixed(4);
 }
 
 /**
@@ -488,16 +512,42 @@ export function readSourceForStructuralCheck(cwd: string, file: string): string 
   }
 }
 
+/** One model call the review makes: one diff batch with its context and tools. */
+export interface PlannedPass {
+  label: string;
+  request: ModelRequest;
+}
+
+export type PromptOf = (diffText: string, context: string) => ModelRequest;
+
+/**
+ * Every call a review makes, in order. Each batch carries its own context and
+ * the same tools, so no batch is where a strategy silently stops running.
+ */
+export function planPasses(
+  config: Config,
+  diffBatches: readonly string[],
+  batchContexts: readonly string[],
+  contextTools: ToolSet | undefined,
+  promptOf: PromptOf,
+): PlannedPass[] {
+  return diffBatches.map((batchDiff, index) => ({
+    label: `batch ${String(index + 1)}/${String(diffBatches.length)}`,
+    request: attachContextTools(
+      promptOf(batchDiff, batchContexts[index] ?? ""),
+      contextTools,
+      config.context.maxToolRounds,
+    ),
+  }));
+}
+
 interface AssembledReview {
   redacted: RedactedDiff;
+  /** The whole-corpus request: what an ensemble sends and the shape a single pass takes. */
   request: ModelRequest;
-  diffBatches: string[];
-  /** The context text resolved for each entry of diffBatches, "" where dropped. */
-  batchContexts: string[];
-  /** On-demand tools every batch should carry; undefined means the strategy offers none. */
-  contextTools: ToolSet | undefined;
+  passes: PlannedPass[];
+  batchCount: number;
   parseOptions: ParseOptions;
-  promptOf: (diffText: string, context: string) => ModelRequest;
   budgetDegraded: boolean;
   linters: string[];
 }
@@ -541,7 +591,7 @@ async function assembleReview(
 
   const linters = detectLinters(deps.cwd);
   if (linters.length > 0) deps.err(`linters detected (not duplicated): ${linters.join(", ")}\n`);
-  const promptOf = (diffText: string, context: string): ModelRequest =>
+  const promptOf: PromptOf = (diffText, context) =>
     buildReviewPrompt(guidelines, diffText, {
       generalPass: config.review.generalPass,
       language: config.review.language,
@@ -591,11 +641,9 @@ async function assembleReview(
   return {
     redacted,
     request,
-    diffBatches,
-    batchContexts,
-    contextTools,
+    passes: planPasses(config, diffBatches, batchContexts, contextTools, promptOf),
+    batchCount: diffBatches.length,
     parseOptions,
-    promptOf,
     budgetDegraded,
     linters,
   };
@@ -622,11 +670,9 @@ async function executeReview(
   deps: ReviewDeps,
   config: Config,
   request: ModelRequest,
-  diffBatches: readonly string[],
-  batchContexts: readonly string[],
-  contextTools: ToolSet | undefined,
+  passes: readonly PlannedPass[],
+  batchCount: number,
   parseOptions: ParseOptions,
-  promptOf: (diffText: string, context: string) => ModelRequest,
 ): Promise<ExecuteResult> {
   if (config.ensemble.enabled) {
     const ensemble = await runEnsemble(deps, config, request, parseOptions);
@@ -650,103 +696,117 @@ async function executeReview(
       deps.err(`${notice}\n`);
     },
   );
-  if (diffBatches.length > 1) {
-    deps.err(`budget: reviewing the diff in ${String(diffBatches.length)} batch(es)\n`);
+  if (batchCount > 1) {
+    deps.err(`budget: reviewing the diff in ${String(batchCount)} batch(es)\n`);
   }
+  return {
+    ...(await runPasses(deps, modelPort, passes, parseOptions)),
+    ensembleMembers: undefined,
+  };
+}
+
+/** Passes in flight at once; a focused review fans out one call per guideline. */
+const PASS_CONCURRENCY = 4;
+
+type PassOutcome =
+  { ok: true; parsed: ParsedReview; reply: ModelReply } | { ok: false; reason: string };
+
+/**
+ * Runs every planned pass and folds the replies into one parsed result. A
+ * reply with no parseable JSON gets one more answering step, then costs only
+ * its own pass's findings: the others were paid for and stand beside it.
+ */
+export async function runPasses(
+  deps: Pick<ReviewDeps, "err">,
+  modelPort: ModelPort,
+  passes: readonly PlannedPass[],
+  parseOptions: ParseOptions,
+): Promise<Omit<ExecuteResult, "ensembleMembers">> {
+  const outcomes = await inPool(
+    passes.map((pass) => async (): Promise<PassOutcome> => {
+      let reply = await completeOrFail(modelPort, pass.request);
+      try {
+        try {
+          return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
+        } catch (error) {
+          // one more answering step, tools off, with what the model fetched replayed as text
+          deps.err(
+            `${pass.label}: ${(error as Error).message}; asking once more for the JSON answer\n`,
+          );
+          const first = reply;
+          reply = await completeOrFail(modelPort, retryRequest(pass.request, first));
+          reply = {
+            ...reply,
+            ...(first.usage !== undefined
+              ? { usage: reply.usage ? addUsage(first.usage, reply.usage) : first.usage }
+              : {}),
+            ...(first.toolCalls !== undefined ? { toolCalls: first.toolCalls } : {}),
+          };
+          return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
+        }
+      } catch (error) {
+        const reason = (error as Error).message;
+        deps.err(`${pass.label}: ${reason}; skipping this batch's findings\n`);
+        return { ok: false, reason };
+      }
+    }),
+    PASS_CONCURRENCY,
+  );
   const merged: Finding[] = [];
   let usage: ModelUsage | undefined;
   let toolCalls: number | undefined;
   let cachedResponse = false;
-  let batchDropped = 0;
-  let batchOutOfScope = 0;
-  let batchAdjusted = 0;
-  let batchMalformed = 0;
-  let batchMisquoted = 0;
-  const batchRejected: RejectedCandidate[] = [];
+  const counts = { uncited: 0, outOfScope: 0, adjusted: 0, malformed: 0, misquoted: 0 };
+  const rejected: RejectedCandidate[] = [];
   const unparsedBatches: UnparsedBatch[] = [];
-  for (const [index, batchDiff] of diffBatches.entries()) {
-    // every batch carries its own (already-budgeted) context and the same
-    // tools: agentic/repo_map/rag are not a whole-diff privilege, so a batch
-    // is never the one place they silently stop running
-    const batchRequest = attachContextTools(
-      promptOf(batchDiff, batchContexts[index] ?? ""),
-      contextTools,
-      config.context.maxToolRounds,
-    );
-    let reply = await completeOrFail(modelPort, batchRequest);
-    // a reply with no parseable JSON costs only this batch's findings: the
-    // other batches were already paid for and must survive alongside it, or
-    // one bad reply among many (routine once a large diff forces batching)
-    // would discard a whole review's worth of real work
-    try {
-      let batchParsed: ParsedReview;
-      try {
-        batchParsed = parseReviewResponse(reply.text, parseOptions);
-      } catch (error) {
-        // one more answering step, tools off, with what the model fetched replayed as text
-        deps.err(
-          `batch ${String(index + 1)}/${String(diffBatches.length)}: ${(error as Error).message}; asking once more for the JSON answer\n`,
-        );
-        const first = reply;
-        reply = await completeOrFail(modelPort, retryRequest(batchRequest, first));
-        reply = {
-          ...reply,
-          ...(first.usage !== undefined
-            ? { usage: reply.usage ? addUsage(first.usage, reply.usage) : first.usage }
-            : {}),
-          ...(first.toolCalls !== undefined ? { toolCalls: first.toolCalls } : {}),
-        };
-        batchParsed = parseReviewResponse(reply.text, parseOptions);
-      }
-      merged.push(...batchParsed.findings);
-      batchDropped += batchParsed.droppedUncited;
-      batchOutOfScope += batchParsed.droppedOutOfScope;
-      batchAdjusted += batchParsed.adjustedLines;
-      batchMalformed += batchParsed.droppedMalformed;
-      batchMisquoted += batchParsed.droppedMisquoted;
-      batchRejected.push(...batchParsed.rejected);
-      usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
-      if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
-        deps.err(`agentic context: ${String(reply.toolCalls)} tool call(s) served\n`);
-        toolCalls = (toolCalls ?? 0) + reply.toolCalls;
-      }
-      if (reply.cached === true) cachedResponse = true;
-    } catch (error) {
-      const reason = (error as Error).message;
-      deps.err(
-        `batch ${String(index + 1)}/${String(diffBatches.length)}: ${reason}; skipping this batch's findings\n`,
-      );
-      unparsedBatches.push({ batch: index + 1, of: diffBatches.length, reason });
+  for (const [index, outcome] of outcomes.entries()) {
+    if (!outcome.ok) {
+      unparsedBatches.push({ batch: index + 1, of: passes.length, reason: outcome.reason });
+      continue;
     }
+    const { parsed, reply } = outcome;
+    merged.push(...parsed.findings);
+    counts.uncited += parsed.droppedUncited;
+    counts.outOfScope += parsed.droppedOutOfScope;
+    counts.adjusted += parsed.adjustedLines;
+    counts.malformed += parsed.droppedMalformed;
+    counts.misquoted += parsed.droppedMisquoted;
+    rejected.push(...parsed.rejected);
+    usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
+    if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
+      toolCalls = (toolCalls ?? 0) + reply.toolCalls;
+    }
+    if (reply.cached === true) cachedResponse = true;
   }
-  if (unparsedBatches.length === diffBatches.length) {
-    // every batch failed to parse: zero findings here would read as a clean
+  if (toolCalls !== undefined) {
+    deps.err(`agentic context: ${String(toolCalls)} tool call(s) served\n`);
+  }
+  if (unparsedBatches.length === passes.length) {
+    // every pass failed to parse: zero findings here would read as a clean
     // pass, so this must surface exactly like the old single-batch failure did
     throw new ToolError(
       [
         "every batch's reply failed to parse; nothing to review with",
         ...unparsedBatches.map(
-          (entry) => `batch ${String(entry.batch)}/${String(entry.of)}: ${entry.reason}`,
+          (entry) =>
+            `${passes[entry.batch - 1]?.label ?? `pass ${String(entry.batch)}`}: ${entry.reason}`,
         ),
       ].join("\n"),
     );
   }
   return {
     parsed: {
-      // same file + line + guidelineId (or file + line + kind for an
-      // observation) is the same finding regardless of batch count -- the
-      // model can cite one guideline twice, worded differently, within a
-      // single reply, not just across batches
+      // same file + line + guidelineId is the same finding whichever pass or
+      // batch found it, and one reply can cite a guideline twice in other words
       findings: dedupeFindings(merged),
-      droppedUncited: batchDropped,
-      droppedOutOfScope: batchOutOfScope,
-      adjustedLines: batchAdjusted,
-      droppedMalformed: batchMalformed,
-      droppedMisquoted: batchMisquoted,
-      rejected: batchRejected,
+      droppedUncited: counts.uncited,
+      droppedOutOfScope: counts.outOfScope,
+      adjustedLines: counts.adjusted,
+      droppedMalformed: counts.malformed,
+      droppedMisquoted: counts.misquoted,
+      rejected,
     },
     usage,
-    ensembleMembers: undefined,
     toolCalls,
     cachedResponse,
     unparsedBatches,
@@ -970,6 +1030,15 @@ function failureReason(error: ToolError): string {
   return first;
 }
 
+/** The checked out commit, short; undefined outside a git checkout. */
+function reviewedCommit(cwd: string): string | undefined {
+  try {
+    return runGit(cwd, ["rev-parse", "--short=12", "HEAD"]).trim();
+  } catch {
+    return undefined;
+  }
+}
+
 /** The branch links point at: the target without a remote or refs prefix. */
 function targetBranch(target: string): string {
   return target.replace(/^refs\/heads\//, "").replace(/^origin\//, "");
@@ -989,8 +1058,10 @@ async function publishIfConfigured(
   const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
   const { guidePath } = config.review;
   const lines = new Map<string, readonly string[] | undefined>();
+  const head = reviewedCommit(deps.cwd);
   const outcome = await publishReview(scm, {
     ...input,
+    ...(head !== undefined ? { resolvedIn: head } : {}),
     tasks: config.scm.tasks,
     lineTextOf: (file, line) => {
       if (!lines.has(file)) lines.set(file, linesAtHead(deps.cwd, file, undefined));

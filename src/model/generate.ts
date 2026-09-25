@@ -3,6 +3,9 @@ import { generateText, stepCountIs, type LanguageModel } from "ai";
 import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelReply, type ModelRequest } from "./port.js";
 import { normalizeUsage } from "./usage.js";
 
+/** Retries per call on a throttled or failed request, with the SDK's exponential backoff. */
+export const MAX_RETRIES = 5;
+
 /** Told to the model on the step after its last tool round. */
 export const FINAL_STEP =
   "The tool budget is spent and no further tool calls are allowed. Do not ask for more context and do not write a tool call as text: give your final answer now, in the format requested above.";
@@ -83,6 +86,8 @@ export async function completeWith(
     temperature: request.temperature ?? 0,
     // bound the reply so runaway output cannot outrun the cost estimate
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    // a throttled call backs off 2, 4, 8, 16, 32 s before it fails the review
+    maxRetries: MAX_RETRIES,
     ...(request.tools
       ? {
           tools: request.tools,

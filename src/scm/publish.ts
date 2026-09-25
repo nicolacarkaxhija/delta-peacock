@@ -200,16 +200,72 @@ function assignFingerprints(
   return claims;
 }
 
-/** A thread with replies is resolved where the host can, so the discussion keeps its context. */
-async function retireComment(scm: ScmPort, comment: ScmComment): Promise<void> {
-  if ((comment.replies ?? 0) > 0 && scm.resolveComment !== undefined) {
-    await scm.resolveComment(comment.id);
-  } else {
-    await scm.deleteComment(comment.id);
+/** Starts the line that turns a finding's comment into the trace of its resolution. */
+export const RESOLVED_PREFIX = "Resolved in ";
+
+/** A comment the reviewer already turned into a resolution trace. */
+export function isResolvedTrace(body: string): boolean {
+  return body.split("\n").some((line) => line.startsWith(RESOLVED_PREFIX));
+}
+
+/** The finding's heading kept, the rest replaced by where it was resolved. */
+export function resolvedBody(body: string, resolvedIn: string | undefined): string {
+  const heading = body.split("\n")[0] ?? "";
+  const where = resolvedIn !== undefined ? `\`${resolvedIn.slice(0, 12)}\`` : "a later commit";
+  return `${heading}\n\n${RESOLVED_PREFIX}${where}: the flagged line changed or the finding no longer holds.`;
+}
+
+/** An error that says the thing is already gone, which is what cleanup wanted. */
+function isGone(error: unknown): boolean {
+  return error instanceof Error && /\b(?:404|410)\b/.test(error.message);
+}
+
+/**
+ * Cleanup that must never fail a review: a gone target counts as done, any
+ * other error becomes a notice and the run goes on to its summary and status.
+ */
+async function cleanup(
+  outcome: PublishOutcome,
+  what: string,
+  action: () => Promise<void>,
+): Promise<boolean> {
+  try {
+    await action();
+    return true;
+  } catch (error) {
+    if (isGone(error)) return false;
+    outcome.notices.push(
+      `could not ${what} (${(error as Error).message.split("\n")[0] ?? ""}); continuing`,
+    );
+    return false;
+  }
+}
+
+/**
+ * A finding that no longer holds leaves a trace a reader can follow: its
+ * comment is rewritten to say where it was resolved and the thread resolved
+ * where the host can, instead of vanishing with the task attached to it.
+ */
+async function retireComment(
+  scm: ScmPort,
+  comment: ScmComment,
+  resolvedIn: string | undefined,
+  outcome: PublishOutcome,
+): Promise<void> {
+  const edited = await cleanup(outcome, `mark comment ${comment.id} resolved`, () =>
+    scm.updateComment(comment.id, resolvedBody(comment.body, resolvedIn)),
+  );
+  if (edited) outcome.deleted += 1;
+  if (edited && scm.resolveComment !== undefined) {
+    const resolve = scm.resolveComment.bind(scm);
+    await cleanup(outcome, `resolve the thread of comment ${comment.id}`, () =>
+      resolve(comment.id),
+    );
   }
 }
 
 function looksLikeFinding(comment: ScmComment, presentation: Presentation): boolean {
+  if (isResolvedTrace(comment.body)) return false;
   return (
     markerFingerprint(comment.body) !== undefined ||
     (!presentation.markers && headingAnchor(comment.body) !== undefined)
@@ -223,6 +279,7 @@ async function reconcileInlineComments(
   desired: ReadonlyMap<string, Finding>,
   outcome: PublishOutcome,
   settled: ReadonlySet<string> = new Set(),
+  resolvedIn?: string,
 ): Promise<Map<string, string>> {
   const commentIds = new Map<string, string>();
   const existing = await ownComments(
@@ -244,8 +301,7 @@ async function reconcileInlineComments(
       continue;
     }
     if (fingerprint === undefined || finding === undefined) {
-      await retireComment(scm, comment);
-      outcome.deleted += 1;
+      await retireComment(scm, comment, resolvedIn, outcome);
       continue;
     }
     seen.add(fingerprint);
@@ -340,7 +396,31 @@ function taskApiOf(scm: ScmPort): TaskApi | undefined {
   };
 }
 
-async function reconcileTasks(
+/**
+ * Resolves the open tasks whose finding is gone or whose line changed. Runs
+ * before any comment changes: on Bitbucket a task lives on its comment.
+ */
+async function resolveStaleTasks(
+  scm: TaskApi,
+  own: readonly OwnTask[],
+  desired: ReadonlyMap<string, Finding>,
+  lineTextOf: (file: string, line: number) => string | undefined,
+  outcome: PublishOutcome,
+): Promise<void> {
+  for (const entry of own) {
+    if (entry.task.resolved) continue;
+    const stands =
+      desired.has(entry.fingerprint) &&
+      lineDigest(lineTextOf(entry.file, entry.line)) === entry.digest;
+    if (stands) continue;
+    const done = await cleanup(outcome, `resolve task ${entry.task.id}`, () =>
+      scm.resolve(entry.task.id),
+    );
+    if (done) outcome.tasksResolved = (outcome.tasksResolved ?? 0) + 1;
+  }
+}
+
+async function createTasks(
   scm: TaskApi,
   own: readonly OwnTask[],
   desired: ReadonlyMap<string, Finding>,
@@ -348,12 +428,6 @@ async function reconcileTasks(
   lineTextOf: (file: string, line: number) => string | undefined,
   outcome: PublishOutcome,
 ): Promise<void> {
-  for (const entry of own) {
-    if (entry.task.resolved) continue;
-    if (lineDigest(lineTextOf(entry.file, entry.line)) === entry.digest) continue;
-    await scm.resolve(entry.task.id);
-    outcome.tasksResolved = (outcome.tasksResolved ?? 0) + 1;
-  }
   for (const [fingerprint, finding] of desired) {
     const commentId = commentIds.get(fingerprint);
     if (commentId === undefined) continue;
@@ -421,6 +495,8 @@ export async function publishReview(
     tasks?: boolean;
     /** A file's line at the reviewed commit; tasks resolve once it changed. */
     lineTextOf?: (file: string, line: number) => string | undefined;
+    /** The reviewed commit, named on the comment of a finding it resolved. */
+    resolvedIn?: string;
     /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
     dryRun: boolean;
   },
@@ -440,6 +516,7 @@ export async function publishReview(
         fingerprintEntries(placed).map(({ fingerprint, finding }) => [fingerprint, finding]),
       );
       const taskApi = input.tasks === true ? taskApiOf(scm) : undefined;
+      const lineTextOf = input.lineTextOf ?? (() => undefined);
       if (input.tasks === true && taskApi === undefined) {
         outcome.notices.push("this provider has no pull request tasks; skipping them");
       }
@@ -455,6 +532,7 @@ export async function publishReview(
         for (const entry of own) {
           if (entry.task.resolved && entry.task.resolvedBy !== me) settled.add(entry.fingerprint);
         }
+        await resolveStaleTasks(taskApi, own, desired, lineTextOf, outcome);
       }
       const commentIds = await reconcileInlineComments(
         scm,
@@ -462,16 +540,10 @@ export async function publishReview(
         desired,
         outcome,
         settled,
+        input.resolvedIn,
       );
       if (taskApi !== undefined) {
-        await reconcileTasks(
-          taskApi,
-          own,
-          desired,
-          commentIds,
-          input.lineTextOf ?? (() => undefined),
-          outcome,
-        );
+        await createTasks(taskApi, own, desired, commentIds, lineTextOf, outcome);
       }
     }
     // where an Insights card carries a clean result, a clean summary only updates an earlier one

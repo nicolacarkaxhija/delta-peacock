@@ -178,6 +178,77 @@ export function vetSuggestions(
   });
 }
 
+/** Lines above a finding searched for the comment its suggestion would add. */
+const COMMENT_REACH = 10;
+
+/** The text of a line comment or a one line block comment, without its markers. */
+function commentText(line: string): string | undefined {
+  const match = /(?:\/\/+|\/\*+)\s*(.*?)\s*(?:\*\/)?\s*$/.exec(line);
+  const text = match?.[1]?.trim();
+  return text === undefined || text === "" ? undefined : text.toLowerCase();
+}
+
+/**
+ * The comment a suggestion adds: the quoted code with a comment on it, or a
+ * comment line before it. Undefined when the suggestion changes the code.
+ */
+function addedComment(quote: string, suggestion: string): string | undefined {
+  const code = quote.trim();
+  const lines = suggestion
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const last = lines.at(-1) ?? "";
+  if (lines.length === 2 && last === code) return commentText(lines[0] ?? "");
+  if (lines.length === 1 && last.startsWith(code) && last !== code) {
+    return commentText(last.slice(code.length));
+  }
+  return undefined;
+}
+
+/**
+ * Drops a finding whose only fix is a comment the file already carries just
+ * above the flagged line: a reason in reach is the reason the rule asks for,
+ * and moving it is not a fix. Deterministic, like the Good example gate.
+ */
+export function dropCommentMoves(
+  findings: readonly Finding[],
+  linesOf: LinesOf,
+): { kept: Finding[]; dropped: RejectedCandidate[] } {
+  const kept: Finding[] = [];
+  const dropped: RejectedCandidate[] = [];
+  for (const finding of findings) {
+    const comment =
+      finding.suggestion !== undefined && finding.quote !== undefined
+        ? addedComment(finding.quote, finding.suggestion)
+        : undefined;
+    const above =
+      comment === undefined
+        ? []
+        : (linesOf(finding.file) ?? []).slice(
+            Math.max(0, finding.line - 1 - COMMENT_REACH),
+            finding.line - 1,
+          );
+    const present =
+      comment !== undefined && above.some((line) => commentText(line)?.includes(comment) === true);
+    if (present) {
+      dropped.push({
+        reason: "comment-move",
+        raw: JSON.stringify({
+          file: finding.file,
+          line: finding.line,
+          suggestion: finding.suggestion,
+        }),
+        ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),
+        title: finding.title,
+      });
+    } else {
+      kept.push(finding);
+    }
+  }
+  return { kept, dropped };
+}
+
 /**
  * Drops a finding whose quoted code is shown as right by its own guideline's
  * Good example; the rule cannot be broken by code it holds up as the model.

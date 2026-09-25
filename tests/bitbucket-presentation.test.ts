@@ -272,10 +272,13 @@ describe("bitbucket presentation", () => {
       expect(fake.comments.some((c) => c.id === 500)).toBe(true);
       expect(fake.comments.every((c) => !c.content.raw.includes("<!--"))).toBe(true);
 
-      // resolved threads are left alone and their finding is not reposted
+      // the resolved one is kept as a trace; a finding that comes back gets a comment of its own
+      const trace = fake.comments.find((c) => c.id === todoComment?.id)?.content.raw ?? "";
+      expect(trace).toMatch(/Resolved in `[0-9a-f]{12}`/);
       const third = await review(fake, TWO, repo);
-      expect(third.stderr).toContain("0 created, 1 updated, 0 resolved, 1 unchanged");
-      expect(inline(fake).filter((c) => c.parent === undefined)).toHaveLength(2);
+      expect(third.stderr).toContain("1 created, 1 updated, 0 resolved, 0 unchanged");
+      expect(inline(fake).filter((c) => c.parent === undefined)).toHaveLength(3);
+      expect(fake.comments.find((c) => c.id === todoComment?.id)?.content.raw).toBe(trace);
     } finally {
       await fake.close();
     }
@@ -318,7 +321,10 @@ describe("bitbucket presentation", () => {
       expect(swapped).toMatchObject({ created: 0, updated: 0, deleted: 0, unchanged: 2 });
       const fewer = await publish([twin("Second.")]);
       expect(fewer).toMatchObject({ created: 0, updated: 0, deleted: 1, unchanged: 1 });
-      expect(inline(fake).map((c) => c.content.raw)).toEqual([expect.stringContaining("Second.")]);
+      expect(inline(fake).map((c) => c.content.raw)).toEqual([
+        expect.stringContaining("Resolved in a later commit"),
+        expect.stringContaining("Second."),
+      ]);
     } finally {
       await fake.close();
     }

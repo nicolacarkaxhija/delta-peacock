@@ -78,10 +78,106 @@ describe("bitbucket pull request tasks", () => {
     expect(outcome.tasksResolved).toBe(1);
   });
 
-  it("leaves the task open while the anchored line is unchanged", async () => {
+  it("leaves the task open while the finding stands on an unchanged line", async () => {
     await publish([finding], "const panel = '.size-guide';");
-    await publish([], "const panel = '.size-guide';");
+    await publish([finding], "const panel = '.size-guide';");
     expect(fake.tasks[0]?.state).toBe("UNRESOLVED");
+  });
+
+  it("resolves the task before its comment becomes the trace of the fix", async () => {
+    await publish([finding], "const panel = '.size-guide';");
+    const outcome = await publishReview(port, {
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 0,
+      gate: evaluateGate([], "MAJOR"),
+      commitStatus: true,
+      tasks: true,
+      lineTextOf: () => "const panel = page.getByTestId('size-guide');",
+      resolvedIn: "0123456789abcdef",
+      dryRun: false,
+    });
+    expect(fake.tasks[0]?.state).toBe("RESOLVED");
+    const comment = fake.comments.find((entry) => entry.inline !== undefined);
+    expect(comment?.content.raw).toContain("Resolved in `0123456789ab`");
+    const taskWrite = fake.writes.findIndex((write) => /\/tasks\/\d+$/.test(write.url));
+    const commentWrite = fake.writes.findIndex(
+      (write, index) => index > 0 && write.method === "PUT" && /\/comments\/\d+$/.test(write.url),
+    );
+    expect(taskWrite).toBeGreaterThan(-1);
+    expect(taskWrite).toBeLessThan(commentWrite);
+    expect(fake.writes.some((write) => write.method === "DELETE")).toBe(false);
+    expect(outcome).toMatchObject({ deleted: 1, tasksResolved: 1 });
+    expect(fake.statuses.at(-1)?.state).toBe("SUCCESSFUL");
+  });
+
+  it("counts a comment already gone as done and notes a thread it could not resolve", async () => {
+    await publish([finding], "const panel = '.size-guide';");
+    const gone: ScmPort = {
+      ...port,
+      updateComment: () => Promise.reject(new Error("Bitbucket responded 404 to PUT comments/1")),
+    };
+    const quiet = await publishReview(gone, {
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 0,
+      gate: evaluateGate([], "MAJOR"),
+      commitStatus: false,
+      dryRun: false,
+    });
+    expect(quiet).toMatchObject({ deleted: 0, notices: [] });
+    const stuck: ScmPort = {
+      ...port,
+      resolveComment: () => Promise.reject(new Error("Bitbucket responded 409 to POST resolve")),
+    };
+    const noted = await publishReview(stuck, {
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 0,
+      gate: evaluateGate([], "MAJOR"),
+      commitStatus: false,
+      dryRun: false,
+    });
+    expect(noted.deleted).toBe(1);
+    expect(noted.notices).toEqual([
+      expect.stringMatching(
+        /^could not resolve the thread of comment \d+ \(.*409.*\); continuing$/,
+      ),
+    ]);
+  });
+
+  it("finishes a passed review when cleanup fails, and treats a gone task as done", async () => {
+    await publish([finding], "const panel = '.size-guide';");
+    const [task] = fake.tasks;
+    const flaky: ScmPort = {
+      ...port,
+      // the task vanished with its comment on Bitbucket's side: 404
+      resolveTask: () =>
+        Promise.reject(new Error(`Bitbucket responded 404 to PUT tasks/${String(task?.id)}`)),
+      // the comment edit hits a server error
+      updateComment: () => Promise.reject(new Error("Bitbucket responded 500 to PUT comments/1")),
+    };
+    const outcome = await publishReview(flaky, {
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 0,
+      gate: evaluateGate([], "MAJOR"),
+      commitStatus: true,
+      tasks: true,
+      lineTextOf: () => "changed",
+      dryRun: false,
+    });
+    expect(outcome.tasksResolved).toBeUndefined();
+    expect(outcome.deleted).toBe(0);
+    expect(outcome.notices).toEqual([
+      expect.stringMatching(/could not mark comment \d+ resolved .*500.*continuing/),
+    ]);
+    expect(fake.statuses.at(-1)?.state).toBe("SUCCESSFUL");
+    expect(fake.comments.some((entry) => entry.inline === undefined)).toBe(true);
   });
 
   it("does not repost a finding whose task a person resolved", async () => {

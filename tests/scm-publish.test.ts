@@ -139,11 +139,15 @@ describe("publishing to github", () => {
       expect(fake.reviewComments).toHaveLength(1);
       expect(fake.reviewComments[0]?.body).toContain("New wording.");
 
-      // finding gone: comment resolved, summary updated, still one summary
+      // finding gone: comment kept as a trace of where it was resolved, summary updated
       const clean = JSON.stringify({ findings: [] });
       const fourth = await reviewAgainst(fake, repo, clean);
       expect(fourth.stderr).toContain("1 resolved");
-      expect(fake.reviewComments).toHaveLength(0);
+      expect(fake.reviewComments).toHaveLength(1);
+      expect(fake.reviewComments[0]?.body).toMatch(/Resolved in `[0-9a-f]{12}`/);
+      // a later run leaves the trace alone
+      const fifth = await reviewAgainst(fake, repo, clean);
+      expect(fifth.stderr).toContain("0 created, 0 updated, 0 resolved, 0 unchanged");
       expect(fake.issueComments).toHaveLength(1);
       expect(fake.issueComments[0]?.body).toContain("No issues found in this change.");
     } finally {
@@ -171,7 +175,10 @@ describe("publishing to github", () => {
         "MAJOR",
       );
       expect(code).toBe(0);
-      expect(fake.reviewComments).toHaveLength(0); // stale finding resolved
+      // stale finding resolved, its comment left as the trace
+      expect(fake.reviewComments.map((comment) => comment.body)).toEqual([
+        expect.stringContaining("Resolved in"),
+      ]);
       expect(fake.statuses.at(-1)?.state).toBe("success");
     } finally {
       await fake.close();

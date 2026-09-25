@@ -11,6 +11,7 @@ import {
 } from "../src/review/declared.js";
 import { examplesOf, matchesGoodExample } from "../src/review/examples.js";
 import {
+  dropCommentMoves,
   dropGoodExamples,
   linesFromDiff,
   placeFindings,
@@ -206,6 +207,53 @@ describe("Good examples", () => {
   });
 });
 
+describe("a fix that only moves a reason", () => {
+  const file = [
+    "export class HomePage {",
+    "  // No test id on the panel; the class is the same in every language.",
+    "  sizeGuidePanel(): Locator {",
+    "    return this.page.locator('.size-guide-panel');",
+    "  }",
+    "  /** The trigger has no test id either. */",
+    "  trigger(): Locator {",
+    "    return this.page.locator('.trigger');",
+    "  }",
+    "}",
+  ];
+  const quote = "    return this.page.locator('.size-guide-panel');";
+  const linesOf = (name: string) => (name === "pages/home.ts" ? file : undefined);
+  const at = (line: number, overrides: Partial<Violation>) =>
+    violation({ file: "pages/home.ts", line, quote, ...overrides });
+
+  it("drops a finding whose suggestion repeats a comment already above the line", () => {
+    const inline = at(4, {
+      suggestion: `${quote} // No test id on the panel; the class is the same in every language.`,
+    });
+    const above = at(8, {
+      quote: "    return this.page.locator('.trigger');",
+      suggestion:
+        "    /** The trigger has no test id either. */\n    return this.page.locator('.trigger');",
+    });
+    const result = dropCommentMoves([inline, above], linesOf);
+    expect(result.kept).toEqual([]);
+    expect(result.dropped.map((entry) => entry.reason)).toEqual(["comment-move", "comment-move"]);
+  });
+
+  it("keeps a finding that changes the code, adds a new reason, or has nothing to compare", () => {
+    const newReason = at(4, { suggestion: `${quote} // the storefront renders no test id here` });
+    const changed = at(4, { suggestion: "    return this.page.getByTestId('size_guide_panel');" });
+    const bare = at(4, { suggestion: `${quote} //` });
+    const noSuggestion = at(4, {});
+    const elsewhere = at(4, {
+      file: "pages/other.ts",
+      suggestion: `${quote} // No test id on the panel; the class is the same in every language.`,
+    });
+    const result = dropCommentMoves([newReason, changed, bare, noSuggestion, elsewhere], linesOf);
+    expect(result.kept).toHaveLength(5);
+    expect(result.dropped).toEqual([]);
+  });
+});
+
 describe("declared tags edges", () => {
   it("skips comments, strings, templates and ternaries", () => {
     const source = [
@@ -228,6 +276,30 @@ describe("declared tags edges", () => {
   it("handles escapes, stray closers, unsafe keys and a closing line comment", () => {
     const source = "} { tags: { features: { 'it\\'s': 1, 'a b': 2, ok: 3 } } } // end";
     expect(keysAt(objectKeysByPath(source), "tags.features")).toEqual(["ok"]);
+  });
+
+  it("reads what each feature covers, and lists a feature the config leaves undescribed bare", () => {
+    const source = [
+      "export default {",
+      "  tags: { features: { cart: 'the cart page', 'pdp-types': \"the pinned types\", plp: 3, bad: `x` } },",
+      "  other: { features: { cart: 'not this one' } },",
+      "};",
+    ].join("\n");
+    const tags = declaredTags(source, "c.ts");
+    expect(tags?.descriptions).toEqual({
+      "@cart": "the cart page",
+      "@pdp-types": "the pinned types",
+    });
+    const block = declaredTagsBlock(tags ?? { source: "none", features: [], axis: [] });
+    expect(block).toContain(
+      "- @cart: the cart page\n- @pdp-types: the pinned types\n- @plp\n- @bad",
+    );
+    expect(block).toContain(
+      "a page the test only opens on the way does not make that page's tag fit",
+    );
+    expect(
+      declaredTags("export default { tags: { features: { cart: 1 } } }", "c.ts")?.descriptions,
+    ).toBeUndefined();
   });
 
   it("survives unterminated input", () => {
