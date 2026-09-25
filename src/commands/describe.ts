@@ -7,9 +7,9 @@ import { acquireDiff, resolveTargetRef } from "../git/diff.js";
 import { buildModelPort } from "../model/build.js";
 import { anyRateConfigured, computeCost } from "../model/usage.js";
 import {
-  DESCRIPTION_START,
   buildDescribeRequest,
   parseDescribeReply,
+  upsertDescription,
   upsertDescriptionSection,
 } from "../review/describe.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
@@ -91,7 +91,8 @@ export async function runDescribe(
     if (options.title && described.title !== undefined) {
       deps.out(`title (${reason}, not written): ${described.title}\n\n`);
     }
-    deps.out(`${upsertDescriptionSection("", described.summary)}\n`);
+    const markers = config.scm.provider !== "bitbucket";
+    deps.out(`${upsertDescriptionSection("", described.summary, markers)}\n`);
     return 0;
   }
 
@@ -100,12 +101,14 @@ export async function runDescribe(
     throw new ToolError(`the ${config.scm.provider} provider cannot edit descriptions`);
   }
   const current = await scm.getPullRequestText();
+  // a host that prints HTML comments gets a visible heading and footer instead
+  const next = upsertDescription(current.body, described.summary, scm.hidesHtmlComments !== false);
   await scm.updatePullRequestText({
-    body: upsertDescriptionSection(current.body, described.summary),
+    body: next.body,
     ...(options.title && described.title !== undefined ? { title: described.title } : {}),
   });
   deps.out(
-    `description section ${current.body.includes(DESCRIPTION_START) ? "updated" : "added"}` +
+    `description section ${next.replaced ? "updated" : "added"}` +
       `${options.title && described.title !== undefined ? "; title set" : ""}\n`,
   );
   return 0;
