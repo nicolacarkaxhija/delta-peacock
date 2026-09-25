@@ -79,12 +79,37 @@ export interface ParsedReview {
 export const REJECTED_RAW_CAP = 500;
 const rawOf = (candidate: unknown): string => JSON.stringify(candidate).slice(0, REJECTED_RAW_CAP);
 
-/** Candidate JSON slices in order of confidence; the first that parses wins. */
+/** Each balanced `open`..close slice, string-aware, in order of appearance. */
+function balancedSlices(text: string, open: "{" | "["): string[] {
+  const close = open === "{" ? "}" : "]";
+  const slices: string[] = [];
+  for (let start = text.indexOf(open); start !== -1; start = text.indexOf(open, start + 1)) {
+    let depth = 0;
+    let inString = false;
+    for (let at = start; at < text.length; at += 1) {
+      const char = text[at];
+      if (inString) {
+        if (char === "\\") at += 1;
+        else if (char === '"') inString = false;
+      } else if (char === '"') inString = true;
+      else if (char === open) depth += 1;
+      else if (char === close && --depth === 0) {
+        slices.push(text.slice(start, at + 1));
+        break;
+      }
+    }
+  }
+  return slices;
+}
+
+/** Candidate JSON slices in order of confidence; objects before arrays. */
 function jsonCandidates(text: string): string[] {
   const trimmed = text.trim();
   const candidates: string[] = [];
-  const fenced = /^```[a-zA-Z]*\r?\n([\s\S]*?)\r?\n```/.exec(trimmed);
-  if (fenced?.[1] !== undefined) candidates.push(fenced[1]);
+  for (const fenced of trimmed.matchAll(/```[a-zA-Z]*\r?\n([\s\S]*?)\r?\n```/g)) {
+    if (fenced[1] !== undefined) candidates.push(fenced[1]);
+  }
+  candidates.push(...balancedSlices(trimmed, "{"));
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
   if (start !== -1 && end > start) {
@@ -95,20 +120,35 @@ function jsonCandidates(text: string): string[] {
     // guarded fallback: it is tried after the intact slices and skipped if wrong.
     if (/"findings"\s*:\s*\[/.test(trimmed)) candidates.push(`${greedy}]}`);
   }
+  candidates.push(...balancedSlices(trimmed, "["));
   return candidates;
 }
 
-/** Tolerant JSON extraction shared by every command that reads a model reply. */
-export function parseJson(text: string): unknown {
+const isContainer = (value: unknown): boolean => typeof value === "object" && value !== null;
+
+/**
+ * Tolerant JSON extraction shared by every command that reads a model reply:
+ * the first object or array, fenced or wrapped in prose, that `accept` takes.
+ */
+export function parseJson(text: string, accept: (value: unknown) => boolean = () => true): unknown {
   let lastError = "model response held no JSON object";
   for (const candidate of jsonCandidates(text)) {
     try {
-      return JSON.parse(candidate);
+      const value: unknown = JSON.parse(candidate);
+      if (accept(value)) return value;
+      lastError = "model response held no JSON object of the expected shape";
     } catch (error) {
       lastError = `model response was not valid JSON: ${(error as Error).message}`;
     }
   }
   throw new ToolError(lastError);
+}
+
+/** A findings envelope, or a bare array of finding objects a model sent without one. */
+function isReviewShape(value: unknown): boolean {
+  // an empty array in prose ("returns []") must never read as a clean review
+  if (Array.isArray(value)) return value.length > 0 && value.every(isContainer);
+  return isContainer(value) && "findings" in (value as object);
 }
 
 /** The cap wins whenever the model claims something more severe. */
@@ -226,7 +266,9 @@ export function relocateFindings(
 }
 
 export function parseReviewResponse(text: string, options: ParseOptions): ParsedReview {
-  const result = RawResponse.safeParse(parseJson(text));
+  const bareEmpty = /^(?:```[a-zA-Z]*\s*)?\[\s*\](?:\s*```)?$/.test(text.trim());
+  const value = bareEmpty ? [] : parseJson(text, isReviewShape);
+  const result = RawResponse.safeParse(Array.isArray(value) ? { findings: value } : value);
   if (!result.success) {
     throw new ToolError(
       `model response did not match the expected shape: ${result.error.issues

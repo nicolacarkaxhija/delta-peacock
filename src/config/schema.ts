@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SEVERITIES } from "../domain/severity.js";
+import { DEFAULT_MAX_TOOL_ROUNDS } from "../model/port.js";
 
 export const ModelSchema = z.strictObject({
   provider: z
@@ -134,7 +135,7 @@ export const ContextSchema = z.strictObject({
   /** Ceiling for injected context, measured in approximate tokens. */
   maxTokens: z.number().int().positive().default(4000),
   /** Bound on agentic tool rounds before the model must conclude. */
-  maxToolRounds: z.number().int().min(1).max(20).default(6),
+  maxToolRounds: z.number().int().min(1).max(20).default(DEFAULT_MAX_TOOL_ROUNDS),
   rag: RagSchema.prefault({}),
 });
 

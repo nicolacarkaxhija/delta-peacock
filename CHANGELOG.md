@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4 (2026-09-25)
+
+### Bug Fixes
+
+- The agentic context no longer ends a review mid-investigation: once `context.maxToolRounds` is spent the model gets one more step with tools switched off and is told to answer. Haiku 4.5 on a real Bitbucket pull request used all six rounds on tool calls, so the reply was prose with no JSON and the review failed with `every batch's reply failed to parse`.
+- The reply parser takes the first findings object from anywhere in the reply, skipping braces in surrounding prose, and accepts a bare array of findings, fenced or not. An empty array inside prose never reads as a clean review.
+
+### Developer experience
+
+- `DELTA_PEACOCK_DUMP_REPLY=<file>` appends each raw model reply, step by step, as one JSON line.
+
 ## 0.1.3 (2026-09-25)
 
 ### Bug Fixes

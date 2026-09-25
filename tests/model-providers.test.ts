@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parseReviewResponse } from "../src/review/parse.js";
 import { loadConfig } from "../src/config/loader.js";
 import { ToolError } from "../src/errors.js";
 import { buildModelPort } from "../src/model/build.js";
@@ -200,6 +202,89 @@ describe("tool passthrough on the other adapters", () => {
       },
     });
     expect(JSON.stringify(calls[0]?.body)).toContain("ping");
+  });
+});
+
+describe("agentic tool budget (captured Haiku reply, a real Bitbucket pull request)", () => {
+  // six steps, every one a tool call with prose around it and no JSON answer
+  const captured = JSON.parse(
+    readFileSync(
+      new URL("./fixtures/replies/haiku-tool-budget-spent.json", import.meta.url),
+      "utf8",
+    ),
+  ) as { finishReason: string; steps: { text: string; toolCalls: string[] }[] };
+  const answer = JSON.stringify({ findings: [{ guidelineId: "g", file: "a.ts", line: 8 }] });
+
+  function budgetFetch(): { bodies: Record<string, unknown>[]; fetch: typeof globalThis.fetch } {
+    const bodies: Record<string, unknown>[] = [];
+    return {
+      bodies,
+      fetch: (_input, init) => {
+        const body = JSON.parse(init?.body as string) as Record<string, unknown>;
+        bodies.push(body);
+        const toolsOn = body["toolConfig"] !== undefined;
+        const step = captured.steps[Math.min(bodies.length - 1, captured.steps.length - 1)];
+        // the model keeps calling tools for as long as it is offered any
+        const content = toolsOn
+          ? [
+              { text: step?.text ?? "" },
+              { toolUse: { toolUseId: `t${String(bodies.length)}`, name: "ping", input: {} } },
+            ]
+          : [{ text: answer }];
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              output: { message: { role: "assistant", content } },
+              stopReason: toolsOn ? "tool_use" : "end_turn",
+              usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      },
+    };
+  }
+
+  it("the captured final step holds no JSON, which is what 0.1.3 failed on", () => {
+    expect(captured.finishReason).toBe("tool-calls");
+    const last = captured.steps.at(-1)?.text ?? "";
+    expect(() =>
+      parseReviewResponse(last, {
+        guidelinesById: new Map(),
+        generalPass: false,
+        observationSeverityCap: "MINOR",
+      }),
+    ).toThrow("held no JSON object");
+  });
+
+  it("forces one answering step with tools off once the rounds are spent", async () => {
+    const { bodies, fetch } = budgetFetch();
+    const { tool } = await import("ai");
+    const { z } = await import("zod");
+    const port = createBedrockPort({
+      region: "eu-central-1",
+      accessKeyId: "k",
+      secretAccessKey: "s",
+      modelId: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+      fetch,
+    });
+    const reply = await port.complete({
+      system: "s",
+      user: "u",
+      tools: {
+        ping: tool({
+          description: "answers pong",
+          inputSchema: z.object({}),
+          execute: () => Promise.resolve("pong"),
+        }),
+      },
+      maxToolRounds: 6,
+    });
+    expect(bodies).toHaveLength(7);
+    expect(bodies[6]?.["toolConfig"]).toBeUndefined();
+    expect(JSON.stringify(bodies[6]?.["system"])).toContain("tool budget is spent");
+    expect(reply.toolCalls).toBe(6);
+    expect(reply.text).toBe(answer);
   });
 });
 

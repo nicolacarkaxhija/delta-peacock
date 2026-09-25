@@ -7,6 +7,9 @@ import type { ToolSet } from "ai";
  */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 4000;
 
+/** Default bound on agentic tool rounds: enough to open the few files a diff points to, few enough that resending the prompt each round stays cheap. */
+export const DEFAULT_MAX_TOOL_ROUNDS = 6;
+
 export interface ModelRequest {
   system: string;
   user: string;
