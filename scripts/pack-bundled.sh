@@ -13,5 +13,10 @@ cd "$stage"
 pnpm install --prod --frozen-lockfile --ignore-scripts --config.node-linker=hoisted \
   --config.package-import-method=copy
 rm -f pnpm-lock.yaml pnpm-workspace.yaml
+# drop what no runtime loads (types, TS sources, docs, maps); npm unpacks per file, twice
+find node_modules -type f \( -name '*.ts' -o -name '*.cts' -o -name '*.mts' -o -name '*.map' \
+  -o -name '*.md' -o -name '*.mdx' -o -name '*.markdown' \) \
+  ! -iname 'licen[cs]e*' ! -iname 'notice*' -delete
+find node_modules -type d -empty -delete
 npm pack --ignore-scripts --pack-destination "$dest"
 cd "$root"
