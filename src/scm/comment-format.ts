@@ -156,7 +156,9 @@ export type ReviewOutcome =
   /** Nothing was reviewed, for a reason that is not a fault. */
   | { kind: "not-reviewed"; line: string }
   /** The review broke off; the pull request must not read as reviewed. */
-  | { kind: "failed"; reason: string };
+  | { kind: "failed"; reason: string }
+  /** A cost cap stopped the review before any model call. */
+  | { kind: "capped"; reason: string };
 
 /** Why nothing was reviewed; each is the whole state line of its summary. */
 export const NOT_REVIEWED = {
@@ -168,6 +170,7 @@ export const NOT_REVIEWED = {
 
 export const NO_ISSUES = "No issues found in this change.";
 const FAILED_LEAD = "The review could not complete: ";
+const CAPPED_LEAD = "The review was skipped: ";
 const COUNT_LEAD = /^\d+ findings?: [a-z0-9, ]+$/;
 
 /**
@@ -181,6 +184,7 @@ export function isSummaryBody(body: string, presentation: Presentation): boolean
     first === summaryHeading(presentation) ||
     first === NO_ISSUES ||
     first.startsWith(FAILED_LEAD) ||
+    first.startsWith(CAPPED_LEAD) ||
     COUNT_LEAD.test(first) ||
     Object.values(NOT_REVIEWED).some((line) => line === first)
   );
@@ -194,16 +198,55 @@ export interface SummaryInput {
   gate: GateDecision;
   /** Absent means reviewed. */
   outcome?: ReviewOutcome;
+  /** How many changed files the review covered, for the commit status. */
+  changedFiles?: number;
 }
+
+const sentence = (text: string): string => `${text.replace(/[.\s]+$/, "")}.`;
 
 /** The one line that says how the run ended. */
 export function stateLine(input: Pick<SummaryInput, "findings" | "outcome">): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
   if (outcome.kind === "not-reviewed") return outcome.line;
-  if (outcome.kind === "failed") {
-    return `${FAILED_LEAD}${outcome.reason.replace(/[.\s]+$/, "")}.`;
-  }
+  if (outcome.kind === "failed") return `${FAILED_LEAD}${sentence(outcome.reason)}`;
+  if (outcome.kind === "capped") return `${CAPPED_LEAD}${sentence(outcome.reason)}`;
   return countLine(input.findings);
+}
+
+/** Room a host leaves for a status description; Bitbucket and GitHub cut near here. */
+const STATUS_MAX = 140;
+
+function clip(text: string): string {
+  return text.length <= STATUS_MAX ? text : `${text.slice(0, STATUS_MAX - 3).trimEnd()}...`;
+}
+
+/**
+ * The commit status description: a verdict word first, then one plain line.
+ * "Passed. No findings in 4 changed files." or "3 findings, 1 major. See the comments."
+ */
+export function statusLine(
+  input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles">,
+): string {
+  const outcome = input.outcome ?? { kind: "reviewed" };
+  if (outcome.kind === "failed") {
+    return clip(`Failed. The review could not complete: ${sentence(outcome.reason)}`);
+  }
+  if (outcome.kind === "capped") return clip(`Skipped. ${sentence(outcome.reason)}`);
+  if (outcome.kind === "not-reviewed") {
+    if (outcome.line === NOT_REVIEWED.tooLarge)
+      return "Skipped. The change is too large to review.";
+    if (outcome.line === NOT_REVIEWED.noGuidelines) {
+      return "Passed. No guidelines to review against.";
+    }
+    return "Passed. No reviewable files in this change.";
+  }
+  if (input.findings.length === 0) {
+    return input.changedFiles === undefined
+      ? "Passed. No findings in this change."
+      : `Passed. No findings in ${plural(input.changedFiles, "changed file")}.`;
+  }
+  const major = input.findings.filter((finding) => meetsThreshold(finding.severity, "MAJOR"));
+  return `${plural(input.findings.length, "finding")}, ${String(major.length)} major. See the comments.`;
 }
 
 function plural(count: number, word: string): string {
@@ -264,6 +307,9 @@ export function renderSummaryBody(
   const lines = [stateLine(input)];
   if (input.outcome?.kind === "failed") {
     lines.push("", "Nothing was reviewed on this run. Run the pipeline again to retry.");
+  }
+  if (input.outcome?.kind === "capped") {
+    lines.push("", "Nothing was reviewed on this run. The cost caps are set in the review config.");
   }
   if (input.findings.length > 0) {
     lines.push("", ...input.findings.map((finding) => listItem(finding, presentation)));

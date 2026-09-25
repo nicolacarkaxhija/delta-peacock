@@ -15,6 +15,8 @@ export interface StatsRecord {
   bySeverity: Partial<Record<Severity, number>>;
   /** Counts per cited guideline id; observations bucket under "(observation)". */
   byGuideline: Record<string, number>;
+  /** Reviewer errors caught before posting; absent when there were none. */
+  errors?: { misquoted: number };
 }
 
 export function severityCounts(findings: readonly Finding[]): Partial<Record<Severity, number>> {
@@ -72,6 +74,8 @@ export interface ContributorSummary {
   byGuideline: Record<string, number>;
   /** Findings per hundred added lines; the raw denominator sits beside it. */
   per100Lines: number;
+  /** Findings the reviewer invented (quoted rule not in the guideline); present when any. */
+  misquoted?: number;
 }
 
 function addInto(target: Record<string, number>, source: Record<string, number>): void {
@@ -102,6 +106,8 @@ export function summarize(records: Iterable<StatsRecord>): ContributorSummary[] 
       summary.findings += count;
     }
     addInto(summary.byGuideline, record.byGuideline);
+    const misquoted = record.errors?.misquoted ?? 0;
+    if (misquoted > 0) summary.misquoted = (summary.misquoted ?? 0) + misquoted;
     byAuthor.set(author, summary);
   }
   const summaries = [...byAuthor.values()];
@@ -132,6 +138,11 @@ export function renderStats(summaries: readonly ContributorSummary[]): string {
       .map(([id, count]) => `${id} ${String(count)}`)
       .join(", ");
     if (guidelines !== "") lines.push(`  by guideline: ${guidelines}`);
+    if (summary.misquoted !== undefined) {
+      lines.push(
+        `  reviewer errors: ${String(summary.misquoted)} finding(s) dropped for quoting a rule the guideline does not have`,
+      );
+    }
   }
   lines.push("");
   return lines.join("\n");

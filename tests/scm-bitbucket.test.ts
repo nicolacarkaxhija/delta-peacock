@@ -294,6 +294,7 @@ describe("api diff fallback", () => {
         quote: "console.log('from the api diff');",
         title: "Console",
         body: "b",
+        guidelineQuote: "Use the logger.",
       },
     ],
   });

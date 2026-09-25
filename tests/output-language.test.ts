@@ -32,7 +32,14 @@ function capture(): { requests: ModelRequest[]; port: ModelPort } {
         return Promise.resolve({
           text: JSON.stringify({
             findings: [
-              { guidelineId: "no-console", file: "src/app.js", line: 1, title: "T", body: "b" },
+              {
+                guidelineId: "no-console",
+                file: "src/app.js",
+                line: 1,
+                title: "T",
+                body: "b",
+                guidelineQuote: "Use the logger.",
+              },
             ],
           }),
         });

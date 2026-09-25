@@ -44,14 +44,17 @@ export function buildPromptOptions(
 }
 
 const RESPONSE_SHAPE =
-  '{"findings": [{"guidelineId": "<id>", "file": "<path from the diff>", "line": <new-file line number>, "quote": "<the flagged line, copied exactly from the new file>", "title": "<short summary>", "body": "<what is wrong and how to fix it>", "confidence": <0..1>, "suggestion": "<exact replacement for the quoted line, only when a concrete fix exists>"}]}';
+  '{"findings": [{"guidelineId": "<id>", "file": "<path from the diff>", "line": <new-file line number>, "quote": "<the flagged line, copied exactly from the new file>", "guidelineQuote": "<the sentence of the cited guideline this finding applies, copied word for word>", "title": "<short summary>", "body": "<what is wrong and how to fix it>", "confidence": <0..1>, "suggestion": "<exact replacement for the quoted line, only when a concrete fix exists>"}]}';
 
 /** Rules every review prompt carries; each answers a wrong finding seen on a real pull request. */
 const FINDING_RULES = [
   "List only violations: a line that follows the guidelines is never listed, not even with a low confidence or a remark that it is fine.",
   "Code that matches a guideline's Good example, verbatim or in structure, is never a finding under that guideline.",
   'Every finding quotes in "quote" the one source line it is about, copied exactly from the new file, and "line" is that line\'s number; a finding you cannot tie to one line is not reported.',
+  'Every finding copies into "guidelineQuote" the sentence of the cited guideline that the code breaks, word for word. A finding whose sentence is not in the guideline is discarded, so never paraphrase a rule, never make it stricter and never report what no sentence forbids.',
+  "When a guideline asks for a comment giving a reason, a comment on the same line, on the line above, or in the doc comment of the enclosing declaration or of the group of declarations it heads satisfies it; never ask for the comment to move.",
   "A suggestion replaces exactly the quoted line and nothing else. It may not introduce a tag, identifier or import the repository does not declare; when the fix needs one, give no suggestion.",
+  "A suggestion keeps every piece of information the original line carries: shorten the wording, never drop a reason, a ticket, a name or a condition. When the information cannot fit, give no suggestion.",
   'Write titles and bodies in plain words: no dashes as punctuation, no config keys or settings, no preamble such as "According to the guideline".',
 ];
 

@@ -16,8 +16,22 @@ const GUIDELINE = "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUs
 
 const TWO_FINDINGS = JSON.stringify({
   findings: [
-    { guidelineId: "no-console", file: "src/app.js", line: 1, title: "First", body: "b" },
-    { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Second", body: "b" },
+    {
+      guidelineId: "no-console",
+      file: "src/app.js",
+      line: 1,
+      title: "First",
+      body: "b",
+      guidelineQuote: "Use the logger.",
+    },
+    {
+      guidelineId: "no-console",
+      file: "src/app.js",
+      line: 2,
+      title: "Second",
+      body: "b",
+      guidelineQuote: "Use the logger.",
+    },
   ],
 });
 

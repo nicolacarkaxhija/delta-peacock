@@ -19,6 +19,16 @@ export interface NewInlineComment {
 
 export type StatusState = "success" | "failure" | "pending";
 
+/** A pull request task (Bitbucket), optionally anchored to a comment. */
+export interface ScmTask {
+  id: string;
+  content: string;
+  commentId?: string;
+  resolved: boolean;
+  /** Who resolved it, where the host says; compared with currentUserId. */
+  resolvedBy?: string;
+}
+
 export interface PullRequestText {
   title: string;
   body: string;
@@ -76,7 +86,12 @@ export interface ScmPort {
   fileUrl?(path: string, branch: string): string;
   /** Inline review comments previously posted (any author; callers filter by marker). */
   listInlineComments(): Promise<ScmComment[]>;
-  createInlineComment(comment: NewInlineComment): Promise<void>;
+  /** Resolves to the new comment's id (a string) where the host returns one. */
+  createInlineComment(comment: NewInlineComment): Promise<unknown>;
+  /** Pull request tasks; only hosts that have them (Bitbucket). */
+  listTasks?(): Promise<ScmTask[]>;
+  createTask?(content: string, commentId: string): Promise<void>;
+  resolveTask?(id: string): Promise<void>;
   updateComment(id: string, body: string): Promise<void>;
   deleteComment(id: string): Promise<void>;
   /** Resolve a comment thread; hosts without one delete instead. */

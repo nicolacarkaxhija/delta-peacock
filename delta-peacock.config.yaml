@@ -4,9 +4,9 @@
 scm:
   comments: true
   commitStatus: true
-# Files fetched on demand for everything the diff does not show.
+# The whole changed files first, then files fetched on demand for everything outside them.
 context:
-  providers: [agentic]
+  providers: [full_files, agentic]
   maxTokens: 12000
   maxToolRounds: 10
 review:

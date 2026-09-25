@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { ToolError } from "../errors.js";
+import type { ModelUsage } from "../model/port.js";
 import {
   scoreFindings,
   type ExpectedFinding,
@@ -15,10 +16,21 @@ export interface BenchCase {
   expected?: ExpectedFinding[];
 }
 
+/** What a case's review hands back beyond its findings: tokens per model, invented rules caught. */
+export interface ReviewResult {
+  produced: ProducedFinding[];
+  usage?: Record<string, ModelUsage>;
+  misquoted?: number;
+}
+
 export interface CaseOutcome {
   name: string;
   milliseconds: number;
   produced: ProducedFinding[];
+  /** Tokens per model id, for pricing a run. */
+  usage?: Record<string, ModelUsage>;
+  /** Findings dropped for quoting a rule the guideline does not have. */
+  misquoted?: number;
   score?: MatchResult;
   /** Set when this case's review threw (unparseable reply, model error, anything); scored as zero findings. */
   error?: string;
@@ -57,7 +69,7 @@ export function loadCases(casesDir: string): BenchCase[] {
   return cases.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export type ReviewFn = (benchCase: BenchCase) => Promise<ProducedFinding[]>;
+export type ReviewFn = (benchCase: BenchCase) => Promise<ProducedFinding[] | ReviewResult>;
 
 /** Timing lives here; scoring stays pure so it tests without any review. */
 export async function runBench(
@@ -78,9 +90,15 @@ export async function runBench(
     // once the corpus grows past a handful of cases) would discard a whole
     // benchmark run's worth of real signal
     let produced: ProducedFinding[] = [];
+    let extra: Omit<ReviewResult, "produced"> = {};
     let error: string | undefined;
     try {
-      produced = await review(benchCase);
+      const result = await review(benchCase);
+      if (Array.isArray(result)) {
+        produced = result;
+      } else {
+        ({ produced, ...extra } = result);
+      }
     } catch (caught) {
       error = (caught as Error).message;
       erroredCount += 1;
@@ -90,6 +108,8 @@ export async function runBench(
       name: benchCase.name,
       milliseconds,
       produced,
+      ...(extra.usage !== undefined ? { usage: extra.usage } : {}),
+      ...((extra.misquoted ?? 0) > 0 ? { misquoted: extra.misquoted } : {}),
       ...(error !== undefined ? { error } : {}),
     };
     if (benchCase.expected !== undefined) {

@@ -7,7 +7,14 @@ const GUIDELINE = "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUs
 
 const FINDING = JSON.stringify({
   findings: [
-    { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Console", body: "b" },
+    {
+      guidelineId: "no-console",
+      file: "src/app.js",
+      line: 2,
+      title: "Console",
+      body: "b",
+      guidelineQuote: "Use the logger.",
+    },
   ],
 });
 

@@ -197,6 +197,7 @@ export async function runReview(
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
       deps.out("review blocked by the cost guard before any model call\n");
+      await publishSkipped(deps, config, capReason(decision.reasons));
       if (config.output.report !== undefined) {
         const blockedReport = buildReport({
           findings: [],
@@ -343,6 +344,7 @@ export async function runReview(
       droppedStructural,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
+      droppedMisquoted: parsed.droppedMisquoted,
       filtered: filtered.length,
       waived: waivedEntries,
       gate,
@@ -393,6 +395,7 @@ export async function runReview(
       droppedStructural,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
+      droppedMisquoted: parsed.droppedMisquoted,
       redactions: redacted.counts,
       gate,
       ...(usage ? { usage } : {}),
@@ -429,6 +432,7 @@ export async function runReview(
     droppedUncited: parsed.droppedUncited,
     filtered: filtered.length,
     gate,
+    changedFiles: changedFiles.length,
     commitStatus: config.scm.commitStatus,
     comments: config.scm.comments,
     dryRun: isDryRun(config),
@@ -447,6 +451,8 @@ export async function runReview(
       addedLines: addedLineCount(diff),
       bySeverity: severityCounts(kept),
       byGuideline: guidelineCounts(kept),
+      // an invented rule is a reviewer error, counted apart from the author's findings
+      ...(parsed.droppedMisquoted > 0 ? { errors: { misquoted: parsed.droppedMisquoted } } : {}),
     });
   }
 
@@ -655,6 +661,7 @@ async function executeReview(
   let batchOutOfScope = 0;
   let batchAdjusted = 0;
   let batchMalformed = 0;
+  let batchMisquoted = 0;
   const batchRejected: RejectedCandidate[] = [];
   const unparsedBatches: UnparsedBatch[] = [];
   for (const [index, batchDiff] of diffBatches.entries()) {
@@ -696,6 +703,7 @@ async function executeReview(
       batchOutOfScope += batchParsed.droppedOutOfScope;
       batchAdjusted += batchParsed.adjustedLines;
       batchMalformed += batchParsed.droppedMalformed;
+      batchMisquoted += batchParsed.droppedMisquoted;
       batchRejected.push(...batchParsed.rejected);
       usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
       if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
@@ -734,6 +742,7 @@ async function executeReview(
       droppedOutOfScope: batchOutOfScope,
       adjustedLines: batchAdjusted,
       droppedMalformed: batchMalformed,
+      droppedMisquoted: batchMisquoted,
       rejected: batchRejected,
     },
     usage,
@@ -930,6 +939,28 @@ async function publishFailure(deps: ReviewDeps, config: Config, reason: string):
   }
 }
 
+/** A run the cost guard stopped says so on the pull request instead of staying silent. */
+async function publishSkipped(deps: ReviewDeps, config: Config, reason: string): Promise<void> {
+  await publishIfConfigured(deps, config, {
+    findings: [],
+    proposals: [],
+    droppedUncited: 0,
+    filtered: 0,
+    gate: evaluateGate([], config.gate.failOn),
+    outcome: { kind: "capped", reason },
+    commitStatus: config.scm.commitStatus,
+    comments: config.scm.comments,
+    dryRun: isDryRun(config),
+  });
+}
+
+/** Which cap stopped the run, in words a pull request reader follows. */
+export function capReason(reasons: readonly string[]): string {
+  return reasons.some((reason) => reason.includes("monthlyCap"))
+    ? "the monthly cost cap is reached"
+    : "this change would cost more than the per review cap";
+}
+
 /** The first line of a failure, readable on a pull request. */
 function failureReason(error: ToolError): string {
   const first = String(error.message.split("\n")[0]);
@@ -947,15 +978,24 @@ function targetBranch(target: string): string {
 async function publishIfConfigured(
   deps: ReviewDeps,
   config: Config,
-  input: Omit<Parameters<typeof publishReview>[1], "codeInsights" | "presentation">,
+  input: Omit<
+    Parameters<typeof publishReview>[1],
+    "codeInsights" | "presentation" | "tasks" | "lineTextOf"
+  >,
 ): Promise<void> {
   if (config.scm.provider === "local") return;
   // publishReview itself holds the hard guarantee now: a dry run trips zero
   // adapter writes even if this caller got the plumbing wrong.
   const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
   const { guidePath } = config.review;
+  const lines = new Map<string, readonly string[] | undefined>();
   const outcome = await publishReview(scm, {
     ...input,
+    tasks: config.scm.tasks,
+    lineTextOf: (file, line) => {
+      if (!lines.has(file)) lines.set(file, linesAtHead(deps.cwd, file, undefined));
+      return lines.get(file)?.[line - 1];
+    },
     codeInsights: codeInsightsEnabled(config),
     summaryWhenClean: config.review.summaryWhenClean,
     presentation: {
@@ -970,5 +1010,10 @@ async function publishIfConfigured(
     deps.err(
       `published: ${String(outcome.created)} created, ${String(outcome.updated)} updated, ${String(outcome.deleted)} resolved, ${String(outcome.unchanged)} unchanged\n`,
     );
+    if (outcome.tasksCreated !== undefined || outcome.tasksResolved !== undefined) {
+      deps.err(
+        `tasks: ${String(outcome.tasksCreated ?? 0)} created, ${String(outcome.tasksResolved ?? 0)} resolved\n`,
+      );
+    }
   }
 }

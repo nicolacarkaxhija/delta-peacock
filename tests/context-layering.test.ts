@@ -130,6 +130,7 @@ describe("bench over layered variants", () => {
             line: 1,
             title: "s",
             body: "b",
+            guidelineQuote: "Changing a function's parameters breaks its callers.",
           });
         }
         return Promise.resolve({ text: JSON.stringify({ findings }) });

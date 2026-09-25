@@ -61,6 +61,8 @@ export interface ReviewReport {
   adjustedLines: number;
   /** Findings the model returned in an unreadable shape (or a truncated tail). */
   droppedMalformedFindings: number;
+  /** Violations quoting a rule their guideline does not contain; present when any were dropped. */
+  droppedMisquotedFindings?: number;
   /** Replacement counts per redaction pattern that fired. */
   redactions: Record<string, number>;
   gate: GateDecision;
@@ -100,6 +102,7 @@ export function buildReport(input: {
   droppedStructural?: number;
   adjustedLines: number;
   droppedMalformed?: number;
+  droppedMisquoted?: number;
   redactions?: Record<string, number>;
   gate: GateDecision;
   usage?: ModelUsage;
@@ -149,6 +152,9 @@ export function buildReport(input: {
     droppedStructuralFindings: input.droppedStructural ?? 0,
     adjustedLines: input.adjustedLines,
     droppedMalformedFindings: input.droppedMalformed ?? 0,
+    ...((input.droppedMisquoted ?? 0) > 0
+      ? { droppedMisquotedFindings: input.droppedMisquoted }
+      : {}),
     redactions: input.redactions ?? {},
     gate: input.gate,
     ...(input.usage ? { usage: input.usage } : {}),

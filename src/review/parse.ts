@@ -6,23 +6,28 @@ import { ToolError } from "../errors.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { plainBody, plainTitle } from "./prose.js";
 
+/** Models write null for "no value" (`"suggestion": null`); that reads as absent, never as malformed. */
+const absentIfNull = <T extends z.ZodType>(schema: T) =>
+  schema.nullish().transform((value) => value ?? undefined);
+
 const RawFinding = z.object({
-  guidelineId: z.string().optional(),
+  guidelineId: absentIfNull(z.string()),
   file: z.string().min(1),
   line: z.unknown(),
-  title: z.string().default(""),
-  body: z.string().default(""),
-  severity: z.enum(SEVERITIES).optional(),
-  confidence: z.number().min(0).max(1).optional(),
-  suggestion: z.string().optional(),
-  quote: z.string().optional(),
-  proposedGuideline: z
-    .object({
+  title: absentIfNull(z.string()).transform((value) => value ?? ""),
+  body: absentIfNull(z.string()).transform((value) => value ?? ""),
+  severity: absentIfNull(z.enum(SEVERITIES)),
+  confidence: absentIfNull(z.number().min(0).max(1)),
+  suggestion: absentIfNull(z.string()),
+  quote: absentIfNull(z.string()),
+  guidelineQuote: absentIfNull(z.string()),
+  proposedGuideline: absentIfNull(
+    z.object({
       id: z.string().min(1),
       severity: z.enum(SEVERITIES),
       rationale: z.string().default(""),
-    })
-    .optional(),
+    }),
+  ),
 });
 
 // the envelope is read loosely so one off-shape element cannot fail the whole
@@ -48,7 +53,12 @@ export interface ParseOptions {
  */
 export interface RejectedCandidate {
   reason:
-    "malformed" | "uncited" | "out-of-scope" | "good-example" | `structural:${StructuralCheck}`;
+    | "malformed"
+    | "uncited"
+    | "out-of-scope"
+    | "misquoted"
+    | "good-example"
+    | `structural:${StructuralCheck}`;
   /** The candidate's JSON, capped; the diff it came from was already redacted. */
   raw: string;
   /** The cited guideline id, when the candidate carried one. */
@@ -69,6 +79,8 @@ export interface ParsedReview {
   adjustedLines: number;
   /** Findings in a shape we could not read at all (or a truncated tail), dropped. */
   droppedMalformed: number;
+  /** Violations whose guidelineQuote is not in the cited guideline: an invented rule, dropped. */
+  droppedMisquoted: number;
   /** The payloads behind the drop counts, for --explain-drops and the report. */
   rejected: RejectedCandidate[];
 }
@@ -164,12 +176,33 @@ function normalizeLine(raw: unknown): { line: number; adjusted: boolean } {
   return { line: 1, adjusted: true };
 }
 
-/** Undefined means uncited with the general pass off; out-of-scope is its own lane. */
+/** Whitespace collapsed, wrapping quotes and markdown emphasis gone: what a verbatim quote must survive. */
+function normalizeQuote(text: string): string {
+  return text
+    .replace(/[*`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^["'“‘]+|["'”’]+$/g, "")
+    .trim();
+}
+
+/** Shorter quotes ("dashes") prove nothing about which sentence was applied. */
+const MIN_GUIDELINE_QUOTE = 12;
+
+/** True when the quote is a verbatim passage of the guideline's title or body. */
+export function quotesGuideline(quote: string | undefined, guideline: Guideline): boolean {
+  if (quote === undefined) return false;
+  const wanted = normalizeQuote(quote);
+  if (wanted.length < MIN_GUIDELINE_QUOTE) return false;
+  return normalizeQuote(`${guideline.title}\n${guideline.body}`).includes(wanted);
+}
+
+/** Undefined means uncited with the general pass off; out-of-scope and misquoted are their own lanes. */
 function toFinding(
   raw: RawShape,
   line: number,
   options: ParseOptions,
-): Finding | undefined | "out-of-scope" {
+): Finding | undefined | "out-of-scope" | "misquoted" {
   const confidence = raw.confidence !== undefined ? { confidence: raw.confidence } : {};
   const suggestion = {
     ...(raw.suggestion !== undefined && raw.suggestion !== ""
@@ -184,6 +217,8 @@ function toFinding(
     return "out-of-scope";
   }
   if (guideline !== undefined) {
+    // a finding stands on a sentence the guideline really says, never on a paraphrase
+    if (!quotesGuideline(raw.guidelineQuote, guideline)) return "misquoted";
     const violation: Violation = {
       kind: "violation",
       guidelineId: guideline.id,
@@ -193,6 +228,7 @@ function toFinding(
       line,
       title: plainTitle(raw.title === "" ? guideline.title : raw.title, guideline.id),
       body: plainBody(raw.body),
+      guidelineQuote: String(raw.guidelineQuote),
       ...confidence,
       ...suggestion,
     };
@@ -230,6 +266,7 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
   let droppedOutOfScope = 0;
   let adjustedLines = 0;
   let droppedMalformed = 0;
+  let droppedMisquoted = 0;
   for (const candidate of result.data.findings) {
     // validate each finding alone: one off-shape element costs one finding, not
     // the whole review, so a single stray field can never blank the gate
@@ -252,6 +289,11 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
       rejected.push({ reason: "out-of-scope", raw: rawOf(candidate), ...meta });
       continue;
     }
+    if (finding === "misquoted") {
+      droppedMisquoted += 1;
+      rejected.push({ reason: "misquoted", raw: rawOf(candidate), ...meta });
+      continue;
+    }
     if (finding === undefined) {
       droppedUncited += 1;
       rejected.push({ reason: "uncited", raw: rawOf(candidate), ...meta });
@@ -259,5 +301,13 @@ export function parseReviewResponse(text: string, options: ParseOptions): Parsed
     }
     findings.push(finding);
   }
-  return { findings, droppedUncited, droppedOutOfScope, adjustedLines, droppedMalformed, rejected };
+  return {
+    findings,
+    droppedUncited,
+    droppedOutOfScope,
+    adjustedLines,
+    droppedMalformed,
+    droppedMisquoted,
+    rejected,
+  };
 }

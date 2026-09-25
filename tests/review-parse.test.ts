@@ -34,6 +34,7 @@ const finding = {
   line: 2,
   title: "Console call",
   body: "Replace with the logger.",
+  guidelineQuote: "Use the logger instead.",
 };
 
 describe("parseReviewResponse", () => {
@@ -140,7 +141,14 @@ describe("parseReviewResponse", () => {
   });
 
   it("falls back to the guideline title and line 1 on sloppy fields, counting the fix", () => {
-    const sloppy = response([{ guidelineId: "no-console", file: "src/app.js", line: -5 }]);
+    const sloppy = response([
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: -5,
+        guidelineQuote: "Use the logger instead.",
+      },
+    ]);
     const { findings, adjustedLines } = parseReviewResponse(sloppy, options());
     expect(findings[0]).toMatchObject({ line: 1, title: "No console statements" });
     expect(adjustedLines).toBe(1);

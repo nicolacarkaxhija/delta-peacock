@@ -3,12 +3,17 @@ export interface ExpectedFinding {
   line: number;
   /** When set, only a finding citing this guideline can match. */
   guidelineId?: string;
+  /** When set, the finding's suggestion must contain each of these, case-insensitive. */
+  suggestionIncludes?: string[];
 }
 
 export interface ProducedFinding {
   file: string;
   line: number;
   guidelineId?: string;
+  suggestion?: string;
+  /** The advisory calibration verdict, when calibration ran and disagreed. */
+  calibration?: "drop" | "demote";
 }
 
 export interface MatchResult {
@@ -26,7 +31,10 @@ function matches(produced: ProducedFinding, expected: ExpectedFinding, tolerance
   if (expected.guidelineId !== undefined && produced.guidelineId !== expected.guidelineId) {
     return false;
   }
-  return true;
+  const suggestion = (produced.suggestion ?? "").toLowerCase();
+  return (expected.suggestionIncludes ?? []).every((part) =>
+    suggestion.includes(part.toLowerCase()),
+  );
 }
 
 /** Pure greedy matching; the review function is injected elsewhere. */

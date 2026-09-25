@@ -20,7 +20,14 @@ function makeScenario(): string {
 }
 
 function findingAt(line: number, title: string): Record<string, unknown> {
-  return { guidelineId: "no-console", file: "src/app.js", line, title, body: "b" };
+  return {
+    guidelineId: "no-console",
+    file: "src/app.js",
+    line,
+    title,
+    body: "b",
+    guidelineQuote: "Use the logger.",
+  };
 }
 
 const MEMBERS = JSON.stringify([
@@ -228,6 +235,8 @@ describe("judge mode", () => {
     expect(judgeCalls[0]).toContain("Candidate findings");
     const report = JSON.parse(readFileSync(path.join(repo, "j.json"), "utf8")) as ReviewReport;
     expect(report.ensemble?.members.some((member) => member.id === "the-judge")).toBe(true);
+    // the judge's own reply still carries a verified guidelineQuote, not dropped along the way
+    expect(report.findings[0]).toMatchObject({ guidelineQuote: "Use the logger." });
   });
 
   it("falls back to the union when the judge fails", async () => {

@@ -11,6 +11,8 @@ export interface RenderableReview {
   droppedStructural?: number;
   adjustedLines: number;
   droppedMalformed?: number;
+  /** Violations quoting a sentence their guideline does not contain. */
+  droppedMisquoted?: number;
   /** How many findings sit under the confidence floor, report-only. */
   filtered: number;
   /** Violations excused by an in-code waiver: reported here, never gating. */
@@ -109,6 +111,11 @@ export function renderReview(review: RenderableReview): string {
       : []),
     ...((review.droppedMalformed ?? 0) > 0
       ? [`${String(review.droppedMalformed ?? 0)} malformed finding(s) dropped`]
+      : []),
+    ...((review.droppedMisquoted ?? 0) > 0
+      ? [
+          `${String(review.droppedMisquoted ?? 0)} finding(s) dropped: the quoted rule is not in the cited guideline`,
+        ]
       : []),
     ...(review.filtered > 0
       ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]

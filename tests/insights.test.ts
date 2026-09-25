@@ -18,6 +18,7 @@ const REPLY = JSON.stringify({
       quote: "console.log('x');",
       title: "Console",
       body: "b1",
+      guidelineQuote: "Use the logger.",
     },
     {
       guidelineId: "no-todo",
@@ -26,6 +27,7 @@ const REPLY = JSON.stringify({
       quote: "// TODO fix",
       title: "Todo",
       body: "b2",
+      guidelineQuote: "File an issue instead.",
     },
   ],
 });

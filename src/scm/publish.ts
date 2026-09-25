@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Config } from "../config/schema.js";
 import { fingerprintFrom, fingerprintOf, type Finding } from "../domain/finding.js";
 import {
@@ -9,13 +10,15 @@ import {
   renderCommentBody,
   isSummaryBody,
   renderSummaryBody,
+  severityWord,
   stateLine,
+  statusLine,
   SUMMARY_MARKER,
   twoSentences,
   type Presentation,
   type SummaryInput,
 } from "./comment-format.js";
-import type { InsightReport, ScmComment, ScmPort, StatusState } from "./port.js";
+import type { InsightReport, ScmComment, ScmPort, ScmTask, StatusState } from "./port.js";
 
 export { renderCommentBody, renderSummaryBody, type SummaryInput } from "./comment-format.js";
 
@@ -68,6 +71,9 @@ export interface PublishOutcome {
   deleted: number;
   unchanged: number;
   notices: string[];
+  /** Present only when tasks are on. */
+  tasksCreated?: number;
+  tasksResolved?: number;
 }
 
 /** Bitbucket's four annotation severities absorb the five review severities. */
@@ -91,10 +97,9 @@ export function buildInsightReport(
     counts.set(finding.severity, (counts.get(finding.severity) ?? 0) + 1);
   }
   const blocked = blockedLine(input);
-  const failed = input.outcome?.kind === "failed";
   return {
     title: presentation.displayName,
-    result: input.gate.failed || failed ? "FAILED" : "PASSED",
+    result: statusState(input) === "failure" ? "FAILED" : "PASSED",
     details: blocked === undefined ? stateLine(input) : `${stateLine(input)}. ${blocked}.`,
     counts: [
       { label: "Findings", value: input.findings.length },
@@ -211,15 +216,15 @@ function looksLikeFinding(comment: ScmComment, presentation: Presentation): bool
   );
 }
 
+/** Returns the comment id each posted finding lives in, where the host names one. */
 async function reconcileInlineComments(
   scm: ScmPort,
   presentation: Presentation,
-  findings: readonly Finding[],
+  desired: ReadonlyMap<string, Finding>,
   outcome: PublishOutcome,
-): Promise<void> {
-  const desired = new Map(
-    fingerprintEntries(findings).map(({ fingerprint, finding }) => [fingerprint, finding]),
-  );
+  settled: ReadonlySet<string> = new Set(),
+): Promise<Map<string, string>> {
+  const commentIds = new Map<string, string>();
   const existing = await ownComments(
     scm,
     presentation,
@@ -230,8 +235,8 @@ async function reconcileInlineComments(
   for (const comment of existing) {
     const fingerprint = claims.get(comment);
     const finding = fingerprint === undefined ? undefined : desired.get(fingerprint);
-    if (comment.resolved === true) {
-      // a resolved thread is the team's call: left as is, and its finding is not reposted
+    if (comment.resolved === true || (fingerprint !== undefined && settled.has(fingerprint))) {
+      // a resolved thread or task is the team's call: left as is, and its finding is not reposted
       if (fingerprint !== undefined && finding !== undefined) {
         seen.add(fingerprint);
         outcome.unchanged += 1;
@@ -244,6 +249,7 @@ async function reconcileInlineComments(
       continue;
     }
     seen.add(fingerprint);
+    commentIds.set(fingerprint, comment.id);
     const body = renderCommentBody(finding, fingerprint, presentation);
     if (body === comment.body) {
       outcome.unchanged += 1;
@@ -253,13 +259,108 @@ async function reconcileInlineComments(
     }
   }
   for (const [fingerprint, finding] of desired) {
-    if (seen.has(fingerprint)) continue;
-    await scm.createInlineComment({
+    if (seen.has(fingerprint) || settled.has(fingerprint)) continue;
+    const id = await scm.createInlineComment({
       body: renderCommentBody(finding, fingerprint, presentation),
       path: finding.file,
       line: finding.line,
     });
+    if (typeof id === "string") commentIds.set(fingerprint, id);
     outcome.created += 1;
+  }
+  return commentIds;
+}
+
+/** Short stable digest of a line's text, so a later run can tell whether it changed. */
+export function lineDigest(text: string | undefined): string {
+  return createHash("sha256")
+    .update((text ?? "").trim())
+    .digest("hex")
+    .slice(0, 8);
+}
+
+const TASK_REF = /\bref ([0-9a-f]+(?:-\d+)?)\.([0-9a-f]{8})$/;
+
+/** One line a person reads, ending in the reference a later run matches on. */
+export function taskContent(finding: Finding, fingerprint: string, digest: string): string {
+  const cite = finding.kind === "violation" ? finding.guidelineId : "observation";
+  return `${severityWord(finding.severity)}: ${cite} in ${finding.file} line ${String(finding.line)}, ref ${fingerprint}.${digest}`;
+}
+
+interface OwnTask {
+  task: ScmTask;
+  fingerprint: string;
+  digest: string;
+  file: string;
+  line: number;
+}
+
+function ownTask(task: ScmTask): OwnTask | undefined {
+  const ref = TASK_REF.exec(task.content);
+  const where = / in (.+) line (\d+), ref /.exec(task.content);
+  if (ref === null || where === null) return undefined;
+  return {
+    task,
+    fingerprint: String(ref[1]),
+    digest: String(ref[2]),
+    file: String(where[1]),
+    line: Number(where[2]),
+  };
+}
+
+export interface TaskOutcome {
+  tasksCreated: number;
+  tasksResolved: number;
+}
+
+/**
+ * Tasks mirror findings: one per posted finding, resolved by the reviewer once
+ * the anchored line changed, left open while it stands. A finding whose task a
+ * person resolved stays settled and is not posted again.
+ */
+interface TaskApi {
+  list(): Promise<ScmTask[]>;
+  create(content: string, commentId: string): Promise<void>;
+  resolve(id: string): Promise<void>;
+}
+
+function taskApiOf(scm: ScmPort): TaskApi | undefined {
+  if (
+    scm.listTasks === undefined ||
+    scm.createTask === undefined ||
+    scm.resolveTask === undefined
+  ) {
+    return undefined;
+  }
+  const port = scm as ScmPort & Required<Pick<ScmPort, "listTasks" | "createTask" | "resolveTask">>;
+  return {
+    list: () => port.listTasks(),
+    create: (content, commentId) => port.createTask(content, commentId),
+    resolve: (id) => port.resolveTask(id),
+  };
+}
+
+async function reconcileTasks(
+  scm: TaskApi,
+  own: readonly OwnTask[],
+  desired: ReadonlyMap<string, Finding>,
+  commentIds: ReadonlyMap<string, string>,
+  lineTextOf: (file: string, line: number) => string | undefined,
+  outcome: PublishOutcome,
+): Promise<void> {
+  for (const entry of own) {
+    if (entry.task.resolved) continue;
+    if (lineDigest(lineTextOf(entry.file, entry.line)) === entry.digest) continue;
+    await scm.resolve(entry.task.id);
+    outcome.tasksResolved = (outcome.tasksResolved ?? 0) + 1;
+  }
+  for (const [fingerprint, finding] of desired) {
+    const commentId = commentIds.get(fingerprint);
+    if (commentId === undefined) continue;
+    const digest = lineDigest(lineTextOf(finding.file, finding.line));
+    if (own.some((entry) => entry.fingerprint === fingerprint && entry.digest === digest)) continue;
+    await scm.create(taskContent(finding, fingerprint, digest), commentId);
+    outcome.tasksCreated = (outcome.tasksCreated ?? 0) + 1;
   }
 }
 
@@ -284,11 +385,12 @@ async function upsertSummary(
   for (const duplicate of extra) await scm.deleteComment(duplicate.id);
 }
 
-function statusDescription(input: SummaryInput): string {
-  if (input.outcome?.kind === "failed") return "Review could not complete";
-  const blocked = blockedLine(input);
-  if (blocked !== undefined) return blocked;
-  return stateLine(input);
+/** A capped run fails the status only where the gate would have blocked. */
+function statusState(input: SummaryInput): StatusState {
+  const kind = input.outcome?.kind;
+  if (kind === "failed") return "failure";
+  if (kind === "capped") return input.gate.threshold === "none" ? "success" : "failure";
+  return input.gate.failed ? "failure" : "success";
 }
 
 /** The one place every command asks whether a write is suppressed; nothing else reads config.scm.dryRun directly. */
@@ -315,6 +417,10 @@ export async function publishReview(
     /** Post a summary comment on a clean run even where an Insights card carries the result. */
     summaryWhenClean?: boolean;
     presentation?: PresentationSettings;
+    /** One pull request task per posted finding, where the host has tasks. */
+    tasks?: boolean;
+    /** A file's line at the reviewed commit; tasks resolve once it changed. */
+    lineTextOf?: (file: string, line: number) => string | undefined;
     /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
     dryRun: boolean;
   },
@@ -325,12 +431,48 @@ export async function publishReview(
     return outcome;
   }
   const presentation = presentationFor(scm, input.presentation);
-  const failed = input.outcome?.kind === "failed";
+  const failed = input.outcome?.kind === "failed" || input.outcome?.kind === "capped";
   if (input.comments !== false) {
     // a broken run knows nothing about the code, so earlier inline comments stay as they are
     if (!failed) {
       const placed = input.findings.filter((finding) => finding.unplaced !== true);
-      await reconcileInlineComments(scm, presentation, placed, outcome);
+      const desired = new Map(
+        fingerprintEntries(placed).map(({ fingerprint, finding }) => [fingerprint, finding]),
+      );
+      const taskApi = input.tasks === true ? taskApiOf(scm) : undefined;
+      if (input.tasks === true && taskApi === undefined) {
+        outcome.notices.push("this provider has no pull request tasks; skipping them");
+      }
+      let own: OwnTask[] = [];
+      const settled = new Set<string>();
+      if (taskApi !== undefined) {
+        own = (await taskApi.list()).flatMap((task) => {
+          const parsed = ownTask(task);
+          return parsed === undefined ? [] : [parsed];
+        });
+        const me = await scm.currentUserId?.();
+        // a person settled it; the reviewer does not raise it again
+        for (const entry of own) {
+          if (entry.task.resolved && entry.task.resolvedBy !== me) settled.add(entry.fingerprint);
+        }
+      }
+      const commentIds = await reconcileInlineComments(
+        scm,
+        presentation,
+        desired,
+        outcome,
+        settled,
+      );
+      if (taskApi !== undefined) {
+        await reconcileTasks(
+          taskApi,
+          own,
+          desired,
+          commentIds,
+          input.lineTextOf ?? (() => undefined),
+          outcome,
+        );
+      }
     }
     // where an Insights card carries a clean result, a clean summary only updates an earlier one
     const cardCarries = input.codeInsights === true && scm.publishInsights !== undefined;
@@ -339,8 +481,7 @@ export async function publishReview(
     await upsertSummary(scm, presentation, renderSummaryBody(input, presentation), !quiet);
   }
   if (input.commitStatus) {
-    const state: StatusState = input.gate.failed || failed ? "failure" : "success";
-    await scm.postStatus(state, statusDescription(input), presentation.displayName);
+    await scm.postStatus(statusState(input), statusLine(input), presentation.displayName);
   }
   if (input.codeInsights === true) {
     if (scm.publishInsights === undefined) {

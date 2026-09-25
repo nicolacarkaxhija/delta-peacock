@@ -15,6 +15,7 @@ function findingReply(entries: { line: number; suggestion?: string }[]): string 
       line: entry.line,
       title: `Finding ${String(index + 1)}`,
       body: "b",
+      guidelineQuote: "Use the logger.",
       ...(entry.suggestion !== undefined ? { suggestion: entry.suggestion } : {}),
     })),
   });
@@ -162,6 +163,7 @@ describe("fix applies suggestions", () => {
             line: 1,
             title: "One",
             body: "b",
+            guidelineQuote: "Use the logger.",
             suggestion: "logger.info('x');",
           },
           {
@@ -170,6 +172,7 @@ describe("fix applies suggestions", () => {
             line: 1,
             title: "Two",
             body: "b",
+            guidelineQuote: "Use const/let.",
             suggestion: "logger.warn('x');",
           },
         ],
