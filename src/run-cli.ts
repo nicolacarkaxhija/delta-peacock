@@ -1,5 +1,5 @@
 import { CommanderError } from "commander";
-import { detectCi } from "./config/ci.js";
+import { ciBuildUrl, detectCi } from "./config/ci.js";
 import { loadCredentials } from "./config/credentials.js";
 import { ConfigError, loadConfig } from "./config/loader.js";
 import type { EmbeddingPort } from "./context/embedding.js";
@@ -38,12 +38,14 @@ export interface CliDeps {
 
 function toRuntimeDeps(boundary: CliDeps): RuntimeDeps {
   const { cwd, env, ...rest } = boundary;
+  const buildUrl = ciBuildUrl(env);
   return {
     cwd,
     loadConfig: (flags) =>
       loadConfig({ root: cwd, env, ...(flags !== undefined ? { flags } : {}) }),
     credentials: loadCredentials(env),
     ci: detectCi(env),
+    ...(buildUrl !== undefined ? { ciBuildUrl: buildUrl } : {}),
     ...rest,
   };
 }

@@ -95,7 +95,7 @@ export async function runDescribe(
     return 0;
   }
 
-  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
+  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
   if (scm.getPullRequestText === undefined || scm.updatePullRequestText === undefined) {
     throw new ToolError(`the ${config.scm.provider} provider cannot edit descriptions`);
   }

@@ -25,7 +25,7 @@ export async function runLearn(
   if (config.scm.provider === "local") {
     throw new ToolError("learn reads reactions from an SCM; local mode has none");
   }
-  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
+  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
   if (scm.listCommentSignals === undefined) {
     throw new ToolError(`the ${config.scm.provider} provider cannot read comment signals yet`);
   }

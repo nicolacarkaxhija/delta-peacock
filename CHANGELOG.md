@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 (2026-09-25)
+
+### Bug Fixes
+
+- The Bitbucket build status carries the absolute `url` the real API requires (the pipeline run from `BITBUCKET_BUILD_NUMBER`, `BITBUCKET_WORKSPACE` and `BITBUCKET_REPO_SLUG`, else the pull request page) plus `name` and `refname`, so the POST no longer answers 400; unmapped SCM errors now quote the response body.
+
 ## 0.1.2 (2026-09-25)
 
 ### Features

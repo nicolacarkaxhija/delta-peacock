@@ -48,7 +48,7 @@ async function backfill(deps: RuntimeDeps, cwd: string, statsPath: string): Prom
   if (config.scm.provider === "local") {
     throw new ToolError("stats backfill reads a pull request's comments; local mode has none");
   }
-  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials);
+  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
   if (scm.listCommentSignals === undefined || scm.getPullRequestAuthor === undefined) {
     throw new ToolError(`the ${config.scm.provider} provider cannot back stats out yet`);
   }

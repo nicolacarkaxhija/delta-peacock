@@ -3,7 +3,8 @@ import { ToolError } from "../src/errors.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
 import { createBitbucketPort } from "../src/scm/bitbucket.js";
-import { startFakeBitbucket } from "./helpers/fake-bitbucket.js";
+import { ciBuildUrl } from "../src/config/ci.js";
+import { buildStatusFieldErrors, startFakeBitbucket } from "./helpers/fake-bitbucket.js";
 import { runScmContract } from "./helpers/scm-contract.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
@@ -85,6 +86,102 @@ describe("bitbucket source sha caching", () => {
     } finally {
       await fake.close();
     }
+  });
+});
+
+describe("bitbucket build status contract", () => {
+  it("the fake enforces the real field rules", () => {
+    expect(buildStatusFieldErrors({ key: "k", state: "SUCCESSFUL" })).toEqual({
+      url: ["This field is required."],
+    });
+    expect(buildStatusFieldErrors({ key: "k", state: "FAILED", url: "/pipelines" })).toEqual({
+      url: ["Enter a valid URL."],
+    });
+    expect(Object.keys(buildStatusFieldErrors({ state: "DONE", url: "https://x.y" }))).toEqual([
+      "key",
+      "state",
+    ]);
+    for (const state of ["SUCCESSFUL", "FAILED", "INPROGRESS", "STOPPED"]) {
+      expect(buildStatusFieldErrors({ key: "k", state, url: "https://x.y/z" })).toEqual({});
+    }
+  });
+
+  it("sends key, a valid state, an absolute url and the source branch", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      await portAgainst(fake.baseUrl).postStatus("failure", "1 MAJOR");
+      expect(fake.lastStatusBody).toEqual({
+        key: "delta-peacock",
+        name: "delta-peacock",
+        state: "FAILED",
+        url: "https://bitbucket.org/acme/widgets/pull-requests/7",
+        description: "1 MAJOR",
+        refname: "feature/widgets",
+      });
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("links the pipeline run when one is given and ignores a relative one", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const run = "https://bitbucket.org/acme/widgets/pipelines/results/42";
+      await createBitbucketPort({
+        repository: "acme/widgets",
+        pullRequest: 7,
+        token: "test-token",
+        baseUrl: fake.baseUrl,
+        statusUrl: run,
+      }).postStatus("success", "clean");
+      expect(fake.lastStatusBody?.["url"]).toBe(run);
+      await createBitbucketPort({
+        repository: "acme/widgets",
+        pullRequest: 7,
+        token: "test-token",
+        baseUrl: fake.baseUrl,
+        statusUrl: "/pipelines/results/42",
+      }).postStatus("success", "clean");
+      expect(fake.lastStatusBody?.["url"]).toBe(
+        "https://bitbucket.org/acme/widgets/pull-requests/7",
+      );
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("appends the error body to an unmapped status so a 400 names its fields", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const port = createBitbucketPort({
+        repository: "acme/widgets",
+        pullRequest: 7,
+        token: "test-token",
+        baseUrl: `${fake.baseUrl}/nowhere`,
+      });
+      await expect(port.postStatus("success", "x")).rejects.toThrow(/404 .*no route/);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("derives the pipeline url from Bitbucket's own variables only", () => {
+    expect(
+      ciBuildUrl({
+        BITBUCKET_BUILD_NUMBER: "42",
+        BITBUCKET_WORKSPACE: "acme",
+        BITBUCKET_REPO_SLUG: "widgets",
+      }),
+    ).toBe("https://bitbucket.org/acme/widgets/pipelines/results/42");
+    expect(ciBuildUrl({ BITBUCKET_BUILD_NUMBER: "42" })).toBeUndefined();
+    expect(
+      ciBuildUrl({
+        BITBUCKET_BUILD_NUMBER: "4 2",
+        BITBUCKET_WORKSPACE: "acme",
+        BITBUCKET_REPO_SLUG: "widgets",
+      }),
+    ).toBeUndefined();
+    expect(ciBuildUrl({})).toBeUndefined();
   });
 });
 

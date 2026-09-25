@@ -23,6 +23,8 @@ export interface RuntimeDeps {
   credentials: Credentials;
   /** Which CI host this process runs under, if any. */
   ci: CiProvider;
+  /** The CI run's absolute URL, when the host exposes one; status links point at it. */
+  ciBuildUrl?: string;
   out: (text: string) => void;
   err: (text: string) => void;
   /** The model-port seam: tests inject a scripted fake here. */
