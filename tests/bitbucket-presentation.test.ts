@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { recordFromSignals } from "../src/commands/stats.js";
-import { fingerprintOf } from "../src/domain/finding.js";
+import { fingerprintOf, type Finding } from "../src/domain/finding.js";
+import { evaluateGate } from "../src/domain/gate.js";
+import { publishReview } from "../src/scm/publish.js";
 import { evidenceFrom } from "../src/guidelines/learn.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
@@ -187,6 +189,112 @@ describe("bitbucket presentation", () => {
       expect(stderr).toContain("2 created, 0 updated, 2 resolved");
       expect(fake.drafts).toBe(0); // GET /user answered, no draft needed
       expect(summaries(fake).map((c) => c.id)).toEqual([60]);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("the fake refuses any comment or description carrying an HTML comment", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const port = createBitbucketPort({
+        repository: "acme/widgets",
+        pullRequest: 7,
+        token: "test-token",
+        baseUrl: fake.baseUrl,
+      });
+      await expect(
+        port.createInlineComment({ body: "x\n\n<!-- m -->", path: "a.js", line: 1 }),
+      ).rejects.toThrow(/400/);
+      await expect(port.createSummaryComment("<!-- m -->")).rejects.toThrow(/400/);
+      await port.createSummaryComment("plain");
+      await expect(port.updateSummaryComment("1", "<!-- m -->")).rejects.toThrow(/400/);
+      await expect(port.updatePullRequestText?.({ body: "<!-- m -->" })).rejects.toThrow(/400/);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("updates a persisting finding in place and resolves a discussed one that is gone", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const repo = reviewedRepo();
+      await review(fake, TWO, repo);
+      const [consoleComment, todoComment] = inline(fake);
+      fake.comments.push({
+        id: 500,
+        content: { raw: "fixed later" },
+        inline: { path: "src/app.js", to: 2 },
+        parent: { id: todoComment?.id ?? 0 },
+        user: { uuid: "{human}" },
+      });
+      const reworded = JSON.stringify({
+        findings: [
+          {
+            guidelineId: "no-console",
+            file: "src/app.js",
+            line: 1,
+            title: "Console",
+            body: "Route it through the logger.",
+          },
+        ],
+      });
+      const { stderr } = await review(fake, reworded, repo);
+      expect(stderr).toContain("0 created, 1 updated, 1 resolved");
+      const kept = fake.comments.find((c) => c.id === consoleComment?.id);
+      expect(kept?.content.raw).toContain("Route it through the logger.");
+      // the discussed thread stays, resolved, with its reply
+      expect(fake.comments.find((c) => c.id === todoComment?.id)?.resolution).toBeTruthy();
+      expect(fake.comments.some((c) => c.id === 500)).toBe(true);
+      expect(fake.comments.every((c) => !c.content.raw.includes("<!--"))).toBe(true);
+
+      // resolved threads are left alone and their finding is not reposted
+      const third = await review(fake, TWO, repo);
+      expect(third.stderr).toContain("0 created, 1 updated, 0 resolved, 1 unchanged");
+      expect(inline(fake).filter((c) => c.parent === undefined)).toHaveLength(2);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("tells apart findings sharing file, guideline and line without markers", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const port = createBitbucketPort({
+        repository: "acme/widgets",
+        pullRequest: 7,
+        token: "test-token",
+        baseUrl: fake.baseUrl,
+      });
+      const twin = (body: string): Finding => ({
+        kind: "violation",
+        guidelineId: "no-console",
+        severity: "MAJOR",
+        file: "src/app.js",
+        line: 1,
+        title: body,
+        body,
+      });
+      const publish = (findings: Finding[]) =>
+        publishReview(port, {
+          findings,
+          proposals: [],
+          droppedUncited: 0,
+          filtered: 0,
+          gate: evaluateGate(findings, "BLOCKER"),
+          commitStatus: false,
+          codeInsights: false,
+          dryRun: false,
+        });
+      await publish([twin("First."), twin("Second.")]);
+      expect(inline(fake)).toHaveLength(2);
+      const again = await publish([twin("First."), twin("Second.")]);
+      expect(again).toMatchObject({ created: 0, updated: 0, deleted: 0, unchanged: 2 });
+      const swapped = await publish([twin("Second."), twin("First.")]);
+      expect(swapped).toMatchObject({ created: 0, updated: 0, deleted: 0, unchanged: 2 });
+      const fewer = await publish([twin("Second.")]);
+      expect(fewer).toMatchObject({ created: 0, updated: 0, deleted: 1, unchanged: 1 });
+      expect(inline(fake).map((c) => c.content.raw)).toEqual([expect.stringContaining("Second.")]);
     } finally {
       await fake.close();
     }

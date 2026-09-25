@@ -7,6 +7,12 @@ export interface FakeBitbucketComment {
   parent?: { id: number };
   user?: { uuid: string };
   pending?: boolean;
+  resolution?: { type: string } | null;
+}
+
+/** Bitbucket prints HTML comments as text, so the fake refuses any write carrying one. */
+export function visibleMarker(text: unknown): boolean {
+  return typeof text === "string" && text.includes("<!--");
 }
 
 /** The fake token's own user, like a repository access token's bot. */
@@ -127,6 +133,8 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
       const prDiff = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/diff$/;
       const commentsRoute = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/comments$/;
       const commentRoute = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/comments\/(\d+)$/;
+      const resolveRoute =
+        /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/comments\/(\d+)\/resolve$/;
       const statusRoute = /^\/repositories\/[^/]+\/[^/]+\/commit\/([^/]+)\/statuses\/build$/;
       const reportRoute = /^\/repositories\/[^/]+\/[^/]+\/commit\/[^/]+\/reports\/([^/]+)$/;
       const annotationsRoute =
@@ -148,6 +156,12 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
         });
       } else if (method === "PUT" && prMeta.test(path)) {
         const body = await readBody(request);
+        if (visibleMarker(body["description"])) {
+          send(response, 400, {
+            error: { message: "an HTML comment would show in the description" },
+          });
+          return;
+        }
         if (typeof body["description"] === "string") state.prText.body = body["description"];
         if (typeof body["title"] === "string") state.prText.title = body["title"];
         send(response, 200, state.prText);
@@ -165,6 +179,10 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
         });
       } else if (method === "POST" && commentsRoute.test(path)) {
         const body = await readBody(request);
+        if (visibleMarker((body["content"] as { raw?: unknown } | undefined)?.raw)) {
+          send(response, 400, { error: { message: "an HTML comment would show in the comment" } });
+          return;
+        }
         if (body["pending"] === true) holder.drafts += 1;
         state.comments.push({
           id: nextId++,
@@ -172,6 +190,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
           ...(body["inline"] !== undefined
             ? { inline: body["inline"] as { path: string; to: number } }
             : {}),
+          ...(body["parent"] !== undefined ? { parent: body["parent"] as { id: number } } : {}),
           user: { uuid: BOT_UUID },
           ...(body["pending"] === true ? { pending: true } : {}),
         });
@@ -186,9 +205,24 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
           send(response, 204);
         } else {
           const body = await readBody(request);
+          if (visibleMarker((body["content"] as { raw?: unknown } | undefined)?.raw)) {
+            send(response, 400, {
+              error: { message: "an HTML comment would show in the comment" },
+            });
+            return;
+          }
           const target = state.comments[index];
           if (target) target.content = body["content"] as { raw: string };
           send(response, 200, target);
+        }
+      } else if (method === "POST" && resolveRoute.test(path)) {
+        const id = Number(resolveRoute.exec(path)?.[1]);
+        const target = state.comments.find((comment) => comment.id === id);
+        if (target === undefined || target.parent !== undefined) {
+          send(response, 404, { error: { message: "no resolvable thread" } });
+        } else {
+          target.resolution = { type: "comment_resolution" };
+          send(response, 200, target.resolution);
         }
       } else if (method === "PUT" && reportRoute.test(path)) {
         if (holder.insightsDisabled) {

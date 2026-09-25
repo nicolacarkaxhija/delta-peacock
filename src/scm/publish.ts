@@ -142,15 +142,68 @@ async function ownComments(
   return candidates.filter((comment) => comment.authorId === self);
 }
 
-/** A comment's fingerprint: its marker, or on marker-less hosts its heading, path and line. */
-function commentFingerprint(comment: ScmComment, presentation: Presentation): string | undefined {
+/**
+ * The unclaimed fingerprint a comment stands for. A marker names it exactly;
+ * a heading, path and line name only the base, so findings sharing all three
+ * take a free suffix: the one whose body matches, or unless exactOnly the first.
+ */
+function claimFingerprint(
+  comment: ScmComment,
+  presentation: Presentation,
+  desired: ReadonlyMap<string, Finding>,
+  taken: ReadonlySet<string>,
+  exactOnly: boolean,
+): string | undefined {
   const marked = markerFingerprint(comment.body);
-  if (marked !== undefined || presentation.markers) return marked;
+  if (marked !== undefined || presentation.markers) {
+    return marked === undefined || taken.has(marked) ? undefined : marked;
+  }
   const anchor = headingAnchor(comment.body);
   if (anchor === undefined || comment.path === undefined || comment.line === undefined) {
     return undefined;
   }
-  return fingerprintFrom(comment.path, anchor, comment.line);
+  const base = fingerprintFrom(comment.path, anchor, comment.line);
+  const free: { fingerprint: string; finding: Finding }[] = [];
+  for (let index = 0; ; index += 1) {
+    const fingerprint = index === 0 ? base : `${base}-${String(index)}`;
+    const finding = desired.get(fingerprint);
+    if (finding === undefined) break;
+    if (!taken.has(fingerprint)) free.push({ fingerprint, finding });
+  }
+  const same = free.find(
+    ({ fingerprint, finding }) =>
+      renderCommentBody(finding, fingerprint, presentation) === comment.body,
+  );
+  return (same ?? (exactOnly ? undefined : free[0]))?.fingerprint;
+}
+
+/** Exact body matches claim first, so a reorder or a dropped twin rewrites nothing. */
+function assignFingerprints(
+  existing: readonly ScmComment[],
+  presentation: Presentation,
+  desired: ReadonlyMap<string, Finding>,
+): Map<ScmComment, string> {
+  const claims = new Map<ScmComment, string>();
+  const taken = new Set<string>();
+  for (const exactOnly of [true, false]) {
+    for (const comment of existing) {
+      if (claims.has(comment)) continue;
+      const fingerprint = claimFingerprint(comment, presentation, desired, taken, exactOnly);
+      if (fingerprint === undefined) continue;
+      claims.set(comment, fingerprint);
+      taken.add(fingerprint);
+    }
+  }
+  return claims;
+}
+
+/** A thread with replies is resolved where the host can, so the discussion keeps its context. */
+async function retireComment(scm: ScmPort, comment: ScmComment): Promise<void> {
+  if ((comment.replies ?? 0) > 0 && scm.resolveComment !== undefined) {
+    await scm.resolveComment(comment.id);
+  } else {
+    await scm.deleteComment(comment.id);
+  }
 }
 
 function looksLikeFinding(comment: ScmComment, presentation: Presentation): boolean {
@@ -174,12 +227,21 @@ async function reconcileInlineComments(
     presentation,
     (await scm.listInlineComments()).filter((comment) => looksLikeFinding(comment, presentation)),
   );
+  const claims = assignFingerprints(existing, presentation, desired);
   const seen = new Set<string>();
   for (const comment of existing) {
-    const fingerprint = commentFingerprint(comment, presentation);
+    const fingerprint = claims.get(comment);
     const finding = fingerprint === undefined ? undefined : desired.get(fingerprint);
-    if (fingerprint === undefined || finding === undefined || seen.has(fingerprint)) {
-      await scm.deleteComment(comment.id);
+    if (comment.resolved === true) {
+      // a resolved thread is the team's call: left as is, and its finding is not reposted
+      if (fingerprint !== undefined && finding !== undefined) {
+        seen.add(fingerprint);
+        outcome.unchanged += 1;
+      }
+      continue;
+    }
+    if (fingerprint === undefined || finding === undefined) {
+      await retireComment(scm, comment);
       outcome.deleted += 1;
       continue;
     }

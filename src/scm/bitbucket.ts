@@ -41,6 +41,7 @@ interface BitbucketComment {
   parent?: { id: number };
   deleted?: boolean;
   user?: { uuid?: string };
+  resolution?: unknown;
 }
 
 interface Page<T> {
@@ -111,12 +112,14 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     return all.filter((comment) => comment.deleted !== true);
   }
 
-  const toComment = (comment: BitbucketComment): ScmComment => ({
+  const toComment = (comment: BitbucketComment, replies = 0): ScmComment => ({
     id: String(comment.id),
     body: comment.content.raw,
     ...(comment.inline !== undefined ? { path: comment.inline.path } : {}),
     ...(typeof comment.inline?.to === "number" ? { line: comment.inline.to } : {}),
     ...(comment.user?.uuid !== undefined ? { authorId: comment.user.uuid } : {}),
+    ...(replies > 0 ? { replies } : {}),
+    ...(comment.resolution !== undefined && comment.resolution !== null ? { resolved: true } : {}),
   });
 
   /**
@@ -173,7 +176,16 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
       return `https://bitbucket.org/${repo}/src/${encodeURIComponent(branch)}/${encodeURI(file)}`;
     },
     async listInlineComments(): Promise<ScmComment[]> {
-      return (await listComments()).filter((c) => c.inline !== undefined).map(toComment);
+      const all = await listComments();
+      const replies = new Map<number, number>();
+      for (const comment of all) {
+        if (comment.parent !== undefined) {
+          replies.set(comment.parent.id, (replies.get(comment.parent.id) ?? 0) + 1);
+        }
+      }
+      return all
+        .filter((c) => c.inline !== undefined && c.parent === undefined)
+        .map((c) => toComment(c, replies.get(c.id)));
     },
     async createInlineComment(comment: NewInlineComment): Promise<void> {
       await request("POST", `${base}/repositories/${repo}/pullrequests/${pr}/comments`, {
@@ -189,8 +201,14 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     async deleteComment(id: string): Promise<void> {
       await request("DELETE", `${base}/repositories/${repo}/pullrequests/${pr}/comments/${id}`);
     },
+    async resolveComment(id: string): Promise<void> {
+      await request(
+        "POST",
+        `${base}/repositories/${repo}/pullrequests/${pr}/comments/${id}/resolve`,
+      );
+    },
     async listSummaryComments(): Promise<ScmComment[]> {
-      return (await listComments()).filter((c) => c.inline === undefined).map(toComment);
+      return (await listComments()).filter((c) => c.inline === undefined).map((c) => toComment(c));
     },
     async createSummaryComment(body: string): Promise<void> {
       await request("POST", `${base}/repositories/${repo}/pullrequests/${pr}/comments`, {

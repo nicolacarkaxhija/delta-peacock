@@ -5,6 +5,10 @@ export interface ScmComment {
   line?: number;
   /** Stable id of the comment's author, where the host exposes one. */
   authorId?: string;
+  /** Replies in the comment's thread, where the host threads inline comments. */
+  replies?: number;
+  /** True once someone resolved the thread. */
+  resolved?: boolean;
 }
 
 export interface NewInlineComment {
@@ -74,6 +78,8 @@ export interface ScmPort {
   createInlineComment(comment: NewInlineComment): Promise<void>;
   updateComment(id: string, body: string): Promise<void>;
   deleteComment(id: string): Promise<void>;
+  /** Resolve a comment thread; hosts without one delete instead. */
+  resolveComment?(id: string): Promise<void>;
   /** Top-level conversation comments, for the summary. */
   listSummaryComments(): Promise<ScmComment[]>;
   createSummaryComment(body: string): Promise<void>;

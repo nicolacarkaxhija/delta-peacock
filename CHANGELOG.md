@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.6 (2026-09-25)
+
+### Bug Fixes
+
+- Bitbucket shows no `<!-- delta-peacock:... -->` text anywhere. Inline comments are matched by author, file, line and the guideline id in their first line; a finding that persists updates its comment in place, and several findings on one line with one guideline keep their own comments across re-runs and reorders instead of being rewritten.
+- A finding that is gone resolves its Bitbucket thread when someone replied, rather than deleting the discussion; it is deleted otherwise. A thread someone resolved is left alone and its finding is not posted again.
+- `describe` on Bitbucket fences its section with a visible `### Change summary` heading and a closing `_Generated summary; replaced on every run._` line. A section written by an earlier version with hidden markers is replaced in place; GitHub and GitLab keep the hidden markers.
+
+### Developer experience
+
+- The fake Bitbucket refuses any comment or description write that contains `<!--`, so every Bitbucket test enforces the markerless contract.
+
 ## 0.1.5 (2026-09-25)
 
 ### Features

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   DESCRIPTION_END,
   DESCRIPTION_START,
+  upsertDescription,
   upsertDescriptionSection,
+  VISIBLE_DESCRIPTION_END,
+  VISIBLE_DESCRIPTION_START,
 } from "../src/review/describe.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
@@ -63,6 +66,29 @@ describe("upsertDescriptionSection", () => {
   it("stands alone when the description was empty", () => {
     expect(upsertDescriptionSection("  ", "s").startsWith(DESCRIPTION_START)).toBe(true);
   });
+
+  it("uses a visible heading and footer without markers and replaces only that", () => {
+    const first = upsertDescription("### Change summary\n\nthe author's own", "v1", false);
+    expect(first.replaced).toBe(false);
+    expect(first.body).not.toContain("<!--");
+    expect(first.body).toContain(
+      `${VISIBLE_DESCRIPTION_START}\n\nv1\n\n${VISIBLE_DESCRIPTION_END}`,
+    );
+    const second = upsertDescription(`${first.body}\n\nprose below`, "v2", false);
+    expect(second.replaced).toBe(true);
+    expect(second.body).toBe(
+      `### Change summary\n\nthe author's own\n\n${VISIBLE_DESCRIPTION_START}\n\nv2\n\n${VISIBLE_DESCRIPTION_END}\n\nprose below`,
+    );
+  });
+
+  it("turns a marker-fenced section into the visible one", () => {
+    const legacy = upsertDescriptionSection("prose", "old");
+    const next = upsertDescription(legacy, "new", false);
+    expect(next).toEqual({
+      body: `prose\n\n${VISIBLE_DESCRIPTION_START}\n\nnew\n\n${VISIBLE_DESCRIPTION_END}`,
+      replaced: true,
+    });
+  });
 });
 
 describe("describe command", () => {
@@ -119,6 +145,53 @@ describe("describe command", () => {
       expect(fake.prText.body).toContain("second version");
       expect(fake.prText.body).not.toContain("first version");
       expect(fake.prText.body.match(new RegExp(DESCRIPTION_START, "g"))).toHaveLength(1);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("writes a markerless section on bitbucket and replaces it on re-run", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const repo = repoWithChange();
+      fake.prText.body = upsertDescriptionSection("author prose", "from 0.1.5");
+      const env = {
+        DELTA_PEACOCK_SCM_PROVIDER: "bitbucket",
+        DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+        DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+        DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
+        BITBUCKET_TOKEN: "test-token",
+      };
+      let stdout = "";
+      const run = (reply: string) =>
+        runCli(["describe"], {
+          cwd: repo,
+          env,
+          out: (text) => {
+            stdout += text;
+          },
+          err: () => undefined,
+          modelPort: model(reply),
+        });
+      expect(await run(JSON.stringify({ summary: "first version" }))).toBe(0);
+      expect(stdout).toContain("description section updated");
+      expect(await run(JSON.stringify({ summary: "second version" }))).toBe(0);
+      expect(fake.prText.body).toBe(
+        `author prose\n\n${VISIBLE_DESCRIPTION_START}\n\nsecond version\n\n${VISIBLE_DESCRIPTION_END}`,
+      );
+
+      stdout = "";
+      await runCli(["describe", "--dry-run"], {
+        cwd: repo,
+        env,
+        out: (text) => {
+          stdout += text;
+        },
+        err: () => undefined,
+        modelPort: model(),
+      });
+      expect(stdout).toContain(VISIBLE_DESCRIPTION_START);
+      expect(stdout).not.toContain("<!--");
     } finally {
       await fake.close();
     }
