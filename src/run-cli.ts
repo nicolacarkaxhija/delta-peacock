@@ -42,7 +42,14 @@ function toRuntimeDeps(boundary: CliDeps): RuntimeDeps {
   return {
     cwd,
     loadConfig: (flags) =>
-      loadConfig({ root: cwd, env, ...(flags !== undefined ? { flags } : {}) }),
+      loadConfig({
+        root: cwd,
+        env,
+        ...(flags !== undefined ? { flags } : {}),
+        onNotice: (notice) => {
+          boundary.err(`${notice}\n`);
+        },
+      }),
     credentials: loadCredentials(env),
     ci: detectCi(env),
     ...(buildUrl !== undefined ? { ciBuildUrl: buildUrl } : {}),

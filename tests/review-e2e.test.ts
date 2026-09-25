@@ -642,69 +642,81 @@ describe("line-anchor repair", () => {
     return repo;
   }
 
-  it("relocates a finding to the changed line containing its own cited snippet", async () => {
-    const repo = makeLoopScenario();
-    // the model names the for-loop's own line, but quotes code that actually
-    // sits one line below it -- the drift the live tool showed across runs
-    const misplaced = JSON.stringify({
-      findings: [
-        {
-          guidelineId: "no-console",
-          file: "src/orders/total.js",
-          line: 3,
-          title: "Loop variable is unclear",
-          body: "Rename it: `const lineItem = lineItems[i];` reads better as `const item = ...`.",
-        },
-      ],
-    });
-    const { code, stdout } = await review(
-      repo,
-      scriptedModel(misplaced).port,
-      "--report",
-      "r.json",
-    );
+  async function reviewed(repo: string, finding: Record<string, unknown>) {
+    const reply = JSON.stringify({ findings: [{ guidelineId: "no-console", ...finding }] });
+    const { code, stdout } = await review(repo, scriptedModel(reply).port, "--report", "r.json");
     expect(code).toBe(0);
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    return { stdout, finding: report.findings[0] };
+  }
+
+  it("moves a finding to the line it quotes", async () => {
+    // the model names the for-loop's own line but quotes the line below it
+    const { stdout, finding } = await reviewed(makeLoopScenario(), {
+      file: "src/orders/total.js",
+      line: 3,
+      quote: "    const lineItem = lineItems[i];",
+      title: "Loop variable is unclear",
+      body: "Rename it.",
+      suggestion: "    const item = lineItems[i];",
+    });
     expect(stdout).toContain("src/orders/total.js:4");
-    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
-    expect(report.findings[0]?.line).toBe(4);
+    expect(finding?.line).toBe(4);
+    expect(finding?.suggestion).toBe("    const item = lineItems[i];");
+    expect(finding?.unplaced).toBeUndefined();
   });
 
-  it("keeps the model's line when no changed line matches its cited snippet", async () => {
-    const repo = makeScenario();
-    const noMatch = JSON.stringify({
-      findings: [
-        {
-          guidelineId: "no-console",
-          file: "src/app.js",
-          line: 2,
-          title: "Console call added",
-          body: "Replace `this.exact.text.appears.nowhere()` with the logger.",
-        },
-      ],
+  it("leaves an already correct line untouched", async () => {
+    const { finding } = await reviewed(makeLoopScenario(), {
+      file: "src/orders/total.js",
+      line: 4,
+      quote: "const lineItem = lineItems[i];",
+      title: "Loop variable is unclear",
+      body: "Rename it.",
     });
-    const { code } = await review(repo, scriptedModel(noMatch).port, "--report", "r.json");
-    expect(code).toBe(0);
-    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
-    expect(report.findings[0]?.line).toBe(2);
+    expect(finding?.line).toBe(4);
+    expect(finding?.unplaced).toBeUndefined();
   });
 
-  it("leaves an already-correct line untouched", async () => {
-    const repo = makeLoopScenario();
-    const correct = JSON.stringify({
-      findings: [
-        {
-          guidelineId: "no-console",
-          file: "src/orders/total.js",
-          line: 4,
-          title: "Loop variable is unclear",
-          body: "Rename it: `const lineItem = lineItems[i];` reads better as `const item = ...`.",
-        },
-      ],
+  it("places no finding whose quote is not in the file, and drops its suggestion", async () => {
+    const { finding } = await reviewed(makeScenario(), {
+      file: "src/app.js",
+      line: 2,
+      quote: "this.exact.text.appears.nowhere();",
+      title: "Console call added",
+      body: "Replace it with the logger.",
+      suggestion: "logger.info(name);",
     });
-    const { code } = await review(repo, scriptedModel(correct).port, "--report", "r.json");
-    expect(code).toBe(0);
-    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
-    expect(report.findings[0]?.line).toBe(4);
+    expect(finding?.unplaced).toBe(true);
+    expect(finding?.suggestion).toBeUndefined();
+    expect(finding?.note).toContain("is not in `src/app.js`");
+  });
+
+  it("places no finding that quotes nothing", async () => {
+    const { finding } = await reviewed(makeScenario(), {
+      file: "src/app.js",
+      line: 2,
+      title: "Console call added",
+      body: "Replace it with the logger.",
+      suggestion: "logger.info(name);",
+    });
+    expect(finding?.unplaced).toBe(true);
+    expect(finding?.suggestion).toBeUndefined();
+  });
+
+  it("never lets a suggestion replace a line other than the one quoted", async () => {
+    // a two line quote cannot be one line's replacement
+    const { finding } = await reviewed(makeLoopScenario(), {
+      file: "src/orders/total.js",
+      line: 4,
+      quote: "    const lineItem = lineItems[i];\n    sum += lineItem.price;",
+      title: "Loop variable is unclear",
+      body: "Rename it.",
+      suggestion: "    sum += lineItems[i].price;",
+    });
+    expect(finding?.line).toBe(4);
+    expect(finding?.suggestion).toBeUndefined();
+    expect(finding?.note).toContain("more than the one quoted line");
   });
 });
 
@@ -808,8 +820,13 @@ describe("partial batch parse failures", () => {
       },
       modelPort: port,
     });
-    expect(requests.length).toBe(2); // sanity: the diff really did split into two batches
+    // two batches, plus one retry of the batch whose reply held no JSON
+    expect(requests.length).toBe(3);
+    expect(requests.filter((request) => request.user.includes("held no JSON answer"))).toHaveLength(
+      1,
+    );
     expect(code).toBe(0); // one unparseable batch must not abort an otherwise-clean review
+    expect(stderr).toMatch(/asking once more for the JSON answer/);
     expect(stderr).toMatch(/batch \d+\/2: .+; skipping this batch's findings/);
 
     const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;

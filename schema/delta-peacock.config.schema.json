@@ -160,6 +160,14 @@
           "default": "docs/reviews.md",
           "type": "string",
           "minLength": 1
+        },
+        "summaryWhenClean": {
+          "default": false,
+          "type": "boolean"
+        },
+        "repoConfigPath": {
+          "default": "test-runner.config.ts",
+          "type": "string"
         }
       },
       "additionalProperties": false

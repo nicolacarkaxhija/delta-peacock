@@ -34,6 +34,8 @@ export interface ModelReply {
   toolCalls?: number;
   /** Served from the response cache; no model was called. */
   cached?: boolean;
+  /** The tool results the model saw, as text, for a follow-up call without tools. */
+  transcript?: string;
 }
 
 /** The primary test seam: everything on our side of it runs real in tests. */

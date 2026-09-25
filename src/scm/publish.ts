@@ -2,14 +2,14 @@ import type { Config } from "../config/schema.js";
 import { fingerprintFrom, fingerprintOf, type Finding } from "../domain/finding.js";
 import {
   blockedLine,
-  countLine,
   DEFAULT_PRESENTATION,
   guidelineUrl,
   headingAnchor,
   markerFingerprint,
   renderCommentBody,
+  isSummaryBody,
   renderSummaryBody,
-  summaryHeading,
+  stateLine,
   SUMMARY_MARKER,
   twoSentences,
   type Presentation,
@@ -91,13 +91,11 @@ export function buildInsightReport(
     counts.set(finding.severity, (counts.get(finding.severity) ?? 0) + 1);
   }
   const blocked = blockedLine(input);
+  const failed = input.outcome?.kind === "failed";
   return {
     title: presentation.displayName,
-    result: input.gate.failed ? "FAILED" : "PASSED",
-    details:
-      blocked === undefined
-        ? countLine(input.findings)
-        : `${countLine(input.findings)}. ${blocked}.`,
+    result: input.gate.failed || failed ? "FAILED" : "PASSED",
+    details: blocked === undefined ? stateLine(input) : `${stateLine(input)}. ${blocked}.`,
     counts: [
       { label: "Findings", value: input.findings.length },
       ...(["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFO"] as const).flatMap((severity) => {
@@ -118,7 +116,7 @@ export function buildInsightReport(
         summary: twoSentences(finding.body === "" ? finding.title : finding.body).slice(0, 450),
         severity: INSIGHT_SEVERITIES[finding.severity],
         path: finding.file,
-        line: finding.line,
+        ...(finding.unplaced === true ? {} : { line: finding.line }),
         ...(link !== undefined ? { link } : {}),
       };
     }),
@@ -269,17 +267,17 @@ async function upsertSummary(
   scm: ScmPort,
   presentation: Presentation,
   body: string,
+  createIfMissing: boolean,
 ): Promise<void> {
-  const heading = summaryHeading(presentation);
   // the marker also finds a pre 0.1.5 summary, so an upgrade replaces it in place
   const candidates = (await scm.listSummaryComments()).filter(
     (comment) =>
       comment.body.trimEnd().split("\n").at(-1) === SUMMARY_MARKER ||
-      (!presentation.markers && comment.body.split("\n")[0] === heading),
+      (!presentation.markers && isSummaryBody(comment.body, presentation)),
   );
   const [summary, ...extra] = await ownComments(scm, presentation, candidates);
   if (summary === undefined) {
-    await scm.createSummaryComment(body);
+    if (createIfMissing) await scm.createSummaryComment(body);
     return;
   }
   if (summary.body !== body) await scm.updateSummaryComment(summary.id, body);
@@ -287,9 +285,10 @@ async function upsertSummary(
 }
 
 function statusDescription(input: SummaryInput): string {
+  if (input.outcome?.kind === "failed") return "Review could not complete";
   const blocked = blockedLine(input);
   if (blocked !== undefined) return blocked;
-  return countLine(input.findings);
+  return stateLine(input);
 }
 
 /** The one place every command asks whether a write is suppressed; nothing else reads config.scm.dryRun directly. */
@@ -313,6 +312,8 @@ export async function publishReview(
     commitStatus: boolean;
     comments?: boolean;
     codeInsights?: boolean;
+    /** Post a summary comment on a clean run even where an Insights card carries the result. */
+    summaryWhenClean?: boolean;
     presentation?: PresentationSettings;
     /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
     dryRun: boolean;
@@ -324,12 +325,21 @@ export async function publishReview(
     return outcome;
   }
   const presentation = presentationFor(scm, input.presentation);
+  const failed = input.outcome?.kind === "failed";
   if (input.comments !== false) {
-    await reconcileInlineComments(scm, presentation, input.findings, outcome);
-    await upsertSummary(scm, presentation, renderSummaryBody(input, presentation));
+    // a broken run knows nothing about the code, so earlier inline comments stay as they are
+    if (!failed) {
+      const placed = input.findings.filter((finding) => finding.unplaced !== true);
+      await reconcileInlineComments(scm, presentation, placed, outcome);
+    }
+    // where an Insights card carries a clean result, a clean summary only updates an earlier one
+    const cardCarries = input.codeInsights === true && scm.publishInsights !== undefined;
+    const quiet =
+      input.findings.length === 0 && !failed && cardCarries && input.summaryWhenClean !== true;
+    await upsertSummary(scm, presentation, renderSummaryBody(input, presentation), !quiet);
   }
   if (input.commitStatus) {
-    const state: StatusState = input.gate.failed ? "failure" : "success";
+    const state: StatusState = input.gate.failed || failed ? "failure" : "success";
     await scm.postStatus(state, statusDescription(input), presentation.displayName);
   }
   if (input.codeInsights === true) {

@@ -21,10 +21,18 @@ const TWO = JSON.stringify({
       guidelineId: "no-console",
       file: "src/app.js",
       line: 1,
+      quote: "console.log('x');",
       title: "Console",
       body: "Use the logger.",
     },
-    { guidelineId: "no-todo", file: "src/app.js", line: 2, title: "Todo", body: "File an issue." },
+    {
+      guidelineId: "no-todo",
+      file: "src/app.js",
+      line: 2,
+      quote: "// TODO fix",
+      title: "Todo",
+      body: "File an issue.",
+    },
   ],
 });
 
@@ -78,7 +86,8 @@ describe("bitbucket presentation", () => {
       await review(fake);
       expect(fake.drafts).toBe(0); // nothing to recognise yet, so no identity lookup
       expect(fake.comments.every((c) => !c.content.raw.includes("<!--"))).toBe(true);
-      expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("## Code review");
+      // no heading: the bot's name, the status and the card already say who reviewed
+      expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("2 findings: 1 blocker, 1 major");
       expect(inline(fake)[0]?.content.raw).toBe(
         "**Blocker** · [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md)\n\nUse the logger.",
       );
@@ -97,7 +106,16 @@ describe("bitbucket presentation", () => {
     const fake = await startFakeBitbucket();
     try {
       fake.comments.push(
-        { id: 900, content: { raw: "## Code review\n\nmine" }, user: { uuid: "{human}" } },
+        {
+          id: 900,
+          content: { raw: "## Code review\n\nmine" },
+          user: { uuid: "{human}" },
+        },
+        {
+          id: 902,
+          content: { raw: "No issues found in this change." },
+          user: { uuid: "{human}" },
+        },
         {
           id: 901,
           content: { raw: "**Blocker** · `no-console`\n\nI agree" },
@@ -107,8 +125,11 @@ describe("bitbucket presentation", () => {
       );
       await review(fake);
       expect(fake.comments.find((c) => c.id === 900)?.content.raw).toBe("## Code review\n\nmine");
+      expect(fake.comments.find((c) => c.id === 902)?.content.raw).toBe(
+        "No issues found in this change.",
+      );
       expect(fake.comments.find((c) => c.id === 901)?.content.raw).toContain("I agree");
-      expect(summaries(fake)).toHaveLength(2);
+      expect(summaries(fake)).toHaveLength(3);
       expect(inline(fake)).toHaveLength(3);
     } finally {
       await fake.close();
@@ -142,9 +163,8 @@ describe("bitbucket presentation", () => {
       expect(stderr).toContain("1 resolved");
       expect(summaries(fake)).toHaveLength(1);
       expect(summaries(fake)[0]?.id).toBe(50);
-      expect(summaries(fake)[0]?.content.raw).toBe(
-        "## Code review\n\nNo issues found in this change.",
-      );
+      // clean: no new summary on Bitbucket, but one of ours already there turns clean
+      expect(summaries(fake)[0]?.content.raw).toBe("No issues found in this change.");
 
       fake.comments.push({
         id: 52,
@@ -234,6 +254,7 @@ describe("bitbucket presentation", () => {
             guidelineId: "no-console",
             file: "src/app.js",
             line: 1,
+            quote: "console.log('x');",
             title: "Console",
             body: "Route it through the logger.",
           },

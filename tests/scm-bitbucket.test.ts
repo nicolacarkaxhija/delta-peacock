@@ -287,7 +287,14 @@ describe("api diff fallback", () => {
   const GUIDELINE = "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUse the logger.\n";
   const CITED = JSON.stringify({
     findings: [
-      { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Console", body: "b" },
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: 2,
+        quote: "console.log('from the api diff');",
+        title: "Console",
+        body: "b",
+      },
     ],
   });
   const API_DIFF = [

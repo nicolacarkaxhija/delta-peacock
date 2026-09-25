@@ -150,7 +150,7 @@ describe("reading comments back", () => {
 
 describe("summary rendering", () => {
   it("says so plainly when the change is clean", () => {
-    expect(summaryOf([], PASSED)).toBe("## Automated review\n\nNo issues found in this change.");
+    expect(summaryOf([], PASSED)).toBe("No issues found in this change.");
   });
 
   it("counts, lists, and blocks with a pointer to the reviews doc", () => {
@@ -160,8 +160,6 @@ describe("summary rendering", () => {
     );
     expect(body).toBe(
       [
-        "## Automated review",
-        "",
         "2 findings: 1 major, 1 minor",
         "",
         "- **Major** [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md) in `src/app.js` line 2: Console call",
@@ -217,9 +215,7 @@ describe("summary rendering", () => {
       filtered: 0,
       gate: PASSED,
     });
-    expect(body).toBe(
-      "## Code review\n\nNo issues found in this change.\n\n<!-- delta-peacock:summary -->",
-    );
+    expect(body).toBe("No issues found in this change.\n\n<!-- delta-peacock:summary -->");
   });
 
   it("lists proposed guidelines and the filtering footnote", () => {

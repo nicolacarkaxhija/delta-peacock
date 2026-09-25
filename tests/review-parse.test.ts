@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Guideline } from "../src/domain/guideline.js";
-import type { Violation } from "../src/domain/finding.js";
 import { ToolError } from "../src/errors.js";
-import { parseReviewResponse, relocateFindings, type ParseOptions } from "../src/review/parse.js";
+import { parseReviewResponse, type ParseOptions } from "../src/review/parse.js";
 import { buildReviewPrompt } from "../src/review/prompt.js";
 
 const guideline: Guideline = {
@@ -227,109 +226,6 @@ describe("parseReviewResponse", () => {
     const uncited = parsed.rejected.find((entry) => entry.reason === "uncited");
     expect(uncited?.title).toBe("Magic number");
     expect(uncited?.severity).toBe("MINOR");
-  });
-});
-
-const DECORATOR_FILE = "src/decorators.js";
-
-function loopViolation(overrides: Partial<Violation> = {}): Violation {
-  return {
-    kind: "violation",
-    guidelineId: "sfra-no-const-in-loop",
-    severity: "MAJOR",
-    file: DECORATOR_FILE,
-    line: 1,
-    title: "Const declared inside a loop",
-    body: "Hoist the declaration: `const value = source[i];` is re-created every iteration.",
-    ...overrides,
-  };
-}
-
-describe("relocateFindings", () => {
-  it("never piles more than one same-guideline finding onto the line their snippets share", () => {
-    // six live findings, each reported at a different (miscounted) line, all citing the
-    // same generic snippet -- the only place it actually appears is line 92. The old
-    // "nearest match wins" repair sent every single one of them there.
-    const originalLines = [98, 106, 107, 108, 112, 115];
-    const findings = originalLines.map((line) => loopViolation({ line }));
-    const anchorTexts = new Map([
-      [
-        DECORATOR_FILE,
-        new Map<number, string>([
-          [92, "const value = source[i];"], // the one innocent line every snippet matches
-          [
-            98,
-            "const productModelColorAttr = variationAttributes.find(prop => prop.id === 'color');",
-          ],
-          [106, "for (let i = 0; i < items.length; i++) {"],
-          [107, "  applyDecorator(items[i]);"],
-          [108, "}"],
-          [112, "return decorated;"],
-          [115, "module.exports = decorate;"],
-        ]),
-      ],
-    ]);
-
-    const relocated = relocateFindings(findings, anchorTexts);
-    const lines = relocated.map((finding) => finding.line);
-
-    // at most one of the six may land on the shared line...
-    expect(lines.filter((line) => line === 92)).toHaveLength(1);
-    // ...and none of them may collide with one another at all
-    expect(new Set(lines).size).toBe(lines.length);
-  });
-
-  it("keeps the original line when the cited snippet is too short or matches more than one changed line", () => {
-    const tooShort = loopViolation({ line: 40, body: "Extract it: `let i` appears twice." });
-    const ambiguous = loopViolation({
-      line: 50,
-      body: "Repeated shape: `const x = compute();` shows up more than once.",
-    });
-    const anchorTexts = new Map([
-      [
-        DECORATOR_FILE,
-        new Map<number, string>([
-          [10, "let i = 0;"],
-          [20, "const x = compute();"],
-          [21, "const x = compute();"], // ambiguous: the same shape appears on two changed lines
-        ]),
-      ],
-    ]);
-
-    const relocated = relocateFindings([tooShort, ambiguous], anchorTexts);
-    expect(relocated[0]?.line).toBe(40); // "let i" is below the minimum snippet length
-    expect(relocated[1]?.line).toBe(50); // matches two lines, too ambiguous to trust
-  });
-
-  it("relocates when exactly one changed line contains a sufficiently long snippet", () => {
-    const finding = loopViolation({
-      line: 5,
-      body: "Hoist it: `const total = items.reduce(sum, 0);` outside the loop body.",
-    });
-    const anchorTexts = new Map([
-      [DECORATOR_FILE, new Map<number, string>([[9, "const total = items.reduce(sum, 0);"]])],
-    ]);
-
-    const [relocated] = relocateFindings([finding], anchorTexts);
-    expect(relocated?.line).toBe(9);
-  });
-
-  it("will not relocate a finding onto a line another finding of the same guideline already occupies", () => {
-    const alreadyThere = loopViolation({
-      line: 9,
-      body: "Correctly reported: `const shared = pick(items);` right here.",
-    });
-    const wouldCollide = loopViolation({
-      line: 20,
-      body: "Should be hoisted: `const shared = pick(items);`.",
-    });
-    const anchorTexts = new Map([
-      [DECORATOR_FILE, new Map<number, string>([[9, "const shared = pick(items);"]])],
-    ]);
-
-    const relocated = relocateFindings([alreadyThere, wouldCollide], anchorTexts);
-    expect(relocated[0]?.line).toBe(9); // unchanged: it was already on the right line
-    expect(relocated[1]?.line).toBe(20); // blocked: line 9 is already claimed by the same guideline
   });
 });
 

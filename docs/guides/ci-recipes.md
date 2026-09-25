@@ -1,6 +1,6 @@
 # CI recipes
 
-Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. Each tagged release publishes a Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` that carries node and git, plus an npm package that runs wherever node 22.12+ does. Pin the version in CI (`npx delta-peacock@0.1.6`) so a new release never changes a gate unannounced. The composite action below builds from source instead.
+Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. Each tagged release publishes a Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` that carries node and git, plus an npm package that runs wherever node 22.12+ does. Pin the version in CI (`npx delta-peacock@0.1.7`) so a new release never changes a gate unannounced. The composite action below builds from source instead.
 
 ## GitHub Action (one line)
 
@@ -90,7 +90,7 @@ pipelines:
           clone:
             depth: full
           script:
-            - npx delta-peacock@0.1.6 review
+            - npx delta-peacock@0.1.7 review
           # set in repository variables:
           # ANTHROPIC_API_KEY, BITBUCKET_TOKEN, DELTA_PEACOCK_MODEL_ID
           # DELTA_PEACOCK_SCM_PROVIDER=bitbucket
@@ -101,16 +101,31 @@ pipelines:
 
 What each Bitbucket variable does:
 
-| Variable                                                                                       | Where it comes from                                                                                    | Needed for                                                          |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `BITBUCKET_TOKEN`                                                                              | a repository access token with the Pull requests: Write scope, stored as a secured variable            | comments, the build status and the Code Insights report             |
-| `DELTA_PEACOCK_SCM_PROVIDER`, `DELTA_PEACOCK_SCM_REPOSITORY`, `DELTA_PEACOCK_SCM_PULL_REQUEST` | the values above, from Bitbucket's own `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_SLUG`, `BITBUCKET_PR_ID` | knowing which pull request to review                                |
-| `DELTA_PEACOCK_REVIEW_TARGET`                                                                  | `$BITBUCKET_PR_DESTINATION_BRANCH`                                                                     | the diff base, and the branch guideline links point at              |
-| `BITBUCKET_BUILD_NUMBER`                                                                       | set by Pipelines                                                                                       | the build status links the pipeline run instead of the pull request |
-| `DELTA_PEACOCK_SCM_CODE_INSIGHTS`                                                              | optional; `false` switches the report off                                                              | Code Insights is on by default for Bitbucket                        |
-| `DELTA_PEACOCK_REVIEW_DISPLAY_NAME`                                                            | optional, or `review.displayName` in the config file                                                   | the name readers see on the summary, status and report              |
+| Variable                                                                                       | Where it comes from                                                                                    | Needed for                                                                                                                      |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `BITBUCKET_TOKEN`                                                                              | a repository access token with the Pull requests: Write scope, stored as a secured variable            | comments, the build status and the Code Insights report                                                                         |
+| `DELTA_PEACOCK_SCM_PROVIDER`, `DELTA_PEACOCK_SCM_REPOSITORY`, `DELTA_PEACOCK_SCM_PULL_REQUEST` | the values above, from Bitbucket's own `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_SLUG`, `BITBUCKET_PR_ID` | knowing which pull request to review                                                                                            |
+| `DELTA_PEACOCK_REVIEW_TARGET`                                                                  | `$BITBUCKET_PR_DESTINATION_BRANCH`                                                                     | the diff base, the branch guideline links point at, and the branch the guidelines and `delta-peacock.config.yaml` are read from |
+| `BITBUCKET_BUILD_NUMBER`                                                                       | set by Pipelines                                                                                       | the build status links the pipeline run instead of the pull request                                                             |
+| `DELTA_PEACOCK_SCM_CODE_INSIGHTS`                                                              | optional; `false` switches the report off                                                              | Code Insights is on by default for Bitbucket                                                                                    |
+| `DELTA_PEACOCK_REVIEW_DISPLAY_NAME`                                                            | optional, or `review.displayName` in the config file                                                   | the name readers see on the status and report                                                                                   |
+| `DELTA_PEACOCK_REVIEW_SUMMARY_WHEN_CLEAN`                                                      | optional, or `review.summaryWhenClean`; default `false`                                                | a summary comment on runs without findings                                                                                      |
 
-The Code Insights report appears in the pull request's Reports panel with the display name as its title, `PASSED` or `FAILED` from the gate, the finding counts per severity, and one annotation per finding on its file and line, linked to the cited guideline.
+The Code Insights report appears in the pull request's Reports panel with the display name as its title, `PASSED` or `FAILED` from the gate, the finding counts per severity, and one annotation per finding on its file and line, linked to the cited guideline; a finding that could not be tied to a line is annotated on its file. Since the card and the build status carry a clean result, a run without findings posts no summary comment unless `review.summaryWhenClean` is on; an earlier summary of the reviewer's is turned clean rather than left stale.
+
+### Installing a committed release tarball
+
+Until a package registry is in reach, a repository can commit the bundled tarball and its checksum file and install it offline. Check the tarball against the checksum file as the **target** branch holds it, so a pull request cannot bring its own tarball and a checksum to match:
+
+```yaml
+script:
+  - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
+  - (cd tools && git show "origin/$BITBUCKET_PR_DESTINATION_BRANCH:tools/delta-peacock-0.1.7.tgz.sha256" | sha256sum -c -)
+  - npm install --ignore-scripts --no-save --no-audit --no-fund ./tools/delta-peacock-0.1.7.tgz
+  - npx --no-install delta-peacock review
+```
+
+The pull request that bumps the version adds a checksum the target does not hold yet, so that one run fails the check; a code owner merges it after reading the diff, and every later pull request passes. Bitbucket runs `bitbucket-pipelines.yml` from the pull request's own branch, so this closes the tarball path only together with code owner approval on the pipeline file and `tools/`.
 
 ## Jenkins
 

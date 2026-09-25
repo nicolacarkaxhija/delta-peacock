@@ -35,6 +35,7 @@ const FINDING_WITH_SUGGESTION = JSON.stringify({
       guidelineId: "no-console",
       file: "src/app.js",
       line: 2,
+      quote: "console.log(name);",
       title: "Console call added",
       body: "Replace the console.log with the logger.",
       suggestion: "  logger.info(name);",
@@ -91,7 +92,7 @@ describe("publishing to github", () => {
 
       expect(fake.issueComments).toHaveLength(1);
       const summary = fake.issueComments[0]?.body ?? "";
-      expect(summary.startsWith("## Code review\n\n1 finding: 1 major\n")).toBe(true);
+      expect(summary.startsWith("1 finding: 1 major\n")).toBe(true);
       expect(summary).toContain("in `src/app.js` line 2: Console call added");
       expect(summary).not.toContain("Blocked");
       expect(summary).toContain("<!-- delta-peacock:summary -->");
@@ -125,6 +126,7 @@ describe("publishing to github", () => {
             guidelineId: "no-console",
             file: "src/app.js",
             line: 2,
+            quote: "console.log(name);",
             title: "Console call added",
             body: "New wording.",
           },
@@ -180,8 +182,22 @@ describe("publishing to github", () => {
       const repo = makeScenario();
       const twin = JSON.stringify({
         findings: [
-          { guidelineId: "no-console", file: "src/app.js", line: 2, title: "First", body: "a" },
-          { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Second", body: "b" },
+          {
+            guidelineId: "no-console",
+            file: "src/app.js",
+            line: 2,
+            quote: "console.log(name);",
+            title: "First",
+            body: "a",
+          },
+          {
+            guidelineId: "no-console",
+            file: "src/app.js",
+            line: 2,
+            quote: "console.log(name);",
+            title: "Second",
+            body: "b",
+          },
         ],
       });
       const { stderr } = await reviewAgainst(fake, repo, twin);
@@ -316,6 +332,7 @@ describe("publishing to github", () => {
     const fake = await startFakeGitHub();
     try {
       const repo = makeScenario();
+      git(repo, "update-ref", "refs/remotes/origin/main", "main");
       await runCli(["review"], {
         cwd: repo,
         env: {
@@ -331,7 +348,9 @@ describe("publishing to github", () => {
         err: () => undefined,
         modelPort: model(FINDING_WITH_SUGGESTION),
       });
-      expect(fake.issueComments[0]?.body.startsWith("## Automated review\n")).toBe(true);
+      // the name lives in the status only; the summary opens with its verdict
+      expect(fake.issueComments[0]?.body.startsWith("1 finding: 1 major\n")).toBe(true);
+      expect(fake.issueComments[0]?.body).not.toContain("Automated review");
       expect(fake.statuses[0]?.context).toBe("Automated review");
       expect(fake.reviewComments[0]?.body).toContain("/blob/main/guidelines/no-console.md");
     } finally {

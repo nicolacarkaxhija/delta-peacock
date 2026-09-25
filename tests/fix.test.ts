@@ -42,12 +42,16 @@ async function reviewedRepo(
   writeFileSync(full, fileContent.replaceAll("\n", eol));
   commitAll(repo, "change");
   const reportPath = path.join(repo, "report.json");
+  // every finding quotes the line it names, as the prompt requires
+  const lines = fileContent.split("\n");
+  const parsed = JSON.parse(reply) as { findings: { line: number; quote?: string }[] };
+  for (const finding of parsed.findings) finding.quote ??= lines[finding.line - 1] ?? "";
   const code = await runCli(["review", "--report", reportPath], {
     cwd: repo,
     env: {},
     out: () => undefined,
     err: () => undefined,
-    modelPort: model(reply),
+    modelPort: model(JSON.stringify(parsed)),
   });
   expect(code).toBe(0);
   return { repo, reportPath };

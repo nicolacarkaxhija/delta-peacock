@@ -286,6 +286,46 @@ describe("agentic tool budget (captured Haiku reply, a real Bitbucket pull reque
     expect(reply.toolCalls).toBe(6);
     expect(reply.text).toBe(answer);
   });
+
+  it("replays every fetched file as text in the answering step", async () => {
+    const { bodies, fetch } = budgetFetch();
+    const { tool } = await import("ai");
+    const { z } = await import("zod");
+    let served = 0;
+    const port = createBedrockPort({
+      region: "eu-central-1",
+      accessKeyId: "k",
+      secretAccessKey: "s",
+      modelId: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+      fetch,
+    });
+    const reply = await port.complete({
+      system: "s",
+      user: "u",
+      tools: {
+        ping: tool({
+          description: "reads a file",
+          inputSchema: z.object({}),
+          execute: () => {
+            served += 1;
+            return Promise.resolve(`line ${String(served)} of tests/smoke/homepage.spec.ts`);
+          },
+        }),
+      },
+      maxToolRounds: 6,
+    });
+    const final = JSON.stringify(bodies[6]?.["messages"]);
+    // Bedrock strips tool blocks from a step without tools; the files must survive as text
+    expect(final).not.toContain("toolUse");
+    expect(final).not.toContain("toolResult");
+    for (let index = 1; index <= 6; index += 1) {
+      expect(final).toContain(`line ${String(index)} of tests/smoke/homepage.spec.ts`);
+    }
+    // one plain message: the review prompt, the fetched content, then the instruction
+    expect(bodies[6]?.["messages"]).toHaveLength(1);
+    expect(final).toContain("no further tool calls are allowed");
+    expect(reply.transcript).toContain("line 6 of tests/smoke/homepage.spec.ts");
+  });
 });
 
 describe("buildModelPort provider matrix", () => {

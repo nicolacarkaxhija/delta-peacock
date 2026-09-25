@@ -62,6 +62,10 @@ export const ReviewSchema = z.strictObject({
   displayName: z.string().trim().min(1).max(40).default(DEFAULT_DISPLAY_NAME),
   /** Repository doc explaining how reviews work; a blocked summary links it when the file exists. */
   guidePath: z.string().min(1).default("docs/reviews.md"),
+  /** Post a summary comment on a clean run even where a Code Insights card carries the result. */
+  summaryWhenClean: z.boolean().default(false),
+  /** The reviewed repository's own config, read for the tags it declares; empty turns it off. */
+  repoConfigPath: z.string().default("test-runner.config.ts"),
 });
 
 export const GateSchema = z.strictObject({

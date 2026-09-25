@@ -175,7 +175,14 @@ describe("gitlab end to end", () => {
   const GUIDELINE = "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUse the logger.\n";
   const CITED = JSON.stringify({
     findings: [
-      { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Console", body: "b" },
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: 2,
+        quote: "console.log('x');",
+        title: "Console",
+        body: "b",
+      },
     ],
   });
 

@@ -7,7 +7,8 @@ import { overlapMatrix, type ProducedFinding } from "../bench/scoring.js";
 import { attachContextTools, resolveContext } from "../context/build.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import type { RuntimeDeps } from "../deps.js";
-import { changedFilesFromDiff } from "../git/diff.js";
+import { changedFilesFromDiff, newLineTexts } from "../git/diff.js";
+import { dropGoodExamples, linesFromDiff, placeFindings } from "../review/placement.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import { parseReviewResponse } from "../review/parse.js";
@@ -83,8 +84,17 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       generalPass: config.review.generalPass,
       observationSeverityCap: config.review.observationSeverityCap,
     });
+    // the same placement and Good example gate a live review applies
+    const diffLines = newLineTexts(benchCase.diff);
+    const placed = placeFindings(parsed.findings, (file) => {
+      const source = readSourceForStructuralCheck(filesRoot, file);
+      if (source !== undefined) return source.split("\n");
+      const known = diffLines.get(file);
+      return known === undefined ? undefined : linesFromDiff(known);
+    });
+    const kept = dropGoodExamples(placed, guidelinesById).kept;
     // same AST gate a live review applies, reading the case's files/ tree
-    const structural = verifyStructural(parsed.findings, guidelinesById, (file) =>
+    const structural = verifyStructural(kept, guidelinesById, (file) =>
       readSourceForStructuralCheck(filesRoot, file),
     );
     return structural.kept.map((finding) => ({
