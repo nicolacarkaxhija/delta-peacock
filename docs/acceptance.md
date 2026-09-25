@@ -27,5 +27,8 @@ from a clean checkout; a red line blocks it.
 - `clean checkout`: the release starts from a fresh clone of `main`. On its own:
   `git status --porcelain` prints nothing and `git rev-parse HEAD` equals `origin/main`.
 - `build`: the bundle builds and answers. On its own: `pnpm build && node dist/cli.js --version`.
+- `offline tarball`: the bundled tarball installs with the network off. On its own:
+  `pnpm pack:bundled`, then `npm install --ignore-scripts --no-save ./delta-peacock-<version>.tgz`
+  in an empty directory and `npx --no-install delta-peacock --version`.
 - `bench`: mean F1 over `bench/cases` does not fall against the previous release. On its own: the
   bench command in [release-checklist.md](guides/release-checklist.md), step 2.

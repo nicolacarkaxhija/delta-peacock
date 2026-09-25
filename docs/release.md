@@ -11,8 +11,8 @@ creates the GitHub release. The human part is the checks around it.
    pnpm install --frozen-lockfile
    ```
 
-2. Checks: every line of [acceptance.md](acceptance.md) green, including the release lines (build
-   and bench). Record the commit and the numbers; a red line stops the release.
+2. Checks: every line of [acceptance.md](acceptance.md) green, including the release lines (build,
+   offline tarball, bench). Record the commit and the numbers; a red line stops the release.
 3. Merge the release-please pull request with its own title, `chore(release): <version>`.
 4. Check what the tag published and skim the changelog; fix forward with a `docs` commit, never by
    editing the release. The full list is [release-checklist.md](guides/release-checklist.md).
