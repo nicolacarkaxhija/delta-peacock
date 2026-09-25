@@ -285,6 +285,7 @@ describe("review degradation end to end", () => {
                 line: 1,
                 title: "C",
                 body: "b",
+                guidelineQuote: "Use the logger.",
               })),
             }),
           });

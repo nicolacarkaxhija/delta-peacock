@@ -31,6 +31,8 @@ export interface Violation {
   calibration?: CalibrationNote;
   /** The source line the model says it flags, copied from the file. */
   quote?: string;
+  /** The guideline sentence the finding applies, verified verbatim against the guideline. */
+  guidelineQuote?: string;
   /** Why the suggestion was left out or the finding sits on no line; shown to readers. */
   note?: string;
   /** True when the quoted line could not be found, so no line carries the finding. */

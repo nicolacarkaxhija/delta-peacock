@@ -257,7 +257,14 @@ describe("review.frontmatterContract wired into a review", () => {
       Promise.resolve({
         text: JSON.stringify({
           findings: [
-            { guidelineId: "no-console", file: "src/app.js", line: 1, title: "t", body: "b" },
+            {
+              guidelineId: "no-console",
+              file: "src/app.js",
+              line: 1,
+              title: "t",
+              body: "b",
+              guidelineQuote: "Use the logger.",
+            },
           ],
         }),
       }),

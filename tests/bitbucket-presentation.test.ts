@@ -24,6 +24,7 @@ const TWO = JSON.stringify({
       quote: "console.log('x');",
       title: "Console",
       body: "Use the logger.",
+      guidelineQuote: "Use the logger.",
     },
     {
       guidelineId: "no-todo",
@@ -32,6 +33,7 @@ const TWO = JSON.stringify({
       quote: "// TODO fix",
       title: "Todo",
       body: "File an issue.",
+      guidelineQuote: "File an issue instead.",
     },
   ],
 });
@@ -257,6 +259,7 @@ describe("bitbucket presentation", () => {
             quote: "console.log('x');",
             title: "Console",
             body: "Route it through the logger.",
+            guidelineQuote: "Use the logger.",
           },
         ],
       });

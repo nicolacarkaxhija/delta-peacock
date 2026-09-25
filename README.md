@@ -118,6 +118,8 @@ Credentials, tokens and API keys must come from the environment, never a literal
 
 **Every finding sits on the line it quotes.** The model quotes the source line each finding is about. The reviewer looks that line up in the file at the reviewed commit and moves the finding there; a quote that is missing, not in the file, or on several lines puts the finding in the summary with a note instead of on a line it may not mean. A suggestion replaces exactly the quoted line or is left out with a note, and it is left out too when it brings in a tag the repository does not declare or an import the repository does not have. A finding on code that its own guideline shows verbatim as a Good example is dropped. When the reviewed repository has a `test-runner.config.ts` (`review.repoConfigPath`, empty turns it off), its feature tags (`tags.features`) and axis tags (`@site:`, `@env:`, `@device:`, `@locale:` and their `@not-` forms) go into the prompt as the only tags that exist; the file is read as text, never run.
 
+**Every finding quotes its rule.** Next to the source line, each violation copies into `guidelineQuote` the sentence of its guideline that the code breaks. The reviewer looks that sentence up in the guideline file, with whitespace, emphasis marks and wrapping quotes ignored, and drops the finding when the guideline does not say it: a paraphrase that makes a rule stricter ("not semicolons" where the guideline says "not dashes") never reaches the pull request. Each drop counts as a reviewer error in the stats ledger (`errors.misquoted`) and in the report (`droppedMisquotedFindings`). A suggestion keeps every piece of information of the line it replaces, so shortening a comment never drops its reason, and a reason comment counts wherever it sits: on the line, on the line above, or in the doc comment of the enclosing declaration or of the group of declarations it heads.
+
 **A reply without JSON is asked once more.** When the answer holds no findings object, the reviewer repeats the answering step once with the files the model had fetched replayed as text. If that fails too, the pull request gets a summary saying the review could not complete and why, and a failed status, instead of a silent pipeline error.
 
 **A gate, not a suggestion box.** Findings are compared against your `failOn` threshold. The exit code is the outcome: `0` clean or advisory, `1` a tool error, `2` a gate failure. Everything downstream of the findings is deterministic: the threshold test, the report, the fingerprints, and the scope drops. The findings themselves come from a model, so they run at temperature zero and reuse the response cache on an unchanged changeset; a fresh review is as reproducible as the provider allows, and no more.
@@ -130,7 +132,7 @@ Credentials, tokens and API keys must come from the environment, never a literal
 
 **Models.** Anthropic, Amazon Bedrock, OpenRouter, and any OpenAI-compatible host including local models (Ollama, vLLM). Multi-model **ensemble** review with union or judge merging.
 
-**Cross-file awareness.** A zero-cost deterministic repo map by default, on-demand agentic tools, and retrieval that runs on lexical TF-IDF or real embeddings behind a pluggable port. Strategies layer, and a prompt budget ledger keeps the assembled request inside the model's window, degrading in a documented order.
+**Cross-file awareness.** A zero-cost deterministic repo map by default, the full post-change text of every changed file, on-demand agentic tools, and retrieval that runs on lexical TF-IDF or real embeddings behind a pluggable port. Strategies layer, and a prompt budget ledger keeps the assembled request inside the model's window, degrading in a documented order.
 
 **Governance and cost.** An in-process cost guard with per-review and monthly spend caps checked against real usage, secret and PII redaction before anything reaches a model, an optional response cache for re-triggered runs, and a stable prompt prefix so provider-side caching keeps hitting.
 
@@ -221,6 +223,27 @@ cost:
   maxPerReview: 0.50 # block a review estimated above this, before any model call
 ```
 
+### Context strategies
+
+`context.provider` picks one strategy; `context.providers` layers several in order, and earlier ones win the shared `context.maxTokens` budget (approximate tokens, default 4000).
+
+| Strategy     | What the model gets                                                                                        | Extra model calls |
+| ------------ | ---------------------------------------------------------------------------------------------------------- | ----------------- |
+| `repo_map`   | Signatures elsewhere in the repository that the change touches                                             | none              |
+| `full_files` | The whole post-change text of every changed text file; smallest first, the largest truncated with a marker | none              |
+| `agentic`    | Tools to list, read and search repository files on demand, bounded by `context.maxToolRounds`              | tool rounds       |
+| `scope`      | The enclosing function or loop of each changed line, from the AST                                          | none              |
+| `rag`        | Chunks retrieved by TF-IDF or embeddings                                                                   | embeddings only   |
+
+`full_files` skips deleted, binary and out-of-tree paths and never reads a file larger than 1 MB. Paired with `agentic`, the model starts from the whole changed files and fetches only what lies outside them:
+
+```yaml
+context:
+  providers: [full_files, agentic]
+  maxTokens: 8000
+  maxToolRounds: 10
+```
+
 ### How the review reads on a pull request
 
 The reviewer posts under a name your readers see instead of the tool's: `review.displayName` (default `Code review`, env `DELTA_PEACOCK_REVIEW_DISPLAY_NAME`) names the commit status and the Bitbucket Code Insights report, and nothing else; the comments carry no heading, since their author already says who wrote them. `review.guidePath` (default `docs/reviews.md`, env `DELTA_PEACOCK_REVIEW_GUIDE_PATH`) is the repository doc a blocked summary links to; when the file does not exist the link is left out.
@@ -231,9 +254,11 @@ review:
   summaryWhenClean: false
 ```
 
-Every outcome renders through one summary template whose first line is the verdict: `No issues found in this change.`, `Nothing in scope was changed.` when no file under `review.include` changed, `The review could not complete: <reason>.` when the run broke off, or a count line (`2 findings: 1 major, 1 minor`) followed by one line per finding. A gate line appears only when the gate blocks (`Blocked: 1 major finding must be resolved.`), followed by the link to the guide. The commit status and the Insights card say the same in one line. Where a Code Insights card carries the result (Bitbucket), a run without findings posts no summary comment and only turns an earlier summary of the reviewer's clean; `review.summaryWhenClean: true` (env `DELTA_PEACOCK_REVIEW_SUMMARY_WHEN_CLEAN`) posts it anyway. Each inline comment opens with the severity in bold and the guideline id linked to `<guidelinesDir>/<id>.md` on the target branch, gives the reason in one or two sentences, and shows a suggested change in a fenced block. Titles and reasons carry no dashes as punctuation and no "According to the guideline" opener.
+Every outcome renders through one summary template whose first line is the verdict: `No issues found in this change.`, `Nothing in scope was changed.` when no file under `review.include` changed, `The review could not complete: <reason>.` when the run broke off, or a count line (`2 findings: 1 major, 1 minor`) followed by one line per finding. A gate line appears only when the gate blocks (`Blocked: 1 major finding must be resolved.`), followed by the link to the guide. The Insights card says the same in one line. The commit status keeps the name from `review.displayName` and describes the run in one plain line that opens with its verdict: `Passed. No findings in 4 changed files.`, `3 findings, 1 major. See the comments.` (major counts findings at MAJOR or above), `Passed. No reviewable files in this change.`, `Passed. No guidelines to review against.`, `Skipped. The change is too large to review.`, `Skipped. The monthly cost cap is reached.` when a cost cap stops the run (a failed status unless `gate.failOn` is `none`), or `Failed. The review could not complete: <reason>.` Where a Code Insights card carries the result (Bitbucket), a run without findings posts no summary comment and only turns an earlier summary of the reviewer's clean; `review.summaryWhenClean: true` (env `DELTA_PEACOCK_REVIEW_SUMMARY_WHEN_CLEAN`) posts it anyway. Each inline comment opens with the severity in bold and the guideline id linked to `<guidelinesDir>/<id>.md` on the target branch, gives the reason in one or two sentences, and shows a suggested change in a fenced block. Titles and reasons carry no dashes as punctuation and no "According to the guideline" opener.
 
 Re-runs update comments in place. GitHub and GitLab hide HTML comments, so an invisible marker identifies the reviewer's comments there. Bitbucket prints them as text, so there the reviewer's comments are recognised by their author (the token's user), file, line and the guideline id in their first line, and carry no marker. A repository access token cannot call Bitbucket's `GET /user`, so the reviewer learns its own user from a draft comment it deletes at once; nobody sees it. A finding that is gone deletes its comment, or resolves it when someone replied; a thread someone resolved is left alone and its finding is not posted again. On Bitbucket `describe` fences its section with a visible `### Change summary` heading and a closing italic line instead of hidden markers.
+
+**Pull request tasks (Bitbucket).** With `scm.tasks: true` (env `DELTA_PEACOCK_SCM_TASKS`, default off) every posted finding also gets a pull request task on its comment, one line with the severity, the guideline, the file and the line, ending in a short reference the reviewer matches on later runs. A finding never gets a second task. On a later run the reviewer resolves its own task once the anchored line changed at the reviewed commit and leaves it open while the line stands; a finding whose task a person resolved is not posted again. Tasks only become a hard stop through the host: on Bitbucket enable the Premium merge check "Resolve all pull request tasks" on the target branch; the GitHub equivalent is the branch protection rule "Require conversation resolution before merging", which already covers the reviewer's comment threads. Other hosts have no tasks, and the reviewer notes that and carries on.
 
 ## Security and privacy
 

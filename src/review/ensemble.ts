@@ -127,6 +127,7 @@ export async function runEnsemble(
     droppedOutOfScope: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedOutOfScope, 0),
     adjustedLines: parsedPerMember.reduce((sum, parsed) => sum + parsed.adjustedLines, 0),
     droppedMalformed: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedMalformed, 0),
+    droppedMisquoted: parsedPerMember.reduce((sum, parsed) => sum + parsed.droppedMisquoted, 0),
     rejected: parsedPerMember.flatMap((parsed) => parsed.rejected),
   };
 
@@ -160,6 +161,7 @@ export async function runEnsemble(
         droppedOutOfScope: union.droppedOutOfScope + judged.droppedOutOfScope,
         adjustedLines: union.adjustedLines + judged.adjustedLines,
         droppedMalformed: union.droppedMalformed + judged.droppedMalformed,
+        droppedMisquoted: union.droppedMisquoted + judged.droppedMisquoted,
         rejected: [...union.rejected, ...judged.rejected],
       },
       usage,

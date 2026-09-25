@@ -182,6 +182,7 @@ describe("gitlab end to end", () => {
         quote: "console.log('x');",
         title: "Console",
         body: "b",
+        guidelineQuote: "Use the logger.",
       },
     ],
   });

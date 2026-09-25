@@ -14,8 +14,9 @@ import {
 import { createRagEmbeddingsProvider, createRagProvider } from "./rag.js";
 import { createRepoMapProvider } from "./repo-map.js";
 import { createScopeProvider } from "./scope.js";
+import { createFullFilesProvider } from "./full-files.js";
 
-type StrategyName = "repo_map" | "agentic" | "rag" | "scope";
+type StrategyName = "repo_map" | "agentic" | "rag" | "scope" | "full_files";
 
 export interface ContextBuildDeps {
   credentials?: Credentials;
@@ -51,6 +52,7 @@ export function buildContextProvider(config: Config, deps: ContextBuildDeps = {}
     agentic: createAgenticProvider,
     rag: () => buildRag(config, deps),
     scope: createScopeProvider,
+    full_files: () => createFullFilesProvider({ maxTokens: config.context.maxTokens }),
   };
   const providers = strategies.map((name) => factories[name]());
   const first = providers[0];

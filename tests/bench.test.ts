@@ -94,7 +94,17 @@ describe("harness", () => {
   it("times cases and aggregates scores through an injected review function", async () => {
     const cases = loadCases(CASES_DIR);
     const outcome = await runBench(cases, (benchCase) =>
-      Promise.resolve(benchCase.expected?.map((finding) => ({ ...finding })) ?? []),
+      Promise.resolve(
+        benchCase.expected?.map((finding) => ({
+          ...finding,
+          // a case scored on suggestionIncludes needs a real suggestion text to
+          // self-match; a plain echo of the expectation would otherwise carry
+          // suggestionIncludes but no suggestion for matches() to check
+          ...(finding.suggestionIncludes
+            ? { suggestion: finding.suggestionIncludes.join(" ") }
+            : {}),
+        })) ?? [],
+      ),
     );
     expect(outcome.cases).toHaveLength(cases.length);
     expect(outcome.cases.every((c) => c.milliseconds >= 0)).toBe(true);
@@ -142,6 +152,7 @@ describe("bench command discriminates context strategies", () => {
           line: 2,
           title: "Console call",
           body: "b",
+          guidelineQuote: "route output through the logger.",
         });
       }
       if (request.system.includes("checkout.js")) {
@@ -151,6 +162,7 @@ describe("bench command discriminates context strategies", () => {
           line: 1,
           title: "Signature change breaks checkout.js",
           body: "b",
+          guidelineQuote: "Changing a function's parameters breaks its callers.",
         });
       }
       return Promise.resolve({ text: JSON.stringify({ findings }) });
@@ -366,13 +378,17 @@ describe("bench survives a case whose model reply crashes", () => {
     return dir;
   }
 
-  /** The first case's reply is unparseable prose-free JSON garbage; the second answers cleanly. */
+  /**
+   * The first case's reply is unparseable prose-free JSON garbage, twice
+   * (bench.ts retries a parse failure once, so one bad reply alone would be
+   * silently absorbed by the retry); the second case answers cleanly.
+   */
   function flakyPort(): ModelPort {
     let calls = 0;
     return {
       complete: () => {
         calls += 1;
-        if (calls === 1) return Promise.resolve({ text: "{ not json }" });
+        if (calls <= 2) return Promise.resolve({ text: "{ not json }" });
         return Promise.resolve({
           text: JSON.stringify({
             findings: [
@@ -382,6 +398,7 @@ describe("bench survives a case whose model reply crashes", () => {
                 line: 1,
                 title: "Signature change breaks checkout.js",
                 body: "b",
+                guidelineQuote: "Changing a function's parameters breaks its callers.",
               },
             ],
           }),
@@ -499,7 +516,7 @@ describe("bench applies the structural verifier like a real review does", () => 
     mkdirSync(path.join(caseDir, "files", "src"), { recursive: true });
     writeFileSync(
       path.join(caseDir, "guidelines", "rule.md"),
-      "---\nid: no-const-in-loop\nseverity: BLOCKER\nstructural: no-declaration-in-loop\n---\nbody\n",
+      "---\nid: no-const-in-loop\nseverity: BLOCKER\nstructural: no-declaration-in-loop\n---\nDo not declare a const inside a loop body.\n",
     );
     const source = [
       "function f(items) {",
@@ -527,8 +544,22 @@ describe("bench applies the structural verifier like a real review does", () => 
     const rows = await benchRows(
       dir,
       replying([
-        { guidelineId: "no-const-in-loop", file: "src/app.js", line: 3, title: "t", body: "b" },
-        { guidelineId: "no-const-in-loop", file: "src/app.js", line: 6, title: "t", body: "b" },
+        {
+          guidelineId: "no-const-in-loop",
+          file: "src/app.js",
+          line: 3,
+          title: "t",
+          body: "b",
+          guidelineQuote: "Do not declare a const inside a loop body.",
+        },
+        {
+          guidelineId: "no-const-in-loop",
+          file: "src/app.js",
+          line: 6,
+          title: "t",
+          body: "b",
+          guidelineQuote: "Do not declare a const inside a loop body.",
+        },
       ]),
     );
     expect(rows.find((line) => line.startsWith("| loop |"))).toContain("| 1 |");

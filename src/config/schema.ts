@@ -135,12 +135,14 @@ export const RagSchema = z.strictObject({
 
 export const ContextSchema = z.strictObject({
   /** Cross-file awareness strategy; repo_map costs zero extra model calls. */
-  provider: z.enum(["none", "repo_map", "agentic", "rag", "scope"]).default("repo_map"),
+  provider: z
+    .enum(["none", "repo_map", "agentic", "rag", "scope", "full_files"])
+    .default("repo_map"),
   /**
    * Layered strategies, applied in order (earlier wins the token budget).
-   * Non-empty wins over provider; repo_map plus agentic is the strong combo.
+   * Non-empty wins over provider; full_files plus agentic gives whole files and on-demand digging.
    */
-  providers: z.array(z.enum(["repo_map", "agentic", "rag", "scope"])).default([]),
+  providers: z.array(z.enum(["repo_map", "agentic", "rag", "scope", "full_files"])).default([]),
   /** Ceiling for injected context, measured in approximate tokens. */
   maxTokens: z.number().int().positive().default(4000),
   /** Bound on agentic tool rounds before the model must conclude. */
@@ -177,6 +179,8 @@ export const ScmSchema = z.strictObject({
   comments: z.boolean().default(true),
   /** Publish a native report card with annotations (Bitbucket Code Insights); unset means on for Bitbucket. */
   codeInsights: z.boolean().optional(),
+  /** One pull request task per posted finding (Bitbucket); resolved by the reviewer once the line changes. */
+  tasks: z.boolean().default(false),
   /** API base override for enterprise hosts and tests. */
   baseUrl: z.url().optional(),
   /** The hard guarantee: no write of any kind leaves the process. */

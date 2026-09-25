@@ -73,13 +73,21 @@ describe("guideline scope enforcement after the model answers", () => {
     const repo = reviewRepo([GUIDELINE, SCOPED]);
     const reply = JSON.stringify({
       findings: [
-        { guidelineId: "no-console", file: "src/app.js", line: 1, title: "Real", body: "b" },
+        {
+          guidelineId: "no-console",
+          file: "src/app.js",
+          line: 1,
+          title: "Real",
+          body: "b",
+          guidelineQuote: "Use the logger.",
+        },
         {
           guidelineId: "backend-only",
           file: "src/app.js",
           line: 1,
           title: "Misapplied",
           body: "b",
+          guidelineQuote: "Only for backend files.",
         },
       ],
     });

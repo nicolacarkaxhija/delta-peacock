@@ -98,6 +98,7 @@ const WRONG_FINDING = {
   title: "Missing feature tag — axis-tags",
   body: "According to the guideline, a test should carry one feature tag from tags.features.",
   suggestion: "  { tag: ['@not-site:US', '@homepage'] },",
+  guidelineQuote: "Axis tags restrict or exclude only where a test must",
 };
 
 function scripted(...replies: ModelReply[]): { port: ModelPort; requests: ModelRequest[] } {
@@ -158,7 +159,7 @@ describe("PR 1 root causes, replayed", () => {
       expect(inlineOf(fake)).toHaveLength(0);
       // clean on Bitbucket: the status and the Insights card carry it, no summary comment
       expect(summaryOf(fake)).toBe("");
-      expect(fake.statuses.at(-1)?.description).toBe("No issues found in this change.");
+      expect(fake.statuses.at(-1)?.description).toBe("Passed. No findings in 1 changed file.");
       expect(fake.insightReport?.["details"]).toBe("No issues found in this change.");
     } finally {
       await fake.close();
@@ -277,7 +278,8 @@ describe("a reply with no JSON", () => {
       );
       expect(fake.statuses.at(-1)).toMatchObject({
         state: "FAILED",
-        description: "Review could not complete",
+        description:
+          "Failed. The review could not complete: the model's reply held no readable findings, twice.",
       });
     } finally {
       await fake.close();
@@ -392,7 +394,7 @@ describe("one summary template", () => {
       await reviewOnBitbucket(fake, repo, model.port);
       expect(model.requests).toHaveLength(0);
       expect(summaryOf(fake)).toBe("");
-      expect(fake.statuses.at(-1)?.description).toBe("Nothing in scope was changed.");
+      expect(fake.statuses.at(-1)?.description).toBe("Passed. No reviewable files in this change.");
       expect(fake.insightReport?.["details"]).toBe("Nothing in scope was changed.");
       // with summaryWhenClean the same template is posted as a comment
       write(

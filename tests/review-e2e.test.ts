@@ -47,6 +47,8 @@ const CITED = JSON.stringify({
       line: 2,
       title: "Console call added",
       body: "Replace the console.log with the logger.",
+      // stable across this file's guideline-mutation tests: the title never changes, only the body
+      guidelineQuote: "No console statements",
     },
   ],
 });
@@ -403,6 +405,7 @@ describe("review end to end (local mode)", () => {
           title: "Maybe also here",
           body: "unsure",
           confidence: 0.2,
+          guidelineQuote: "No console statements",
         },
       ],
     });
@@ -643,7 +646,11 @@ describe("line-anchor repair", () => {
   }
 
   async function reviewed(repo: string, finding: Record<string, unknown>) {
-    const reply = JSON.stringify({ findings: [{ guidelineId: "no-console", ...finding }] });
+    const reply = JSON.stringify({
+      findings: [
+        { guidelineId: "no-console", guidelineQuote: "No console statements", ...finding },
+      ],
+    });
     const { code, stdout } = await review(repo, scriptedModel(reply).port, "--report", "r.json");
     expect(code).toBe(0);
     const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
@@ -734,6 +741,7 @@ describe("duplicate finding collapse", () => {
           line: 2,
           title: "Console call added",
           body: "Replace the console.log with the logger.",
+          guidelineQuote: "No console statements",
         },
         {
           guidelineId: "no-console",
@@ -741,6 +749,7 @@ describe("duplicate finding collapse", () => {
           line: 2,
           title: "Console statement present",
           body: "This line calls console.log directly.",
+          guidelineQuote: "No console statements",
         },
         {
           guidelineId: "no-console",
@@ -748,6 +757,7 @@ describe("duplicate finding collapse", () => {
           line: 3,
           title: "A genuinely distinct finding",
           body: "A different line; must not be merged away with the others.",
+          guidelineQuote: "No console statements",
         },
       ],
     });
@@ -799,6 +809,7 @@ describe("partial batch parse failures", () => {
                 line: 1,
                 title: "Console call added",
                 body: "Replace with the logger.",
+                guidelineQuote: "No console statements",
               })),
             }),
           });

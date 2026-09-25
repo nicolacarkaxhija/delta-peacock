@@ -39,6 +39,7 @@ const FINDING_WITH_SUGGESTION = JSON.stringify({
       title: "Console call added",
       body: "Replace the console.log with the logger.",
       suggestion: "  logger.info(name);",
+      guidelineQuote: "Use the logger instead.",
     },
   ],
 });
@@ -99,7 +100,7 @@ describe("publishing to github", () => {
 
       expect(fake.statuses).toHaveLength(1);
       expect(fake.statuses[0]?.state).toBe("success"); // advisory
-      expect(fake.statuses[0]?.description).toBe("1 finding: 1 major");
+      expect(fake.statuses[0]?.description).toBe("1 finding, 1 major. See the comments.");
     } finally {
       await fake.close();
     }
@@ -129,6 +130,7 @@ describe("publishing to github", () => {
             quote: "console.log(name);",
             title: "Console call added",
             body: "New wording.",
+            guidelineQuote: "Use the logger instead.",
           },
         ],
       });
@@ -189,6 +191,7 @@ describe("publishing to github", () => {
             quote: "console.log(name);",
             title: "First",
             body: "a",
+            guidelineQuote: "Use the logger instead.",
           },
           {
             guidelineId: "no-console",
@@ -197,6 +200,7 @@ describe("publishing to github", () => {
             quote: "console.log(name);",
             title: "Second",
             body: "b",
+            guidelineQuote: "Use the logger instead.",
           },
         ],
       });
@@ -297,7 +301,7 @@ describe("publishing to github", () => {
       const repo = makeScenario();
       await reviewAgainst(fake, repo, FINDING_WITH_SUGGESTION, "--fail-on", "CRITICAL");
       expect(fake.statuses[0]?.state).toBe("success");
-      expect(fake.statuses[0]?.description).toBe("1 finding: 1 major");
+      expect(fake.statuses[0]?.description).toBe("1 finding, 1 major. See the comments.");
       expect(fake.statuses[0]?.context).toBe("Code review");
     } finally {
       await fake.close();
@@ -322,7 +326,7 @@ describe("publishing to github", () => {
       expect(summary).toContain(
         `[docs/reviews.md](${fake.baseUrl}/acme/widgets/blob/main/docs/reviews.md)`,
       );
-      expect(fake.statuses[0]?.description).toBe("Blocked: 1 major finding must be resolved");
+      expect(fake.statuses[0]?.description).toBe("1 finding, 1 major. See the comments.");
     } finally {
       await fake.close();
     }

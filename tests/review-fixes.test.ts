@@ -183,6 +183,7 @@ describe("bench variant comparison", () => {
             line: 2,
             title: "c",
             body: "b",
+            guidelineQuote: "No console statements",
           });
         }
         if (request.system.includes("checkout.js")) {
@@ -192,6 +193,7 @@ describe("bench variant comparison", () => {
             line: 1,
             title: "s",
             body: "b",
+            guidelineQuote: "No breaking signature changes",
           });
         }
         return Promise.resolve({ text: JSON.stringify({ findings }) });

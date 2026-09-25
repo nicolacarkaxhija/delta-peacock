@@ -137,7 +137,8 @@ describe("pack resolution", () => {
   });
 });
 
-const LOCAL_RULE = "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nlocal body\n";
+const LOCAL_RULE =
+  "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nlocal body: use the shared logger instead.\n";
 
 describe("pack merge precedence", () => {
   it("loads pack guidelines under the local corpus and records provenance", () => {
@@ -269,8 +270,22 @@ describe("packs end to end", () => {
 
     const reply = JSON.stringify({
       findings: [
-        { guidelineId: "no-dw-logger", file: "src/app.js", line: 2, title: "t", body: "b" },
-        { guidelineId: "no-console", file: "src/app.js", line: 2, title: "t", body: "b" },
+        {
+          guidelineId: "no-dw-logger",
+          file: "src/app.js",
+          line: 2,
+          title: "t",
+          body: "b",
+          guidelineQuote: "Never call dw.system.Logger directly.",
+        },
+        {
+          guidelineId: "no-console",
+          file: "src/app.js",
+          line: 2,
+          title: "t",
+          body: "b",
+          guidelineQuote: "local body: use the shared logger instead.",
+        },
       ],
     });
     let stdout = "";

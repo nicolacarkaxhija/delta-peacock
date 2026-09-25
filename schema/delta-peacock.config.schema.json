@@ -277,6 +277,10 @@
         "codeInsights": {
           "type": "boolean"
         },
+        "tasks": {
+          "default": false,
+          "type": "boolean"
+        },
         "baseUrl": {
           "type": "string",
           "format": "uri"
@@ -354,7 +358,8 @@
             "repo_map",
             "agentic",
             "rag",
-            "scope"
+            "scope",
+            "full_files"
           ]
         },
         "providers": {
@@ -366,7 +371,8 @@
               "repo_map",
               "agentic",
               "rag",
-              "scope"
+              "scope",
+              "full_files"
             ]
           }
         },

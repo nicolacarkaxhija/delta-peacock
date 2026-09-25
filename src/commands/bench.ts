@@ -1,7 +1,21 @@
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { ToolSet } from "ai";
-import { loadCases, runBench, type BenchCase, type ReviewFn } from "../bench/harness.js";
+import {
+  loadCases,
+  runBench,
+  type BenchCase,
+  type ReviewFn,
+  type ReviewResult,
+} from "../bench/harness.js";
+import type { Finding } from "../domain/finding.js";
+import { buildModelPortFor } from "../model/build.js";
+import type { ModelUsage } from "../model/port.js";
+import { addUsage } from "../model/usage.js";
+import { calibrate } from "../review/calibrate.js";
+import { runEnsemble } from "../review/ensemble.js";
+import type { ParsedReview } from "../review/parse.js";
+import { retryRequest } from "../review/run-review.js";
 import { formatTable } from "../bench/harness.js";
 import { overlapMatrix, type ProducedFinding } from "../bench/scoring.js";
 import { attachContextTools, resolveContext } from "../context/build.js";
@@ -21,11 +35,27 @@ import { verifyStructural } from "../review/structural.js";
  * tree for context strategies, no git required. The same pipeline pieces
  * that review PRs judge the cases, so bench results transfer.
  */
+/** A case's own guidelines/, else the corpus-wide bench/guidelines next to the cases dir. */
+export function guidelinesDirFor(caseDir: string): string {
+  const own = path.join(caseDir, "guidelines");
+  return existsSync(own) ? own : path.join(caseDir, "..", "..", "guidelines");
+}
+
+function addTo(
+  usage: Record<string, ModelUsage>,
+  model: string,
+  add: ModelUsage | undefined,
+): void {
+  if (add === undefined) return;
+  const had = usage[model];
+  usage[model] = had === undefined ? add : addUsage(had, add);
+}
+
 function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>): ReviewFn {
-  return async (benchCase: BenchCase): Promise<ProducedFinding[]> => {
+  return async (benchCase: BenchCase): Promise<ReviewResult> => {
     const config = deps.loadConfig(flags);
     const guidelines = loadGuidelinesFromFiles(
-      readWorkingTreeGuidelines(path.join(benchCase.dir, "guidelines")),
+      readWorkingTreeGuidelines(guidelinesDirFor(benchCase.dir)),
       config.review.frontmatterContract,
     ).guidelines;
 
@@ -54,7 +84,12 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       buildReviewPrompt(
         guidelines,
         benchCase.diff,
-        buildPromptOptions(config, benchCase.dir, projectContext),
+        // files/ is the case's repository root: its declared tags and linters count
+        buildPromptOptions(
+          config,
+          existsSync(filesRoot) ? filesRoot : benchCase.dir,
+          projectContext,
+        ),
       ),
       contextTools,
       config.context.maxToolRounds,
@@ -72,18 +107,38 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       if (!decision.allowed) {
         for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
         deps.out(`bench: ${benchCase.name} blocked by the cost guard before any model call\n`);
-        return [];
+        return { produced: [] };
       }
     }
 
-    const port = deps.modelPort ?? buildModelPort(config, deps.credentials);
-    const reply = await port.complete(request);
     const guidelinesById = new Map(guidelines.map((guideline) => [guideline.id, guideline]));
-    const parsed = parseReviewResponse(reply.text, {
+    const parseOptions = {
       guidelinesById,
       generalPass: config.review.generalPass,
       observationSeverityCap: config.review.observationSeverityCap,
-    });
+    };
+    const usage: Record<string, ModelUsage> = {};
+    let parsed: ParsedReview;
+    if (config.ensemble.enabled) {
+      // the same members, union and judge a live review runs
+      const ensemble = await runEnsemble(deps, config, request, parseOptions);
+      for (const notice of ensemble.notices) deps.err(`${notice}\n`);
+      for (const member of ensemble.members) addTo(usage, member.id, member.usage);
+      parsed = ensemble.parsed;
+    } else {
+      const port = deps.modelPort ?? buildModelPort(config, deps.credentials);
+      const model = config.model.id ?? config.model.provider;
+      let reply = await port.complete(request);
+      addTo(usage, model, reply.usage);
+      try {
+        parsed = parseReviewResponse(reply.text, parseOptions);
+      } catch {
+        // the one retry a live review makes, tools off, fetched files as text
+        reply = await port.complete(retryRequest(request, reply));
+        addTo(usage, model, reply.usage);
+        parsed = parseReviewResponse(reply.text, parseOptions);
+      }
+    }
     // the same placement and Good example gate a live review applies
     const diffLines = newLineTexts(benchCase.diff);
     const placed = placeFindings(parsed.findings, (file) => {
@@ -97,11 +152,28 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     const structural = verifyStructural(kept, guidelinesById, (file) =>
       readSourceForStructuralCheck(filesRoot, file),
     );
-    return structural.kept.map((finding) => ({
-      file: finding.file,
-      line: finding.line,
-      ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),
-    }));
+    let findings: Finding[] = structural.kept;
+    if (config.calibration.enabled && findings.length > 0) {
+      // advisory as in a live review: a drop note is recorded, the finding stays
+      const ref = config.calibration.model;
+      const calibrationPort = ref
+        ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.credentials))
+        : (deps.modelPort ?? buildModelPort(config, deps.credentials));
+      const outcome = await calibrate(calibrationPort, findings, benchCase.diff);
+      findings = outcome.findings;
+      addTo(usage, ref?.id ?? config.model.id ?? config.model.provider, outcome.usage);
+    }
+    return {
+      produced: findings.map((finding) => ({
+        file: finding.file,
+        line: finding.line,
+        ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),
+        ...(finding.suggestion !== undefined ? { suggestion: finding.suggestion } : {}),
+        ...(finding.calibration !== undefined ? { calibration: finding.calibration.action } : {}),
+      })),
+      ...(Object.keys(usage).length > 0 ? { usage } : {}),
+      misquoted: parsed.droppedMisquoted,
+    };
   };
 }
 

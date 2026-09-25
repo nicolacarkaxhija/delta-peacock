@@ -26,6 +26,7 @@ function perFilePort(): { requests: ModelRequest[]; port: ModelPort } {
               line: 1,
               title: `Console in ${String(file)}`,
               body: "b",
+              guidelineQuote: "Use the logger.",
             })),
           }),
         });
@@ -190,15 +191,50 @@ describe("audit", () => {
 describe("baseline in the review pipeline", () => {
   const TWO = JSON.stringify({
     findings: [
-      { guidelineId: "no-console", file: "src/app.js", line: 1, title: "One", body: "b" },
-      { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Two", body: "b" },
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: 1,
+        title: "One",
+        body: "b",
+        guidelineQuote: "Use the logger.",
+      },
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: 2,
+        title: "Two",
+        body: "b",
+        guidelineQuote: "Use the logger.",
+      },
     ],
   });
   const THREE = JSON.stringify({
     findings: [
-      { guidelineId: "no-console", file: "src/app.js", line: 1, title: "One", body: "b" },
-      { guidelineId: "no-console", file: "src/app.js", line: 2, title: "Two", body: "b" },
-      { guidelineId: "no-console", file: "src/app.js", line: 3, title: "Three", body: "b" },
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: 1,
+        title: "One",
+        body: "b",
+        guidelineQuote: "Use the logger.",
+      },
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: 2,
+        title: "Two",
+        body: "b",
+        guidelineQuote: "Use the logger.",
+      },
+      {
+        guidelineId: "no-console",
+        file: "src/app.js",
+        line: 3,
+        title: "Three",
+        body: "b",
+        guidelineQuote: "Use the logger.",
+      },
     ],
   });
 

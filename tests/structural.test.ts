@@ -266,6 +266,7 @@ A const declared directly in a loop body crashes on Rhino.
           line: findingLine,
           title: "const declared in a loop",
           body: "Use let instead.",
+          guidelineQuote: "A const declared directly in a loop body crashes on Rhino.",
         },
       ],
     });

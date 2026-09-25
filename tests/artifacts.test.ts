@@ -15,9 +15,30 @@ const GUIDELINES = [
 
 const REPLY = JSON.stringify({
   findings: [
-    { guidelineId: "no-console", file: "src/app.js", line: 1, title: "Console", body: "b1" },
-    { guidelineId: "no-todo", file: "src/app.js", line: 2, title: "Todo", body: "b2" },
-    { guidelineId: "prefer-const", file: "src/app.js", line: 3, title: "Let", body: "b3" },
+    {
+      guidelineId: "no-console",
+      file: "src/app.js",
+      line: 1,
+      title: "Console",
+      body: "b1",
+      guidelineQuote: "Use the logger.",
+    },
+    {
+      guidelineId: "no-todo",
+      file: "src/app.js",
+      line: 2,
+      title: "Todo",
+      body: "b2",
+      guidelineQuote: "File an issue instead.",
+    },
+    {
+      guidelineId: "prefer-const",
+      file: "src/app.js",
+      line: 3,
+      title: "Let",
+      body: "b3",
+      guidelineQuote: "Prefer const",
+    },
   ],
 });
 

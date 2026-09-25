@@ -5,6 +5,7 @@ import type {
   PullRequestText,
   ScmComment,
   ScmPort,
+  ScmTask,
   StatusState,
 } from "./port.js";
 import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
@@ -42,6 +43,14 @@ interface BitbucketComment {
   deleted?: boolean;
   user?: { uuid?: string };
   resolution?: unknown;
+}
+
+interface BitbucketTask {
+  id: number;
+  content: { raw: string };
+  comment?: { id: number };
+  state: string;
+  resolved_by?: { uuid?: string } | null;
 }
 
 interface Page<T> {
@@ -187,10 +196,40 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
         .filter((c) => c.inline !== undefined && c.parent === undefined)
         .map((c) => toComment(c, replies.get(c.id)));
     },
-    async createInlineComment(comment: NewInlineComment): Promise<void> {
-      await request("POST", `${base}/repositories/${repo}/pullrequests/${pr}/comments`, {
-        content: { raw: comment.body },
-        inline: { path: comment.path, to: comment.line },
+    async createInlineComment(comment: NewInlineComment): Promise<string> {
+      const created = (await (
+        await request("POST", `${base}/repositories/${repo}/pullrequests/${pr}/comments`, {
+          content: { raw: comment.body },
+          inline: { path: comment.path, to: comment.line },
+        })
+      ).json()) as BitbucketComment;
+      return String(created.id);
+    },
+    async listTasks(): Promise<ScmTask[]> {
+      const all = await collectAllPages(
+        `${base}/repositories/${repo}/pullrequests/${pr}/tasks`,
+        async (url) => {
+          const page = (await (await request("GET", url)).json()) as Page<BitbucketTask>;
+          return { items: page.values, next: page.next };
+        },
+      );
+      return all.map((task) => ({
+        id: String(task.id),
+        content: task.content.raw,
+        ...(task.comment !== undefined ? { commentId: String(task.comment.id) } : {}),
+        resolved: task.state === "RESOLVED",
+        ...(task.resolved_by?.uuid !== undefined ? { resolvedBy: task.resolved_by.uuid } : {}),
+      }));
+    },
+    async createTask(content: string, commentId: string): Promise<void> {
+      await request("POST", `${base}/repositories/${repo}/pullrequests/${pr}/tasks`, {
+        content: { raw: content },
+        comment: { id: Number(commentId) },
+      });
+    },
+    async resolveTask(id: string): Promise<void> {
+      await request("PUT", `${base}/repositories/${repo}/pullrequests/${pr}/tasks/${id}`, {
+        state: "RESOLVED",
       });
     },
     async updateComment(id: string, body: string): Promise<void> {

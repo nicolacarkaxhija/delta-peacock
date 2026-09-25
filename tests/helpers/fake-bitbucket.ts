@@ -29,9 +29,18 @@ export interface FakeInsightAnnotation {
   link?: string;
 }
 
+export interface FakeBitbucketTask {
+  id: number;
+  content: { raw: string };
+  comment?: { id: number };
+  state: "UNRESOLVED" | "RESOLVED";
+  resolved_by?: { uuid: string };
+}
+
 export interface FakeBitbucket {
   baseUrl: string;
   comments: FakeBitbucketComment[];
+  tasks: FakeBitbucketTask[];
   statuses: { state: string; description: string; key: string; name: string; sha: string }[];
   writes: { method: string; url: string }[];
   /** "forbidden" mirrors an access token (GET /user answers 403); "ok" an API token. */
@@ -90,6 +99,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
   let nextId = 1;
   const state = {
     comments: [] as FakeBitbucketComment[],
+    tasks: [] as FakeBitbucketTask[],
     statuses: [] as FakeBitbucket["statuses"],
     writes: [] as { method: string; url: string }[],
     prText: { title: "original title", body: "author prose" },
@@ -135,6 +145,8 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
       const commentRoute = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/comments\/(\d+)$/;
       const resolveRoute =
         /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/comments\/(\d+)\/resolve$/;
+      const tasksRoute = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/tasks$/;
+      const taskRoute = /^\/repositories\/[^/]+\/[^/]+\/pullrequests\/\d+\/tasks\/(\d+)$/;
       const statusRoute = /^\/repositories\/[^/]+\/[^/]+\/commit\/([^/]+)\/statuses\/build$/;
       const reportRoute = /^\/repositories\/[^/]+\/[^/]+\/commit\/[^/]+\/reports\/([^/]+)$/;
       const annotationsRoute =
@@ -215,6 +227,43 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
           if (target) target.content = body["content"] as { raw: string };
           send(response, 200, target);
         }
+      } else if (method === "GET" && tasksRoute.test(path)) {
+        const page = Number(url.searchParams.get("page") ?? "1");
+        const values = state.tasks.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+        const hasMore = state.tasks.length > page * PER_PAGE;
+        send(response, 200, {
+          values,
+          ...(hasMore
+            ? { next: `http://127.0.0.1:${String(port)}${path}?page=${String(page + 1)}` }
+            : {}),
+        });
+      } else if (method === "POST" && tasksRoute.test(path)) {
+        const body = await readBody(request);
+        const commentId = (body["comment"] as { id?: unknown } | undefined)?.id;
+        if (typeof commentId === "number" && !state.comments.some((c) => c.id === commentId)) {
+          send(response, 400, { error: { message: "no such comment" } });
+          return;
+        }
+        state.tasks.push({
+          id: nextId++,
+          content: body["content"] as { raw: string },
+          ...(typeof commentId === "number" ? { comment: { id: commentId } } : {}),
+          state: "UNRESOLVED",
+        });
+        send(response, 201, state.tasks.at(-1));
+      } else if (method === "PUT" && taskRoute.test(path)) {
+        const id = Number(taskRoute.exec(path)?.[1]);
+        const task = state.tasks.find((entry) => entry.id === id);
+        const body = await readBody(request);
+        if (task === undefined) {
+          send(response, 404, { error: { message: "not found" } });
+        } else {
+          if (body["state"] === "RESOLVED" || body["state"] === "UNRESOLVED") {
+            task.state = body["state"];
+            if (task.state === "RESOLVED") task.resolved_by = { uuid: BOT_UUID };
+          }
+          send(response, 200, task);
+        }
       } else if (method === "POST" && resolveRoute.test(path)) {
         const id = Number(resolveRoute.exec(path)?.[1]);
         const target = state.comments.find((comment) => comment.id === id);
@@ -278,6 +327,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
   return {
     baseUrl: `http://127.0.0.1:${String(port)}`,
     comments: state.comments,
+    tasks: state.tasks,
     statuses: state.statuses,
     writes: state.writes,
     prText: state.prText,
