@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.8 (2026-09-25)
+
+Three wrong findings from the second and third reviewed pull requests on the Bitbucket consumer, a context strategy, plain commit statuses and pull request tasks.
+
+### Features
+
+- `full_files` context strategy: the whole post-change text of every changed text file goes into the prompt under `context.maxTokens`, smallest first, the largest truncated with a marker; deleted, binary, oversized and out-of-tree paths are skipped. It layers through `context.providers`, for example `[full_files, agentic]`.
+- Commit status descriptions open with the verdict in one plain line: `Passed. No findings in 4 changed files.`, `3 findings, 1 major. See the comments.`, `Passed. No reviewable files in this change.`, `Skipped. The monthly cost cap is reached.`, `Failed. The review could not complete: <reason>.` The status keeps its name from `review.displayName`.
+- A run the cost guard stops now says so on the pull request: the summary opens with `The review was skipped: <reason>.` and the status fails unless `gate.failOn` is `none`.
+- `scm.tasks` (Bitbucket, default off): one pull request task per posted finding, attached to its comment. The reviewer never opens a second task for a finding, resolves its own task once the anchored line changed, and does not post again a finding whose task a person resolved.
+
+### Bug Fixes
+
+- Every violation quotes in `guidelineQuote` the guideline sentence it applies; a finding whose quote is not in the guideline (after whitespace, emphasis and wrapping quotes are ignored) is dropped as `misquoted` and counted as a reviewer error in the stats ledger and the report. This stops rules the guideline never states, such as a semicolon ban read into "commas or colons, not dashes".
+- A suggestion keeps every piece of information of the line it replaces; shortening a comment may not drop its reason.
+- A reason comment counts on the flagged line, the line above, or the doc comment of the enclosing declaration or of the group of declarations it heads; the reviewer no longer asks for it to move.
+- A reply that writes `null` for an optional field (`"suggestion": null`) no longer loses the finding as malformed.
+
+### Benchmark
+
+- 13 cases in the shape of a Playwright suite (page objects, specs, a trimmed runner config), each with one seeded defect or none, on a shared `bench/guidelines` folder a case uses when it has no guidelines of its own. An expected finding may require words in the suggestion (`suggestionIncludes`).
+- `bench` runs the ensemble and the calibration pass when they are configured, retries an unreadable reply once like a review does, reads declared tags from the case's `files/` tree, and records tokens per model and dropped misquotes per case in the report.
+
+### Documentation
+
+- The monthly cap in CI: the counter restarts with every pipeline run, `spendSource: aws-cost-explorer` needs `ce:GetCostAndUsage`, and a Bitbucket Downloads counter is sketched as an option.
+- Pull request tasks and the host rules that make them blocking: Bitbucket's merge check for resolved tasks, GitHub's required conversation resolution.
+
 ## 0.1.7 (2026-09-25)
 
 Root causes of the first reviewed pull requests on a Bitbucket consumer, each with a contract test.

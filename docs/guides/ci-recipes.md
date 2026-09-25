@@ -1,6 +1,6 @@
 # CI recipes
 
-Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. Each tagged release publishes a Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` that carries node and git, plus an npm package that runs wherever node 22.12+ does. Pin the version in CI (`npx delta-peacock@0.1.7`) so a new release never changes a gate unannounced. The composite action below builds from source instead.
+Every recipe needs a full clone (the diff comes from local git) and the model credential in the environment. Each tagged release publishes a Docker image `ghcr.io/nicolacarkaxhija/delta-peacock` that carries node and git, plus an npm package that runs wherever node 22.12+ does. Pin the version in CI (`npx delta-peacock@0.1.8`) so a new release never changes a gate unannounced. The composite action below builds from source instead.
 
 ## GitHub Action (one line)
 
@@ -90,7 +90,7 @@ pipelines:
           clone:
             depth: full
           script:
-            - npx delta-peacock@0.1.7 review
+            - npx delta-peacock@0.1.8 review
           # set in repository variables:
           # ANTHROPIC_API_KEY, BITBUCKET_TOKEN, DELTA_PEACOCK_MODEL_ID
           # DELTA_PEACOCK_SCM_PROVIDER=bitbucket
@@ -121,8 +121,8 @@ Until a package registry is in reach, a repository can commit the bundled tarbal
 ```yaml
 script:
   - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
-  - (cd tools && git show "origin/$BITBUCKET_PR_DESTINATION_BRANCH:tools/delta-peacock-0.1.7.tgz.sha256" | sha256sum -c -)
-  - npm install --ignore-scripts --no-save --no-audit --no-fund ./tools/delta-peacock-0.1.7.tgz
+  - (cd tools && git show "origin/$BITBUCKET_PR_DESTINATION_BRANCH:tools/delta-peacock-0.1.8.tgz.sha256" | sha256sum -c -)
+  - npm install --ignore-scripts --no-save --no-audit --no-fund ./tools/delta-peacock-0.1.8.tgz
   - npx --no-install delta-peacock review
 ```
 
