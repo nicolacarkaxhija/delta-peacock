@@ -23,8 +23,8 @@ pnpm lint && pnpm typecheck && pnpm docs:check
 
 ## Conventions
 
-- Conventional Commits (commitlint via husky); release-please manages releases; effort
-  trailer (`Effort: ~1h`) on every commit.
+- Conventional Commits (commitlint via husky); release-please manages releases; commits are a
+  subject line only, no body, no trailers.
 - Config schema snapshot: refresh with `pnpm schema:update` after config-shape changes.
 
 ## Gotchas
