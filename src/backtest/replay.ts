@@ -5,7 +5,7 @@ import type { Config } from "../config/schema.js";
 import { activeStrategies } from "../context/build.js";
 import type { RuntimeDeps } from "../deps.js";
 import { runGit } from "../git/git.js";
-import { anyRateConfigured } from "../model/usage.js";
+import { anyRateConfigured, modelRates } from "../model/usage.js";
 import type { ReviewReport } from "../review/report.js";
 import { runReview } from "../review/run-review.js";
 import type { BacktestCase } from "./cases.js";
@@ -76,7 +76,7 @@ export function missingLines(
   if (activeStrategies(config).includes("full_files") && !/^full_files context: /m.test(log)) {
     problems.push("no full_files context line in the log");
   }
-  if (anyRateConfigured(config.cost) && !/^cost: .+ tokens in, .+ USD; /m.test(log)) {
+  if (anyRateConfigured(modelRates(config)) && !/^cost: .+ tokens in, .+ USD; /m.test(log)) {
     problems.push("no cost line in the log");
   }
   if (config.stats.enabled) {

@@ -25,7 +25,7 @@ import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/port.js";
 import { withFetched } from "../model/generate.js";
-import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
@@ -64,7 +64,8 @@ import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
 import { buildReport, type UnparsedBatch, type WaivedFinding } from "./report.js";
 import { verifyStructural } from "./structural.js";
 import { writeDrafts } from "../guidelines/draft.js";
-import { appendRecord, guidelineCounts, severityCounts } from "../stats/record.js";
+import type { PullRequestText } from "../scm/port.js";
+import { appendRecord, attributionOf, ledgerRecords, type Attribution } from "../stats/record.js";
 
 export type ReviewDeps = RuntimeDeps;
 
@@ -89,6 +90,7 @@ export async function runReview(
   flags: Readonly<Record<string, string>>,
   options: ReviewOptions = {},
 ): Promise<number> {
+  const startedAt = performance.now();
   const config = deps.loadConfig(flags);
 
   if (options.staged === true) {
@@ -404,7 +406,9 @@ export async function runReview(
       redactions: redacted.counts,
       gate,
       ...(usage ? { usage } : {}),
-      ...(usage && anyRateConfigured(config.cost) ? { cost: computeCost(usage, config.cost) } : {}),
+      ...(usage && anyRateConfigured(modelRates(config))
+        ? { cost: computeCost(usage, modelRates(config)) }
+        : {}),
       ...(ensembleMembers !== undefined
         ? { ensemble: { mode: config.ensemble.mode, members: ensembleMembers } }
         : {}),
@@ -448,16 +452,26 @@ export async function runReview(
   }
 
   if (config.stats.enabled) {
+    const rates = modelRates(config);
     // the recorded findings are what survived to the gate, not what was baselined
-    await appendRecord(deps.cwd, config.stats.path, {
-      at: now.toISOString(),
-      author: commitAuthor(deps.cwd, "HEAD"),
-      addedLines: addedLineCount(diff),
-      bySeverity: severityCounts(kept),
-      byGuideline: guidelineCounts(kept),
-      // an invented rule is a reviewer error, counted apart from the author's findings
-      ...(parsed.droppedMisquoted > 0 ? { errors: { misquoted: parsed.droppedMisquoted } } : {}),
-    });
+    await appendRecord(
+      deps.cwd,
+      config.stats.path,
+      ledgerRecords({
+        at: now.toISOString(),
+        author: commitAuthor(deps.cwd, "HEAD"),
+        addedLines: addedLineCount(diff),
+        findings: kept,
+        misquoted: parsed.droppedMisquoted,
+        attribution: await pullRequestAttribution(deps, config),
+        ...(config.model.id !== undefined ? { model: config.model.id } : {}),
+        ...(usage !== undefined ? { usage } : {}),
+        ...(usage !== undefined && anyRateConfigured(rates)
+          ? { cost: computeCost(usage, rates).total }
+          : {}),
+        durationMs: Math.round(performance.now() - startedAt),
+      }),
+    );
     deps.err(`stats: review recorded in ${config.stats.path}\n`);
   }
 
@@ -469,14 +483,42 @@ export async function runReview(
  * prints about it: tokens in and out, the cost, and the month on the counter.
  */
 export async function spendLine(config: Config, usage: ModelUsage, now: Date): Promise<string> {
-  const tokens = `${String(usage.inputTokens)} tokens in, ${String(usage.outputTokens)} out`;
-  if (!anyRateConfigured(config.cost)) return `usage: ${tokens}; no cost rates configured`;
-  const spent = computeCost(usage, config.cost).total;
+  // the model id shows which rates priced the run, an env override included
+  const tokens = `${String(usage.inputTokens)} tokens in, ${String(usage.outputTokens)} out on ${config.model.id ?? "(unset model)"}`;
+  const rates = modelRates(config);
+  if (!anyRateConfigured(rates)) return `usage: ${tokens}; no cost rates configured`;
+  const spent = computeCost(usage, rates).total;
   const counterPath = config.cost.counterPath ?? defaultCounterPath();
   const month = monthKey(now);
   await recordSpend(counterPath, month, spent);
   const cap = config.cost.monthlyCap > 0 ? ` of ${String(config.cost.monthlyCap)}` : "";
   return `cost: ${tokens}, ${usd(spent)} USD; ${month} spend ${usd(readMonthSpend(counterPath, month))} USD${cap} on ${counterPath}`;
+}
+
+/** PR number, link and title for the ledger; a host that cannot say leaves them out. */
+export async function pullRequestAttribution(
+  deps: ReviewDeps,
+  config: Config,
+): Promise<Attribution> {
+  let text: PullRequestText | undefined;
+  if (config.scm.provider !== "local") {
+    try {
+      const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
+      text = await scm.getPullRequestText?.();
+    } catch (error) {
+      deps.err(
+        `stats: pull request title unavailable (${String((error as Error).message.split("\n")[0])})\n`,
+      );
+    }
+  }
+  const number = config.scm.pullRequest;
+  return attributionOf(
+    {
+      ...(number !== undefined ? { number } : {}),
+      ...(text?.url !== undefined ? { url: text.url } : {}),
+    },
+    text?.title,
+  );
 }
 
 function usd(amount: number): string {

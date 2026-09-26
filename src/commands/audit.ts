@@ -10,7 +10,7 @@ import { newLineTexts } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { loadGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
-import { addUsage, anyRateConfigured, computeCost } from "../model/usage.js";
+import { addUsage, anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import type { ModelUsage } from "../model/port.js";
 import { renderCodeQuality, renderSarif } from "../review/artifacts.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "../review/baseline.js";
@@ -182,7 +182,9 @@ export async function runAudit(
       redactions: redactionCounts,
       gate,
       ...(usage ? { usage } : {}),
-      ...(usage && anyRateConfigured(config.cost) ? { cost: computeCost(usage, config.cost) } : {}),
+      ...(usage && anyRateConfigured(modelRates(config))
+        ? { cost: computeCost(usage, modelRates(config)) }
+        : {}),
     });
     if (config.output.report !== undefined) {
       writeFileSync(
@@ -201,8 +203,8 @@ export async function runAudit(
     }
   }
 
-  if (usage && anyRateConfigured(config.cost)) {
-    const spent = computeCost(usage, config.cost).total;
+  if (usage && anyRateConfigured(modelRates(config))) {
+    const spent = computeCost(usage, modelRates(config)).total;
     await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
   }
 

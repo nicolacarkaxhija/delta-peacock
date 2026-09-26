@@ -2,12 +2,31 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Finding } from "../domain/finding.js";
 import { SEVERITIES, type Severity } from "../domain/severity.js";
+import type { ModelUsage } from "../model/port.js";
 import { withLock } from "../util/lockfile.js";
 
 export const DEFAULT_STATS_PATH = "delta-peacock.stats.jsonl";
 
+/** The pull request a record belongs to; each part only when the SCM provides it. */
+export interface PullRequestRef {
+  number?: number;
+  url?: string;
+}
+
+/** Who and what a record is about; every field optional so older lines still read. */
+export interface Attribution {
+  pr?: PullRequestRef;
+  /** The pull request title. */
+  title?: string;
+  /** From a conventional title `type(scope): ...`; empty when the title has none. */
+  scope?: string;
+  type?: string;
+}
+
 /** One review's contribution to the ledger; no PII beyond the author handle. */
-export interface StatsRecord {
+export interface StatsRecord extends Attribution {
+  /** Absent on records written before finding lines existed. */
+  kind?: "review";
   at: string;
   author: string;
   addedLines: number;
@@ -17,6 +36,102 @@ export interface StatsRecord {
   byGuideline: Record<string, number>;
   /** Reviewer errors caught before posting; absent when there were none. */
   errors?: { misquoted: number };
+  /** The review model id in use, env override included. */
+  model?: string;
+  tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  /** USD; present only when the model has rates. */
+  cost?: number;
+  durationMs?: number;
+}
+
+/** One finding that survived to the gate, one ledger line each. */
+export interface FindingRecord extends Attribution {
+  kind: "finding";
+  at: string;
+  author: string;
+  /** The cited guideline id; observations use "(observation)". */
+  guideline: string;
+  severity: Severity;
+  file: string;
+  line: number;
+}
+
+export type LedgerRecord = StatsRecord | FindingRecord;
+
+const CONVENTIONAL_TITLE = /^\s*([A-Za-z][\w-]*)(?:\(([^)]*)\))?!?:\s/;
+
+/** Type and scope of a conventional title; both empty when the title is not one. */
+export function parseConventionalTitle(title: string): { type: string; scope: string } {
+  const match = CONVENTIONAL_TITLE.exec(title);
+  if (match === null) return { type: "", scope: "" };
+  return { type: (match[1] ?? "").toLowerCase(), scope: (match[2] ?? "").trim() };
+}
+
+/** Attribution fields from what the SCM knows; a title-less run still gets empty scope and type. */
+export function attributionOf(
+  pr: PullRequestRef | undefined,
+  title: string | undefined,
+): Attribution {
+  const parsed = parseConventionalTitle(title ?? "");
+  return {
+    ...(pr !== undefined && (pr.number !== undefined || pr.url !== undefined) ? { pr } : {}),
+    ...(title !== undefined ? { title } : {}),
+    scope: parsed.scope,
+    type: parsed.type,
+  };
+}
+
+export interface LedgerInput {
+  at: string;
+  author: string;
+  addedLines: number;
+  findings: readonly Finding[];
+  misquoted: number;
+  attribution: Attribution;
+  model?: string;
+  usage?: ModelUsage;
+  cost?: number;
+  durationMs?: number;
+}
+
+/** The review line followed by one line per finding. */
+export function ledgerRecords(input: LedgerInput): LedgerRecord[] {
+  const { at, author, attribution } = input;
+  const review: StatsRecord = {
+    kind: "review",
+    at,
+    author,
+    addedLines: input.addedLines,
+    bySeverity: severityCounts(input.findings),
+    byGuideline: guidelineCounts(input.findings),
+    // an invented rule is a reviewer error, counted apart from the author's findings
+    ...(input.misquoted > 0 ? { errors: { misquoted: input.misquoted } } : {}),
+    ...attribution,
+    ...(input.model !== undefined ? { model: input.model } : {}),
+    ...(input.usage !== undefined
+      ? {
+          tokens: {
+            input: input.usage.inputTokens,
+            output: input.usage.outputTokens,
+            cacheRead: input.usage.cacheReadTokens ?? 0,
+            cacheWrite: input.usage.cacheWriteTokens ?? 0,
+          },
+        }
+      : {}),
+    ...(input.cost !== undefined ? { cost: input.cost } : {}),
+    ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {}),
+  };
+  const findings = input.findings.map((finding): FindingRecord => ({
+    kind: "finding",
+    at,
+    author,
+    ...attribution,
+    guideline: finding.kind === "violation" ? finding.guidelineId : "(observation)",
+    severity: finding.severity,
+    file: finding.file,
+    line: finding.line,
+  }));
+  return [review, ...findings];
 }
 
 export function severityCounts(findings: readonly Finding[]): Partial<Record<Severity, number>> {
@@ -39,28 +154,44 @@ export function guidelineCounts(findings: readonly Finding[]): Record<string, nu
 export async function appendRecord(
   cwd: string,
   relPath: string,
-  record: StatsRecord,
+  record: LedgerRecord | readonly LedgerRecord[],
 ): Promise<void> {
+  const records = Array.isArray(record) ? record : [record];
   const full = path.resolve(cwd, relPath);
   mkdirSync(path.dirname(full), { recursive: true });
   await withLock(full, () => {
-    appendFileSync(full, `${JSON.stringify(record)}\n`);
+    appendFileSync(full, records.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
   });
 }
 
-/** Yields records one line at a time, so a long ledger never loads whole. */
-export function* readRecords(cwd: string, relPath: string): Generator<StatsRecord> {
+function* ledgerLines(cwd: string, relPath: string): Generator<Record<string, unknown>> {
   const full = path.resolve(cwd, relPath);
   if (!existsSync(full)) return;
   for (const line of readFileSync(full, "utf8").split("\n")) {
     if (line.trim() === "") continue;
     try {
-      const parsed = JSON.parse(line) as StatsRecord;
-      if (typeof parsed.author === "string" && typeof parsed.addedLines === "number") {
-        yield parsed;
-      }
+      const parsed: unknown = JSON.parse(line);
+      if (typeof parsed === "object" && parsed !== null) yield parsed as Record<string, unknown>;
     } catch {
       // a malformed line is skipped, never fatal to the whole report
+    }
+  }
+}
+
+/** Yields review records one line at a time, so a long ledger never loads whole. */
+export function* readRecords(cwd: string, relPath: string): Generator<StatsRecord> {
+  for (const parsed of ledgerLines(cwd, relPath)) {
+    if (typeof parsed["author"] === "string" && typeof parsed["addedLines"] === "number") {
+      yield parsed as unknown as StatsRecord;
+    }
+  }
+}
+
+/** Yields the finding lines; ledgers written before them yield nothing. */
+export function* readFindings(cwd: string, relPath: string): Generator<FindingRecord> {
+  for (const parsed of ledgerLines(cwd, relPath)) {
+    if (parsed["kind"] === "finding" && typeof parsed["guideline"] === "string") {
+      yield parsed as unknown as FindingRecord;
     }
   }
 }

@@ -164,6 +164,7 @@ export async function startFakeBitbucket(): Promise<FakeBitbucket> {
           source: { commit: { hash: "srcsha7890123" }, branch: { name: "feature/widgets" } },
           title: state.prText.title,
           description: state.prText.body,
+          links: { html: { href: "https://bitbucket.org/acme/widgets/pull-requests/7" } },
           author: { nickname: "bbuser" },
         });
       } else if (method === "PUT" && prMeta.test(path)) {

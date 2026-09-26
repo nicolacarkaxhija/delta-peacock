@@ -96,6 +96,7 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
             head: { sha: "headsha1234567" },
             title: state.prText.title,
             body: state.prText.body,
+            html_url: "https://github.com/acme/widgets/pull/7",
             user: { login: "octocat" },
           });
         }

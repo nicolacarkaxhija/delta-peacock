@@ -76,6 +76,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_COST_RATE_CACHE_READ_PER_1M: "cost.rateCacheReadPer1M",
   DELTA_PEACOCK_COST_RATE_CACHE_WRITE_PER_1M: "cost.rateCacheWritePer1M",
   DELTA_PEACOCK_COST_RATE_EMBED_PER_1M: "cost.rateEmbedPer1M",
+  DELTA_PEACOCK_COST_RATES: "cost.rates",
   DELTA_PEACOCK_COST_MAX_PER_REVIEW: "cost.maxPerReview",
   DELTA_PEACOCK_COST_MONTHLY_CAP: "cost.monthlyCap",
   DELTA_PEACOCK_COST_SPEND_SOURCE: "cost.spendSource",
@@ -129,6 +130,7 @@ const JSON_PATHS = new Set([
   "ensemble.members",
   "ensemble.judge",
   "calibration.model",
+  "cost.rates",
 ]);
 
 function coerceStringValue(dotPath: string, raw: string): unknown {

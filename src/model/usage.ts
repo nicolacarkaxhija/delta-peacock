@@ -27,6 +27,38 @@ export interface CostRates {
   rateCacheWritePer1M: number;
 }
 
+/** The cost block of the config: flat rates plus an optional per-model map. */
+export interface CostConfig extends CostRates {
+  rates?: Readonly<Record<string, { [K in keyof CostRates]?: number | undefined }>>;
+}
+
+/** Rates for one model: its `cost.rates` entry, else the flat keys; a missing entry field is unpriced. */
+export function ratesFor(cost: CostConfig, modelId: string | undefined): CostRates {
+  const entry = modelId === undefined ? undefined : cost.rates?.[modelId];
+  if (entry === undefined) {
+    return {
+      rateInputPer1M: cost.rateInputPer1M,
+      rateOutputPer1M: cost.rateOutputPer1M,
+      rateCacheReadPer1M: cost.rateCacheReadPer1M,
+      rateCacheWritePer1M: cost.rateCacheWritePer1M,
+    };
+  }
+  return {
+    rateInputPer1M: entry.rateInputPer1M ?? 0,
+    rateOutputPer1M: entry.rateOutputPer1M ?? 0,
+    rateCacheReadPer1M: entry.rateCacheReadPer1M ?? 0,
+    rateCacheWritePer1M: entry.rateCacheWritePer1M ?? 0,
+  };
+}
+
+/** Rates for the review model in use, env override included. */
+export function modelRates(config: {
+  cost: CostConfig;
+  model: { id?: string | undefined };
+}): CostRates {
+  return ratesFor(config.cost, config.model.id);
+}
+
 export interface ComputedCost {
   input: number;
   output: number;

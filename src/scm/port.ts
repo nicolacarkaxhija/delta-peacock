@@ -32,6 +32,8 @@ export interface ScmTask {
 export interface PullRequestText {
   title: string;
   body: string;
+  /** Web link to the pull request, when the host returns one. */
+  url?: string | undefined;
 }
 
 export interface InsightAnnotation {

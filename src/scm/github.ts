@@ -169,8 +169,9 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
       const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {
         title: string;
         body: string | null;
+        html_url?: string;
       };
-      return { title: meta.title, body: meta.body ?? "" };
+      return { title: meta.title, body: meta.body ?? "", url: meta.html_url };
     },
     async updatePullRequestText(text: { title?: string; body: string }): Promise<void> {
       await request("PATCH", `/repos/${repo}/pulls/${pr}`, {
