@@ -86,18 +86,18 @@ describe("bitbucket code insights", () => {
         report_type: "BUG",
         result: "FAILED",
         details:
-          "2 findings: 1 blocker, 1 major. Blocked: 2 findings (1 blocker, 1 major) must be resolved.",
+          "2 findings: 1 critical, 1 high. Blocked: 2 findings (1 critical, 1 high) must be resolved.",
       });
       const data = fake.insightReport?.["data"] as { title: string; value: number }[];
       expect(data).toEqual([
         { title: "Findings", type: "NUMBER", value: 2 },
-        { title: "Blocker", type: "NUMBER", value: 1 },
-        { title: "Major", type: "NUMBER", value: 1 },
+        { title: "Critical", type: "NUMBER", value: 1 },
+        { title: "High", type: "NUMBER", value: 1 },
       ]);
       expect(fake.insightAnnotations[0]?.link).toBe(
         "https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md",
       );
-      expect(fake.insightAnnotations.map((a) => a.severity)).toEqual(["CRITICAL", "MEDIUM"]);
+      expect(fake.insightAnnotations.map((a) => a.severity)).toEqual(["CRITICAL", "HIGH"]);
       expect(fake.insightAnnotations[0]).toMatchObject({
         annotation_type: "CODE_SMELL",
         path: "src/app.js",

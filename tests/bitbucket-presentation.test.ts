@@ -89,9 +89,9 @@ describe("bitbucket presentation", () => {
       expect(fake.drafts).toBe(0); // nothing to recognise yet, so no identity lookup
       expect(fake.comments.every((c) => !c.content.raw.includes("<!--"))).toBe(true);
       // no heading: the bot's name, the status and the card already say who reviewed
-      expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("2 findings: 1 blocker, 1 major");
+      expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("2 findings: 1 critical, 1 high");
       expect(inline(fake)[0]?.content.raw).toBe(
-        "**Blocker** · [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md)\n\nUse the logger.",
+        "**Critical** · [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md)\n\nUse the logger.",
       );
 
       const again = await review(fake);
@@ -178,9 +178,9 @@ describe("bitbucket presentation", () => {
       });
       const second = await review(fake);
       expect(second.stderr).toContain("1 created, 1 updated");
-      expect(fake.comments.find((c) => c.id === 52)?.content.raw.startsWith("**Blocker** · ")).toBe(
-        true,
-      );
+      expect(
+        fake.comments.find((c) => c.id === 52)?.content.raw.startsWith("**Critical** · "),
+      ).toBe(true);
     } finally {
       await fake.close();
     }

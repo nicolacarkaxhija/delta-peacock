@@ -19,7 +19,12 @@ export interface Presentation {
   guidelinesDir: string;
   /** Repository doc on how reviews work, linked from a blocked summary. */
   guidePath?: string;
+  /** The host's own severity words; absent means the reviewer's scale. */
+  severityScale?: SeverityScale;
 }
+
+/** A host's name for each review severity, upper case; the gate keeps the review scale. */
+export type SeverityScale = Readonly<Record<Severity, string>>;
 
 export const DEFAULT_PRESENTATION: Presentation = {
   displayName: DEFAULT_DISPLAY_NAME,
@@ -28,9 +33,24 @@ export const DEFAULT_PRESENTATION: Presentation = {
   guidelinesDir: "guidelines",
 };
 
-export function severityWord(severity: Severity): string {
-  return `${severity.charAt(0)}${severity.slice(1).toLowerCase()}`;
+/** "Major", or the host's word for it: "High" on Bitbucket. */
+export function severityWord(
+  severity: Severity,
+  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
+): string {
+  const word = presentation.severityScale?.[severity] ?? severity;
+  return `${word.charAt(0)}${word.slice(1).toLowerCase()}`;
 }
+
+const lowerWord = (severity: Severity, presentation: Pick<Presentation, "severityScale">) =>
+  severityWord(severity, presentation).toLowerCase();
+
+/** Host words read back into the review scale; a shared word keeps its review meaning. */
+const HOST_WORDS: Readonly<Record<string, Severity>> = {
+  High: "MAJOR",
+  Medium: "MINOR",
+  Low: "INFO",
+};
 
 /** Only a marker on the comment's final line counts; quoting one in prose does not. */
 export function markerFingerprint(body: string): string | undefined {
@@ -69,7 +89,7 @@ export function renderCommentBody(
 ): string {
   const reason = twoSentences(finding.body === "" ? finding.title : finding.body);
   const lines = [
-    `**${severityWord(finding.severity)}** · ${citation(finding, presentation)}`,
+    `**${severityWord(finding.severity, presentation)}** · ${citation(finding, presentation)}`,
     "",
     reason,
   ];
@@ -82,7 +102,7 @@ export function renderCommentBody(
 }
 
 const HEADING =
-  /^\*\*(Blocker|Critical|Major|Minor|Info)\*\* · (?:\[([^\]\s]+)\]\([^)\s]*\)|`([^`\s]+)`|(observation))$/;
+  /^\*\*(Blocker|Critical|Major|Minor|Info|High|Medium|Low)\*\* · (?:\[([^\]\s]+)\]\([^)\s]*\)|`([^`\s]+)`|(observation))$/;
 const LEGACY_HEADING = /^\*\*(BLOCKER|CRITICAL|MAJOR|MINOR|INFO)\*\*\s*(.*)$/;
 const LEGACY_CITE = /`([^`\s]+)`/;
 
@@ -103,7 +123,7 @@ export function parseFindingComment(body: string): ParsedComment | undefined {
     const guidelineId = current[2] ?? current[3];
     const reason = (lines[2] ?? "").split(/(?<=[.!?])\s/)[0]?.trim() ?? "";
     return {
-      severity: String(current[1]).toUpperCase() as Severity,
+      severity: HOST_WORDS[String(current[1])] ?? (String(current[1]).toUpperCase() as Severity),
       ...(guidelineId !== undefined ? { guidelineId } : {}),
       title: reason,
     };
@@ -205,12 +225,15 @@ export interface SummaryInput {
 const sentence = (text: string): string => `${text.replace(/[.\s]+$/, "")}.`;
 
 /** The one line that says how the run ended. */
-export function stateLine(input: Pick<SummaryInput, "findings" | "outcome">): string {
+export function stateLine(
+  input: Pick<SummaryInput, "findings" | "outcome">,
+  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
+): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
   if (outcome.kind === "not-reviewed") return outcome.line;
   if (outcome.kind === "failed") return `${FAILED_LEAD}${sentence(outcome.reason)}`;
   if (outcome.kind === "capped") return `${CAPPED_LEAD}${sentence(outcome.reason)}`;
-  return countLine(input.findings);
+  return countLine(input.findings, presentation);
 }
 
 /** Room a host leaves for a status description; Bitbucket and GitHub cut near here. */
@@ -226,6 +249,7 @@ function clip(text: string): string {
  */
 export function statusLine(
   input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles">,
+  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
   if (outcome.kind === "failed") {
@@ -246,53 +270,68 @@ export function statusLine(
       : `Passed. No findings in ${plural(input.changedFiles, "changed file")}.`;
   }
   const major = input.findings.filter((finding) => meetsThreshold(finding.severity, "MAJOR"));
-  return `${plural(input.findings.length, "finding")}, ${String(major.length)} major. See the comments.`;
+  return `${plural(input.findings.length, "finding")}, ${String(major.length)} ${lowerWord("MAJOR", presentation)}. See the comments.`;
 }
 
 function plural(count: number, word: string): string {
   return `${String(count)} ${word}${count === 1 ? "" : "s"}`;
 }
 
-function severityCounts(findings: readonly Finding[]): [Severity, number][] {
-  const counts = new Map<Severity, number>();
-  for (const finding of findings)
-    counts.set(finding.severity, (counts.get(finding.severity) ?? 0) + 1);
-  return SEVERITIES.flatMap((severity) => {
-    const count = counts.get(severity);
-    return count === undefined ? [] : [[severity, count] as [Severity, number]];
-  });
+/** Counts per displayed word, most severe first; review severities a host merges count once. */
+export function severityCounts(
+  findings: readonly Finding[],
+  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
+): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const severity of SEVERITIES) {
+    const count = findings.filter((finding) => finding.severity === severity).length;
+    if (count === 0) continue;
+    const word = lowerWord(severity, presentation);
+    counts.set(word, (counts.get(word) ?? 0) + count);
+  }
+  return [...counts];
 }
 
 /** "No issues found in this change." or "2 findings: 1 major, 1 minor". */
-export function countLine(findings: readonly Finding[]): string {
+export function countLine(
+  findings: readonly Finding[],
+  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
+): string {
   if (findings.length === 0) return NO_ISSUES;
-  const parts = severityCounts(findings).map(
-    ([severity, count]) => `${String(count)} ${severity.toLowerCase()}`,
+  const parts = severityCounts(findings, presentation).map(
+    ([word, count]) => `${String(count)} ${word}`,
   );
   return `${plural(findings.length, "finding")}: ${parts.join(", ")}`;
 }
 
-/** "Blocked: 1 major finding must be resolved"; undefined while the gate passes. */
-export function blockedLine(input: Pick<SummaryInput, "findings" | "gate">): string | undefined {
+/** "Blocked: a major finding must be resolved"; undefined while the gate passes. */
+export function blockedLine(
+  input: Pick<SummaryInput, "findings" | "gate">,
+  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
+): string | undefined {
   const { gate } = input;
   if (!gate.failed || gate.threshold === "none") return undefined;
   const threshold = gate.threshold;
   const failing = input.findings.filter(
     (finding) => finding.kind === "violation" && meetsThreshold(finding.severity, threshold),
   );
-  const counts = severityCounts(failing);
+  const counts = severityCounts(failing, presentation);
   const [only] = counts;
   if (counts.length === 1 && only !== undefined) {
-    const [severity, count] = only;
-    return `Blocked: ${plural(count, `${severity.toLowerCase()} finding`)} must be resolved`;
+    const [word, count] = only;
+    const what =
+      count === 1
+        ? `${/^[aeiou]/.test(word) ? "an" : "a"} ${word} finding`
+        : `${String(count)} ${word} findings`;
+    return `Blocked: ${what} must be resolved`;
   }
-  const parts = counts.map(([severity, count]) => `${String(count)} ${severity.toLowerCase()}`);
+  const parts = counts.map(([word, count]) => `${String(count)} ${word}`);
   const detail = parts.length === 0 ? "" : ` (${parts.join(", ")})`;
   return `Blocked: ${plural(gate.failing, "finding")}${detail} must be resolved`;
 }
 
 function listItem(finding: Finding, presentation: Presentation): string {
-  const head = `- **${severityWord(finding.severity)}** ${citation(finding, presentation)} in \`${finding.file}\``;
+  const head = `- **${severityWord(finding.severity, presentation)}** ${citation(finding, presentation)} in \`${finding.file}\``;
   if (finding.unplaced === true) {
     return `${head}: ${finding.title.replace(/[.\s]+$/, "")}. ${String(finding.note)}`;
   }
@@ -304,7 +343,7 @@ export function renderSummaryBody(
   presentation: Presentation = DEFAULT_PRESENTATION,
 ): string {
   // no heading: the author, the status and the card already name the reviewer
-  const lines = [stateLine(input)];
+  const lines = [stateLine(input, presentation)];
   if (input.outcome?.kind === "failed") {
     lines.push("", "Nothing was reviewed on this run. Run the pipeline again to retry.");
   }
@@ -314,7 +353,7 @@ export function renderSummaryBody(
   if (input.findings.length > 0) {
     lines.push("", ...input.findings.map((finding) => listItem(finding, presentation)));
   }
-  const blocked = blockedLine(input);
+  const blocked = blockedLine(input, presentation);
   if (blocked !== undefined) {
     lines.push("", `**${blocked}.**`);
     const guide =
@@ -332,7 +371,7 @@ export function renderSummaryBody(
     lines.push("", "### Proposed guidelines", "");
     for (const proposal of input.proposals) {
       lines.push(
-        `- \`${proposal.id}\` (${severityWord(proposal.severity).toLowerCase()}): ${proposal.rationale}`,
+        `- \`${proposal.id}\` (${lowerWord(proposal.severity, presentation)}): ${proposal.rationale}`,
       );
     }
   }

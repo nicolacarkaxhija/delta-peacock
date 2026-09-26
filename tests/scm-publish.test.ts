@@ -329,7 +329,7 @@ describe("publishing to github", () => {
       );
       expect(code).toBe(2);
       const summary = fake.issueComments[0]?.body ?? "";
-      expect(summary).toContain("**Blocked: 1 major finding must be resolved.**");
+      expect(summary).toContain("**Blocked: a major finding must be resolved.**");
       expect(summary).toContain(
         `[docs/reviews.md](${fake.baseUrl}/acme/widgets/blob/main/docs/reviews.md)`,
       );
