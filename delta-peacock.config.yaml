@@ -24,6 +24,9 @@ review:
     - "bench/cases/**"
     - "schema/**"
     - "CHANGELOG.md"
+  # Mechanical rules: a static check finds the lines, the model judges only those it cannot measure.
+  checks:
+    natural-comments: comments
 gate:
   failOn: MAJOR
 calibration:

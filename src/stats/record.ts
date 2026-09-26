@@ -35,7 +35,7 @@ export interface StatsRecord extends Attribution {
   /** Counts per cited guideline id; observations bucket under "(observation)". */
   byGuideline: Record<string, number>;
   /** Reviewer errors caught before posting; absent when there were none. */
-  errors?: { misquoted: number };
+  errors?: { misquoted?: number; judgeFailed?: number };
   /** The review model id in use, env override included. */
   model?: string;
   tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -87,6 +87,8 @@ export interface LedgerInput {
   addedLines: number;
   findings: readonly Finding[];
   misquoted: number;
+  /** Checked candidates whose judge gave no readable verdict twice. */
+  judgeFailed?: number;
   attribution: Attribution;
   model?: string;
   usage?: ModelUsage;
@@ -105,7 +107,14 @@ export function ledgerRecords(input: LedgerInput): LedgerRecord[] {
     bySeverity: severityCounts(input.findings),
     byGuideline: guidelineCounts(input.findings),
     // an invented rule is a reviewer error, counted apart from the author's findings
-    ...(input.misquoted > 0 ? { errors: { misquoted: input.misquoted } } : {}),
+    ...(input.misquoted > 0 || (input.judgeFailed ?? 0) > 0
+      ? {
+          errors: {
+            ...(input.misquoted > 0 ? { misquoted: input.misquoted } : {}),
+            ...((input.judgeFailed ?? 0) > 0 ? { judgeFailed: input.judgeFailed } : {}),
+          },
+        }
+      : {}),
     ...attribution,
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.usage !== undefined

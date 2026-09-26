@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GUIDELINE_CHECKS } from "../domain/guideline.js";
 import { SEVERITIES } from "../domain/severity.js";
 import { DEFAULT_MAX_TOOL_ROUNDS } from "../model/port.js";
 
@@ -67,6 +68,11 @@ export const ReviewSchema = z.strictObject({
   summaryWhenClean: z.boolean().default(false),
   /** The reviewed repository's own config, read for the tags it declares; empty turns it off. */
   repoConfigPath: z.string().default("test-runner.config.ts"),
+  /**
+   * Guideline id to static check: the check finds the candidate lines, the
+   * model judges only those, and nothing else yields a finding under it.
+   */
+  checks: z.record(z.string().min(1), z.enum(GUIDELINE_CHECKS)).default({}),
 });
 
 export const GateSchema = z.strictObject({

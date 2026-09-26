@@ -10,7 +10,9 @@ delta-peacock reviews its own pull requests against the rules in `guidelines/`, 
 One file per rule in `guidelines/`, with the frontmatter `id`, `severity`, `languages` and `paths`,
 a heading that states the rule, one paragraph of reason, then a Good and a Bad example. The
 reviewer reads them from the target branch, so a pull request cannot weaken the rules that judge
-it. The model judges all three: `natural-comments`, `no-magic-numbers` and `conventional-titles`.
+it. `natural-comments` is bound to the `comments` check under `review.checks`, so it quotes the
+check's sentences word for word; `no-magic-numbers` and `conventional-titles` are judged by the
+model.
 
 ## The workflow
 

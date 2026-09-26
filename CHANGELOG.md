@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.9 (2026-09-26)
+
+Mechanical guidelines move from the model to static checks: the checks find the lines, the model judges only the ones that turn on prose, and every fix comes from a catalog. Seventeen replayed pull requests, three repeats each: no wrong finding, no drift, every expected finding with its expected fix.
+
+### Features
+
+- `review.checks` binds a guideline id to a static check: `selectors`, `comments`, `assertions` or `tags`. A checked guideline yields findings only on the added lines its check flags; a finding the open review reports under it is dropped as `checked`. See the static checks guide.
+- `selectors` flags a `.locator(...)` whose selector is CSS, a plain test id wrapped in CSS, or test ids joined into a CSS list, when no comment on the line, above it, above its statement, heading its group, in the enclosing doc comment or on a used constant's declaration gives a reason. A helper call with a `suffix` builds a derived hook getByTestId cannot read and is no candidate.
+- `comments` flags a comment that spans lines, uses a dash as punctuation, or tells the story of the change; `assertions` flags a snapshot read inside `expect` or passed to its matcher, following a page object method to its body; `tags` flags an undeclared tag in the tag option and a tag in the title.
+- Measured facts become findings without a model call. A CSS selector near a comment that names no reason, and a comment that may narrate, go to a judge that may drop the candidate only by copying the guideline sentence and a listed comment. An unreadable verdict is asked once more with the same request; a second one leaves no finding and counts as `errors.judgeFailed` in the stats ledger.
+- Titles, bodies, quoted sentences and suggestions come from a catalog per shape: `getByTestId('id')` for a test id, one `getByTestId` regex or `or()` for a list, the web first matcher for what was read (`toHaveURL`, `toBeVisible`, `toHaveText`, `toHaveCount`), the tag list without an undeclared tag. The judge's own reason joins only when it names no other matcher or locator.
+- `backtest` replays real pull requests through the review command and fails on a wrong finding, drift across repeats, a missing log line, a rerun cleanup fault, or recall under the stored baseline.
+- Ledger records carry the pull request, its conventional scope and type, and the model id; `cost.rates` prices each model id on its own.
+
+### Bug Fixes
+
+- A reason on a constant's declaration covers its uses, and a feature tag that shares no word with the test is dropped as unfit.
+- A fixed finding resolves its task before its comment is rewritten to the resolution trace, instead of deleting the comment and failing on the task.
+- The log names the context strategies used and prints the spend line.
+
 ## 0.1.8 (2026-09-25)
 
 Three wrong findings from the second and third reviewed pull requests on the Bitbucket consumer, a context strategy, plain commit statuses and pull request tasks.

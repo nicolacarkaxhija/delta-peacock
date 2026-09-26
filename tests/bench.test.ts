@@ -525,3 +525,111 @@ describe("bench applies the structural verifier like a real review does", () => 
     expect(rows.find((line) => line.startsWith("| loop |"))).toContain("| 1 |");
   });
 });
+
+describe("bench runs the static checks a live review runs", () => {
+  it("finds checked guidelines through the check, with or without an open call", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "peacock-bench-checks-"));
+    const dir = path.join(root, "cases");
+    const shared = path.join(dir, "shared-rules");
+    mkdirSync(path.join(shared, "files", "pages"), { recursive: true });
+    const page = [
+      "import type { Locator } from '@playwright/test';",
+      "",
+      "export function banner(page): Locator {",
+      "  return page.locator('.promo-banner');",
+      "}",
+    ];
+    writeFileSync(path.join(shared, "files", "pages", "home.ts"), `${page.join("\n")}\n`);
+    writeFileSync(
+      path.join(shared, "files", "test-runner.config.ts"),
+      "export default { tags: { features: { home: 'the start page' } } };\n",
+    );
+    writeFileSync(
+      path.join(shared, "diff.patch"),
+      [
+        "diff --git a/pages/home.ts b/pages/home.ts",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/pages/home.ts",
+        `@@ -0,0 +1,${String(page.length)} @@`,
+        ...page.map((line) => `+${line}`),
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(shared, "expected.json"),
+      JSON.stringify({
+        findings: [{ file: "pages/home.ts", line: 4, guidelineId: "prefer-test-ids" }],
+      }),
+    );
+    // a case without its own guidelines reads the corpus folder beside the cases
+    mkdirSync(path.join(root, "guidelines"), { recursive: true });
+    writeFileSync(
+      path.join(root, "guidelines", "prefer-test-ids.md"),
+      "---\nid: prefer-test-ids\nseverity: MINOR\n---\nWhere a CSS selector is unavoidable, a comment next to it gives the reason.\n",
+    );
+    writeFileSync(
+      path.join(root, "guidelines", "short-names.md"),
+      "---\nid: short-names\nseverity: MINOR\n---\nA function name says what it returns in at most three words.\n",
+    );
+    const only = path.join(dir, "only-checked");
+    mkdirSync(path.join(only, "guidelines"), { recursive: true });
+    writeFileSync(
+      path.join(only, "guidelines", "prefer-test-ids.md"),
+      "---\nid: prefer-test-ids\nseverity: MINOR\n---\nWhere a CSS selector is unavoidable, a comment next to it gives the reason.\n",
+    );
+    writeFileSync(
+      path.join(only, "diff.patch"),
+      [
+        "diff --git a/pages/a.ts b/pages/a.ts",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/pages/a.ts",
+        "@@ -0,0 +1,3 @@",
+        "+export function a(page) {",
+        "+  return page.locator('.a');",
+        "+}",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(only, "expected.json"),
+      JSON.stringify({
+        findings: [{ file: "pages/a.ts", line: 2, guidelineId: "prefer-test-ids" }],
+      }),
+    );
+    let calls = 0;
+    let stdout = "";
+    const stray = {
+      guidelineId: "prefer-test-ids",
+      file: "pages/home.ts",
+      line: 1,
+      quote: "import type { Locator } from '@playwright/test';",
+      guidelineQuote: "Where a CSS selector is unavoidable, a comment next to it gives the reason.",
+      title: "t",
+      body: "b",
+    };
+    const code = await runCli(["bench", "--cases", dir, "--context", "none"], {
+      cwd: makeRepo(),
+      env: { DELTA_PEACOCK_REVIEW_CHECKS: '{"prefer-test-ids":"selectors"}' },
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: {
+        complete: () => {
+          calls += 1;
+          return Promise.resolve({ text: JSON.stringify({ findings: [stray] }) });
+        },
+      },
+    });
+    expect(code).toBe(0);
+    const rows = stdout.split("\n");
+    // the stray open finding under the checked rule is dropped, so no false positive
+    expect(rows.find((line) => line.startsWith("| shared-rules |"))).toMatch(
+      /\| 1 \| 100% \| 100% \|/,
+    );
+    expect(rows.find((line) => line.startsWith("| only-checked |"))).toContain("| 1 |");
+    expect(calls).toBe(1);
+  });
+});

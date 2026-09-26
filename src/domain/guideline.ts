@@ -12,6 +12,14 @@ export const STRUCTURAL_CHECKS = ["no-declaration-in-loop", "module-scope-only"]
 
 export type StructuralCheck = (typeof STRUCTURAL_CHECKS)[number];
 
+/**
+ * Static checks a guideline can be bound to in `review.checks`: the check
+ * finds the candidate lines, and only those can become findings under it.
+ */
+export const GUIDELINE_CHECKS = ["selectors", "comments", "assertions", "tags"] as const;
+
+export type GuidelineCheck = (typeof GUIDELINE_CHECKS)[number];
+
 export interface Guideline {
   id: string;
   severity: Severity;

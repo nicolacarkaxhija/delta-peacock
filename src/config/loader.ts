@@ -37,6 +37,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_GUIDE_PATH: "review.guidePath",
   DELTA_PEACOCK_REVIEW_REPO_CONFIG_PATH: "review.repoConfigPath",
   DELTA_PEACOCK_REVIEW_SUMMARY_WHEN_CLEAN: "review.summaryWhenClean",
+  DELTA_PEACOCK_REVIEW_CHECKS: "review.checks",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",
@@ -126,6 +127,7 @@ const BOOLEAN_PATHS = new Set([
   "redaction.strict",
 ]);
 const JSON_PATHS = new Set([
+  "review.checks",
   "redaction.patterns",
   "ensemble.members",
   "ensemble.judge",
