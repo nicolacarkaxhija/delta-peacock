@@ -182,7 +182,8 @@
               "selectors",
               "comments",
               "assertions",
-              "tags"
+              "tags",
+              "timeouts"
             ]
           }
         }

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.11 (2026-09-26)
+
+Three misses from the Bitbucket consumer's pull requests 39 and 44 close in the static checks, not in the prompt.
+
+### Features
+
+- `timeouts` check for a no inline timeouts guideline: `waitForTimeout(...)`, a sleep helper or `setTimeout` with a literal number, and a `timeout`, `delay` or `intervals` option holding a literal number or a local numeric constant. The fix names the repository's `timeouts` file, or a web first wait for a sleep.
+- `selectors` reads template literal selectors: an attribute selector such as `[data-ref="${title}"]` is CSS, `[data-testid^="..."]` or a `hookAttribute()` prefix is a test id prefix with a `getByTestId` regex as the fix, and a derived hook built with a `suffix` now needs the same reason comment as any CSS.
+- `assertions` flags an awaited page object method inside `expect` whose body reads the browser, such as a cookie lookup, and direct `cookies()`, `evaluate()`, `storageState()` and `boundingBox()` reads, with `expect.poll` as the fix.
+
+### Bug Fixes
+
+- One comment above a run of multi-line declarations covers each of them, as it already did for single line ones.
+
 ## 0.1.10 (2026-09-26)
 
 One severity scale on Bitbucket: a QA reads the same word in the annotation table, the report card, the summary, the status and the comment.
