@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.10 (2026-09-26)
+
+One severity scale on Bitbucket: a QA reads the same word in the annotation table, the report card, the summary, the status and the comment.
+
+### Bug Fixes
+
+- Code Insights annotations map BLOCKER and CRITICAL to CRITICAL, MAJOR to HIGH, MINOR to MEDIUM and INFO to LOW; a MAJOR finding showed as MEDIUM before.
+- On Bitbucket the report card, its counts, the summary comment, the commit status, the comment headings and the tasks use the annotation words: `1 finding: 1 high. Blocked: a high finding must be resolved.` The gate, the JSON report and the stats ledger keep the reviewer's scale, and an earlier comment heading is rewritten in place on the next run.
+- A gate line with one blocking finding reads `Blocked: a major finding must be resolved.`
+
 ## 0.1.9 (2026-09-26)
 
 Mechanical guidelines move from the model to static checks: the checks find the lines, the model judges only the ones that turn on prose, and every fix comes from a catalog. Seventeen replayed pull requests, three repeats each: no wrong finding, no drift, every expected finding with its expected fix.
