@@ -173,6 +173,41 @@ describe("agentic provider", () => {
     expect(await call(tools, "search", { text: "user.name" })).toContain("consumer.js");
   });
 
+  it("answers a definition with its doc comment and body, class members included", async () => {
+    const repo = makeRepo();
+    write(
+      repo,
+      "pages/base.ts",
+      [
+        "export class BasePage {",
+        "  /** One hook as a selector, for an element getByTestId cannot address on its own. */",
+        "  protected hookSelector(hook: { value?: string }): string {",
+        '    return `[data-tau="${hook.value}"]`;',
+        "  }",
+        "",
+        "  // the page key's path",
+        "  open(key = 'home'): Promise<void> {",
+        "    return this.goto(key);",
+        "  }",
+        "",
+        "  check(): void {",
+        "    open('not a definition');",
+        "    this.hookSelector({ value: 'x' });",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const tools = toolsFor(repo);
+    const hook = await call(tools, "get_definition", { symbol: "hookSelector" });
+    expect(hook).toContain("pages/base.ts:2\n");
+    expect(hook).toContain("One hook as a selector, for an element getByTestId cannot address");
+    expect(hook).toContain('return `[data-tau="${hook.value}"]`;');
+    expect(hook.match(/pages\/base\.ts:/g)).toHaveLength(1);
+    const open = await call(tools, "get_definition", { symbol: "open" });
+    expect(open).toContain("pages/base.ts:7\n  // the page key's path\n  open(key = 'home')");
+    expect(open.match(/pages\/base\.ts:/g)).toHaveLength(1);
+  });
+
   it("reads file ranges and degrades gracefully on bad input", async () => {
     const { repo } = makeCrossFileRepo();
     const tools = toolsFor(repo);

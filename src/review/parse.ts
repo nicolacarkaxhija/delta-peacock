@@ -58,6 +58,7 @@ export interface RejectedCandidate {
     | "out-of-scope"
     | "misquoted"
     | "good-example"
+    | "comment-move"
     | `structural:${StructuralCheck}`;
   /** The candidate's JSON, capped; the diff it came from was already redacted. */
   raw: string;

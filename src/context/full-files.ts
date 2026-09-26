@@ -40,7 +40,7 @@ function fence(file: string): string {
 }
 
 /** The leading lines that fit the budget, with a marker naming what was cut. */
-function truncated(entry: ChangedText, budget: number): string[] {
+function truncated(entry: ChangedText, budget: number): { body: string[]; cut: boolean } {
   const kept: string[] = [];
   let used = 0;
   for (const line of entry.lines) {
@@ -50,7 +50,9 @@ function truncated(entry: ChangedText, budget: number): string[] {
     used += cost;
   }
   const cut = entry.lines.length - kept.length;
-  return cut === 0 ? kept : [...kept, `[truncated: ${String(cut)} more lines not shown]`];
+  return cut === 0
+    ? { body: kept, cut: false }
+    : { body: [...kept, `[truncated: ${String(cut)} more lines not shown]`], cut: true };
 }
 
 /**
@@ -60,6 +62,8 @@ function truncated(entry: ChangedText, budget: number): string[] {
 export function createFullFilesProvider(options: {
   maxTokens: number;
 }): Omit<ContextProvider, "systemContext"> & { systemContext(input: ContextInput): string } {
+  // what the last call injected, so the log shows the strategy ran and at what size
+  let notice: string | undefined;
   return {
     name: "full_files",
     systemContext(input: ContextInput): string {
@@ -67,24 +71,33 @@ export function createFullFilesProvider(options: {
         .map((file) => readChangedText(input.cwd, file))
         .filter((entry): entry is ChangedText => entry !== undefined)
         .sort((a, b) => a.tokens - b.tokens || a.file.localeCompare(b.file));
-      if (entries.length === 0) return "";
+      if (entries.length === 0) {
+        notice = "full_files context: no readable changed file to inject";
+        return "";
+      }
       let remaining = options.maxTokens - approximateTokens(`${HEADER}\n`);
       const sections: string[] = [HEADER];
+      let cut = 0;
       for (const [index, entry] of entries.entries()) {
         const overhead = approximateTokens(`${fence(entry.file)}\n\n`) + 12;
         const share = Math.floor(remaining / (entries.length - index)) - overhead;
         if (share <= 0) {
+          cut += 1;
           sections.push(
             fence(entry.file),
             `[truncated: ${String(entry.lines.length)} lines not shown]`,
           );
           continue;
         }
-        const body = truncated(entry, share);
+        const { body, cut: wasCut } = truncated(entry, share);
+        if (wasCut) cut += 1;
         sections.push(fence(entry.file), ...body);
         remaining -= approximateTokens(`${[fence(entry.file), ...body].join("\n")}\n`);
       }
-      return sections.join("\n");
+      const text = sections.join("\n");
+      notice = `full_files context: ${String(entries.length)} changed file(s), about ${String(approximateTokens(text))} of ${String(options.maxTokens)} tokens, ${cut === 0 ? "none" : String(cut)} truncated`;
+      return text;
     },
+    notices: () => (notice === undefined ? [] : [notice]),
   };
 }

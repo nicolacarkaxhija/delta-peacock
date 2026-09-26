@@ -23,6 +23,48 @@ const lines = (count: number, label: string): string =>
     (_, i) => `${label} line ${String(i + 1)} with some padding text`,
   ).join("\n");
 
+describe("full_files notice", () => {
+  it("says nothing before it ran, then what it injected and against which budget", () => {
+    const cwd = tree({ "a.ts": "export const a = 1;\n", "b.ts": lines(400, "b") });
+    const provider = createFullFilesProvider({ maxTokens: 600 });
+    expect(provider.notices?.()).toEqual([]);
+    provider.systemContext({ cwd, diff: "", changedFiles: ["a.ts", "b.ts"] });
+    expect(provider.notices?.()).toEqual([
+      expect.stringMatching(
+        /^full_files context: 2 changed file\(s\), about \d+ of 600 tokens, 1 truncated$/,
+      ),
+    ]);
+    provider.systemContext({ cwd, diff: "", changedFiles: ["a.ts"] });
+    expect(provider.notices?.()[0]).toMatch(
+      /1 changed file\(s\), about \d+ of 600 tokens, none truncated$/,
+    );
+    provider.systemContext({ cwd, diff: "", changedFiles: ["gone.ts"] });
+    expect(provider.notices?.()).toEqual([
+      "full_files context: no readable changed file to inject",
+    ]);
+  });
+
+  it("counts a file squeezed out entirely as truncated", () => {
+    const cwd = tree({ "a.ts": lines(50, "a"), "b.ts": lines(50, "b") });
+    const provider = createFullFilesProvider({ maxTokens: 30 });
+    provider.systemContext({ cwd, diff: "", changedFiles: ["a.ts", "b.ts"] });
+    expect(provider.notices?.()[0]).toMatch(/2 truncated$/);
+  });
+
+  it("reaches the review log through layered providers", async () => {
+    const cwd = tree({ "a.ts": "x\n" });
+    const config = loadConfig({
+      root: cwd,
+      flags: { "context.providers": "full_files,agentic", "context.maxTokens": "12000" },
+    });
+    const resolved = await resolveContext(config, {}, { cwd, diff: "", changedFiles: ["a.ts"] });
+    expect(resolved.notices).toEqual([
+      expect.stringMatching(/^full_files context: 1 changed file\(s\), about \d+ of 12000 tokens/),
+    ]);
+    expect(resolved.tools).toBeDefined();
+  });
+});
+
 describe("full_files provider", () => {
   it("injects every changed text file whole under its path", () => {
     const cwd = tree({ "pages/pdp.ts": "export const a = 1;\n", "tests/x.spec.ts": "test();\n" });
