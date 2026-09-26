@@ -32,3 +32,6 @@ from a clean checkout; a red line blocks it.
   in an empty directory and `npx --no-install delta-peacock --version`.
 - `bench`: mean F1 over `bench/cases` does not fall against the previous release. On its own: the
   bench command in [release-checklist.md](guides/release-checklist.md), step 2.
+- `backtest`: every consumer case passes with zero wrong findings, zero drift and recall at or
+  above the stored baseline. On its own: `delta-peacock backtest --cases <cases>`, see
+  [backtest.md](guides/backtest.md).
