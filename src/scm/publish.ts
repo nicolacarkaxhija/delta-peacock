@@ -10,6 +10,7 @@ import {
   renderCommentBody,
   isSummaryBody,
   renderSummaryBody,
+  severityCounts,
   severityWord,
   stateLine,
   statusLine,
@@ -49,6 +50,7 @@ export function presentationFor(scm: ScmPort, settings?: PresentationSettings): 
       ? { fileLink: (file: string) => fileUrl(file, base.targetBranch) }
       : {}),
     ...(base.guidePath !== undefined ? { guidePath: base.guidePath } : {}),
+    ...(scm.severityScale !== undefined ? { severityScale: scm.severityScale } : {}),
   };
 }
 
@@ -76,39 +78,22 @@ export interface PublishOutcome {
   tasksResolved?: number;
 }
 
-/** Bitbucket's four annotation severities absorb the five review severities. */
-const INSIGHT_SEVERITIES: Record<
-  "BLOCKER" | "CRITICAL" | "MAJOR" | "MINOR" | "INFO",
-  "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
-> = {
-  BLOCKER: "CRITICAL",
-  CRITICAL: "HIGH",
-  MAJOR: "MEDIUM",
-  MINOR: "LOW",
-  INFO: "LOW",
-};
-
 export function buildInsightReport(
   input: SummaryInput,
   presentation: Presentation = DEFAULT_PRESENTATION,
 ): InsightReport {
-  const counts = new Map<string, number>();
-  for (const finding of input.findings) {
-    counts.set(finding.severity, (counts.get(finding.severity) ?? 0) + 1);
-  }
-  const blocked = blockedLine(input);
+  const blocked = blockedLine(input, presentation);
+  const state = stateLine(input, presentation);
   return {
     title: presentation.displayName,
     result: statusState(input) === "failure" ? "FAILED" : "PASSED",
-    details: blocked === undefined ? stateLine(input) : `${stateLine(input)}. ${blocked}.`,
+    details: blocked === undefined ? state : `${state}. ${blocked}.`,
     counts: [
       { label: "Findings", value: input.findings.length },
-      ...(["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFO"] as const).flatMap((severity) => {
-        const value = counts.get(severity);
-        return value === undefined
-          ? []
-          : [{ label: `${severity.charAt(0)}${severity.slice(1).toLowerCase()}`, value }];
-      }),
+      ...severityCounts(input.findings, presentation).map(([word, value]) => ({
+        label: `${word.charAt(0).toUpperCase()}${word.slice(1)}`,
+        value,
+      })),
     ],
     annotations: fingerprintEntries(input.findings).map(({ fingerprint, finding }) => {
       const link =
@@ -119,7 +104,7 @@ export function buildInsightReport(
         externalId: fingerprint,
         title: finding.title,
         summary: twoSentences(finding.body === "" ? finding.title : finding.body).slice(0, 450),
-        severity: INSIGHT_SEVERITIES[finding.severity],
+        severity: finding.severity,
         path: finding.file,
         ...(finding.unplaced === true ? {} : { line: finding.line }),
         ...(link !== undefined ? { link } : {}),
@@ -338,9 +323,14 @@ export function lineDigest(text: string | undefined): string {
 const TASK_REF = /\bref ([0-9a-f]+(?:-\d+)?)\.([0-9a-f]{8})$/;
 
 /** One line a person reads, ending in the reference a later run matches on. */
-export function taskContent(finding: Finding, fingerprint: string, digest: string): string {
+export function taskContent(
+  finding: Finding,
+  fingerprint: string,
+  digest: string,
+  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
+): string {
   const cite = finding.kind === "violation" ? finding.guidelineId : "observation";
-  return `${severityWord(finding.severity)}: ${cite} in ${finding.file} line ${String(finding.line)}, ref ${fingerprint}.${digest}`;
+  return `${severityWord(finding.severity, presentation)}: ${cite} in ${finding.file} line ${String(finding.line)}, ref ${fingerprint}.${digest}`;
 }
 
 interface OwnTask {
@@ -427,13 +417,14 @@ async function createTasks(
   commentIds: ReadonlyMap<string, string>,
   lineTextOf: (file: string, line: number) => string | undefined,
   outcome: PublishOutcome,
+  presentation: Presentation,
 ): Promise<void> {
   for (const [fingerprint, finding] of desired) {
     const commentId = commentIds.get(fingerprint);
     if (commentId === undefined) continue;
     const digest = lineDigest(lineTextOf(finding.file, finding.line));
     if (own.some((entry) => entry.fingerprint === fingerprint && entry.digest === digest)) continue;
-    await scm.create(taskContent(finding, fingerprint, digest), commentId);
+    await scm.create(taskContent(finding, fingerprint, digest, presentation), commentId);
     outcome.tasksCreated = (outcome.tasksCreated ?? 0) + 1;
   }
 }
@@ -543,7 +534,7 @@ export async function publishReview(
         input.resolvedIn,
       );
       if (taskApi !== undefined) {
-        await createTasks(taskApi, own, desired, commentIds, lineTextOf, outcome);
+        await createTasks(taskApi, own, desired, commentIds, lineTextOf, outcome, presentation);
       }
     }
     // where an Insights card carries a clean result, a clean summary only updates an earlier one
@@ -553,7 +544,11 @@ export async function publishReview(
     await upsertSummary(scm, presentation, renderSummaryBody(input, presentation), !quiet);
   }
   if (input.commitStatus) {
-    await scm.postStatus(statusState(input), statusLine(input), presentation.displayName);
+    await scm.postStatus(
+      statusState(input),
+      statusLine(input, presentation),
+      presentation.displayName,
+    );
   }
   if (input.codeInsights === true) {
     if (scm.publishInsights === undefined) {

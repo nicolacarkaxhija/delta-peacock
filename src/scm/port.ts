@@ -1,3 +1,5 @@
+import type { Severity } from "../domain/severity.js";
+
 export interface ScmComment {
   id: string;
   body: string;
@@ -41,7 +43,8 @@ export interface InsightAnnotation {
   externalId: string;
   title: string;
   summary: string;
-  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  /** The review severity; the host maps it onto its own scale. */
+  severity: Severity;
   path: string;
   /** Absent when the finding could not be tied to a line. */
   line?: number;
@@ -82,6 +85,12 @@ export interface ScmPort {
   readonly hidesHtmlComments?: boolean;
   /** Fence language for a suggested change; absent means GitHub's one-click `suggestion`. */
   readonly suggestionFence?: string;
+  /**
+   * The host's word for each review severity, where it shows its own scale
+   * (Bitbucket); comments, summary and status then speak it. Absent means
+   * the review scale.
+   */
+  readonly severityScale?: Readonly<Record<Severity, string>>;
   /** The token's own user id, matched against ScmComment.authorId. */
   currentUserId?(): Promise<string>;
   /** Web link to a repository file on a branch, for guideline and docs links. */

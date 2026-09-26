@@ -165,7 +165,7 @@ describe("summary rendering", () => {
         "- **Major** [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md) in `src/app.js` line 2: Console call",
         "- **Minor** [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md) in `b.js` line 9: Nit",
         "",
-        "**Blocked: 1 major finding must be resolved.**",
+        "**Blocked: a major finding must be resolved.**",
         "",
         "How reviews work and how to respond: [docs/reviews.md](https://bitbucket.org/acme/widgets/src/main/docs/reviews.md)",
       ].join("\n"),
@@ -249,7 +249,7 @@ describe("code insights report", () => {
     expect(report.title).toBe("Automated review");
     expect(report.result).toBe("FAILED");
     expect(report.details).toBe(
-      "2 findings: 1 major, 1 minor. Blocked: 1 major finding must be resolved.",
+      "2 findings: 1 major, 1 minor. Blocked: a major finding must be resolved.",
     );
     expect(report.counts).toEqual([
       { label: "Findings", value: 2 },

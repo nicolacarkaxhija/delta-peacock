@@ -9,6 +9,7 @@ import type {
   StatusState,
 } from "./port.js";
 import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
+import type { Severity } from "../domain/severity.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface BitbucketPortOptions {
@@ -57,6 +58,17 @@ interface Page<T> {
   values: T[];
   next?: string;
 }
+
+/** Code Insights' four severities; BLOCKER and CRITICAL share the top one. */
+export const BITBUCKET_SEVERITIES: Readonly<
+  Record<Severity, "CRITICAL" | "HIGH" | "MEDIUM" | "LOW">
+> = {
+  BLOCKER: "CRITICAL",
+  CRITICAL: "CRITICAL",
+  MAJOR: "HIGH",
+  MINOR: "MEDIUM",
+  INFO: "LOW",
+};
 
 const STATUS_STATES: Record<StatusState, string> = {
   success: "SUCCESSFUL",
@@ -184,6 +196,8 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     // Bitbucket prints HTML comments as text and has no one-click suggestions
     hidesHtmlComments: false,
     suggestionFence: "",
+    // one word everywhere: comments, summary and status read like the annotations
+    severityScale: BITBUCKET_SEVERITIES,
     currentUserId,
     fileUrl(file: string, branch: string): string {
       return `https://bitbucket.org/${repo}/src/${encodeURIComponent(branch)}/${encodeURI(file)}`;
@@ -300,7 +314,7 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
             title: annotation.title,
             annotation_type: "CODE_SMELL",
             summary: annotation.summary,
-            severity: annotation.severity,
+            severity: BITBUCKET_SEVERITIES[annotation.severity],
             path: annotation.path,
             ...(annotation.line !== undefined ? { line: annotation.line } : {}),
             ...(annotation.link !== undefined ? { link: annotation.link } : {}),
