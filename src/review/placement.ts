@@ -206,10 +206,47 @@ function addedComment(quote: string, suggestion: string): string | undefined {
   return undefined;
 }
 
+/** A line that is, or ends, a comment: `//`, a one line block, or the close of a doc block. */
+function isCommentLine(line: string): boolean {
+  const text = line.trim();
+  return text.startsWith("//") || text.startsWith("/*") || text.endsWith("*/");
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** One single line declaration in a run of them. */
+const GROUP_MEMBER = /^\s*(?:export\s+)?(?:const|let|var)\s+[\w$]+\s*(?::[^=]+)?=.*;\s*$/;
+
 /**
- * Drops a finding whose only fix is a comment the file already carries just
- * above the flagged line: a reason in reach is the reason the rule asks for,
- * and moving it is not a fix. Deterministic, like the Good example gate.
+ * True when the flagged line uses a name the file declares elsewhere with a
+ * comment on the declaration or just above it: a reason on the declaration
+ * covers every use, like a doc comment covers its members.
+ */
+function reasonOnDeclaration(lines: readonly string[], line: number, quote: string): boolean {
+  const names = new Set(quote.match(/[A-Za-z_$][\w$]*/g) ?? []);
+  for (const name of names) {
+    const declaration = new RegExp(
+      `^\\s*(?:export\\s+)?(?:(?:private|protected|public|static|readonly)\\s+)*(?:const|let|var)?\\s*${escapeRegExp(name)}\\s*(?::[^=]+)?=(?!=)`,
+    );
+    const at = lines.findIndex((text, index) => index !== line - 1 && declaration.test(text));
+    if (at < 0) continue;
+    const own = lines[at] ?? "";
+    if (/\/\/|\/\*/.test(own.replace(/(['"`])(?:\\.|(?!\1).)*\1/g, ""))) return true;
+    // a comment heading a group of declarations covers each of them
+    let above = at - 1;
+    while (above >= 0 && GROUP_MEMBER.test(lines[above] ?? "")) above -= 1;
+    if (above >= 0 && isCommentLine(lines[above] ?? "")) return true;
+  }
+  return false;
+}
+
+/**
+ * Drops a finding whose only fix is a comment the file already carries: a
+ * reason just above the flagged line, or on the declaration of a name the line
+ * uses, is the reason the rule asks for, and moving it is not a fix.
+ * Deterministic, like the Good example gate.
  */
 export function dropCommentMoves(
   findings: readonly Finding[],
@@ -222,15 +259,12 @@ export function dropCommentMoves(
       finding.suggestion !== undefined && finding.quote !== undefined
         ? addedComment(finding.quote, finding.suggestion)
         : undefined;
-    const above =
-      comment === undefined
-        ? []
-        : (linesOf(finding.file) ?? []).slice(
-            Math.max(0, finding.line - 1 - COMMENT_REACH),
-            finding.line - 1,
-          );
+    const lines = comment === undefined ? [] : (linesOf(finding.file) ?? []);
+    const above = lines.slice(Math.max(0, finding.line - 1 - COMMENT_REACH), finding.line - 1);
     const present =
-      comment !== undefined && above.some((line) => commentText(line)?.includes(comment) === true);
+      comment !== undefined &&
+      (above.some((line) => commentText(line)?.includes(comment) === true) ||
+        reasonOnDeclaration(lines, finding.line, finding.quote ?? ""));
     if (present) {
       dropped.push({
         reason: "comment-move",
@@ -239,6 +273,87 @@ export function dropCommentMoves(
           line: finding.line,
           suggestion: finding.suggestion,
         }),
+        ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),
+        title: finding.title,
+      });
+    } else {
+      kept.push(finding);
+    }
+  }
+  return { kept, dropped };
+}
+
+/** Words too common in test titles and tag descriptions to tie one to the other. */
+const TITLE_NOISE = new Set([
+  "page",
+  "pages",
+  "render",
+  "renders",
+  "shows",
+  "their",
+  "there",
+  "with",
+  "that",
+  "this",
+  "from",
+  "every",
+  "each",
+  "which",
+  "when",
+  "test",
+  "tests",
+  "same",
+  "only",
+  "least",
+  "into",
+  "across",
+  "healthy",
+]);
+
+/** Content words of a text, each cut to five letters so plural and verb forms meet. */
+function stems(text: string): Set<string> {
+  return new Set(
+    (text.toLowerCase().match(/[a-z]{4,}/g) ?? [])
+      .filter((word) => !TITLE_NOISE.has(word))
+      .map((word) => word.slice(0, 5)),
+  );
+}
+
+/** Lines read after the flagged one for the rest of a test title. */
+const TITLE_REACH = 3;
+
+/**
+ * Drops a finding that adds a declared feature tag no word of the test ties
+ * to: a tag fits a test when its name or description names what the title
+ * says the test checks, so a tag that shares no word with it is a guess.
+ */
+export function dropUnfitTags(
+  findings: readonly Finding[],
+  linesOf: LinesOf,
+  tags: DeclaredTags | undefined,
+): { kept: Finding[]; dropped: RejectedCandidate[] } {
+  const kept: Finding[] = [];
+  const dropped: RejectedCandidate[] = [];
+  const features = tags?.features ?? [];
+  for (const finding of findings) {
+    const quote = finding.quote ?? "";
+    const offered = `${finding.suggestion ?? ""}\n${finding.body}`;
+    const added = features.filter((tag) =>
+      new RegExp(`${escapeRegExp(tag)}(?![\\w:-])`).test(offered),
+    );
+    const fresh = added.filter((tag) => !quote.includes(tag));
+    const lines = linesOf(finding.file) ?? [];
+    const title = stems(
+      [quote, ...lines.slice(finding.line, finding.line + TITLE_REACH)].join("\n"),
+    );
+    const fits = (tag: string): boolean => {
+      const words = stems(`${tag.replace(/[@:-]/g, " ")} ${tags?.descriptions?.[tag] ?? ""}`);
+      return [...words].some((word) => title.has(word));
+    };
+    if (fresh.length > 0 && !fresh.some(fits)) {
+      dropped.push({
+        reason: "tag-fit",
+        raw: JSON.stringify({ file: finding.file, line: finding.line, tags: fresh }),
         ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),
         title: finding.title,
       });

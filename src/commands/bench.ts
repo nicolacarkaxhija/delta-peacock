@@ -25,9 +25,11 @@ import { changedFilesFromDiff, newLineTexts } from "../git/diff.js";
 import {
   dropCommentMoves,
   dropGoodExamples,
+  dropUnfitTags,
   linesFromDiff,
   placeFindings,
 } from "../review/placement.js";
+import { readDeclaredTags } from "../review/declared.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
@@ -146,7 +148,12 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     };
     const placed = placeFindings(parsed.findings, linesOf);
     // the same comment move and Good example gates a live review applies
-    const kept = dropGoodExamples(dropCommentMoves(placed, linesOf).kept, guidelinesById).kept;
+    const tags = readDeclaredTags(
+      existsSync(filesRoot) ? filesRoot : benchCase.dir,
+      config.review.repoConfigPath,
+    );
+    const fitted = dropUnfitTags(dropCommentMoves(placed, linesOf).kept, linesOf, tags).kept;
+    const kept = dropGoodExamples(fitted, guidelinesById).kept;
     // same AST gate a live review applies, reading the case's files/ tree
     const structural = verifyStructural(kept, guidelinesById, (file) =>
       readSourceForStructuralCheck(filesRoot, file),

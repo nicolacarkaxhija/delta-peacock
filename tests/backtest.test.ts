@@ -217,6 +217,28 @@ describe("replaying a case", () => {
     expect(git(repo, "diff", "main...HEAD", "--name-only").trim()).toBe("src/app.js");
   });
 
+  it("replays a rerun case: the earlier finding is resolved and traced, a kept one untouched", async () => {
+    const previous = [
+      {
+        file: "src/app.js",
+        line: 1,
+        guidelineId: "no-console",
+        severity: "MAJOR",
+        title: "Old finding",
+      },
+      { file: "src/gone.js", line: 3, guidelineId: "no-console", severity: "MAJOR", title: "X" },
+    ];
+    const benchCase = firstCase(makeCases({ a: { expected: { findings: [], previous } } }));
+    expect(benchCase.previous).toHaveLength(2);
+    const work = mkdtempSync(path.join(tmpdir(), "bt-work-"));
+    const replay = await replayCase(
+      testDeps(work, {}, { modelPort: scripted(found([])).port }),
+      benchCase,
+      work,
+    );
+    expect(replay.problems).toEqual([]);
+  });
+
   it("runs the real review in dry run and reads its findings, cost and log", async () => {
     const config = `${CONFIG}context:\n  provider: full_files\ncost:\n  rateInputPer1M: 1\n  rateOutputPer1M: 5\nstats:\n  enabled: true\n`;
     const benchCase = firstCase(makeCases({ a: { config } }));

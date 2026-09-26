@@ -59,7 +59,7 @@ describe("a finding that asks to move a reason already above the line", () => {
     });
     expect(code).toBe(0);
     expect(stderr).toContain(
-      "1 finding(s) dropped: the reason they ask for already sits above the line",
+      "1 finding(s) dropped: the reason they ask for already sits above the line or on the declaration",
     );
     const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
     expect(report.findings).toEqual([]);

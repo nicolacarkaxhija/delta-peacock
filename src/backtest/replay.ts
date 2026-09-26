@@ -9,6 +9,7 @@ import { anyRateConfigured, modelRates } from "../model/usage.js";
 import type { ReviewReport } from "../review/report.js";
 import { runReview } from "../review/run-review.js";
 import type { BacktestCase } from "./cases.js";
+import { rerunProblems } from "./rerun.js";
 import type { ReplayedFinding } from "./score.js";
 
 const IDENTITY = ["-c", "user.name=backtest", "-c", "user.email=backtest@localhost"];
@@ -143,6 +144,15 @@ export async function replayCase(
     ...(finding.suggestion !== undefined ? { suggestion: finding.suggestion } : {}),
   }));
   const config = replayDeps.loadConfig();
+  const problems = missingLines(config, log, repo, report?.usage !== undefined);
+  if (report !== undefined && benchCase.previous.length > 0) {
+    const lineTextOf = (file: string, line: number): string | undefined => {
+      const target = path.join(repo, file);
+      return existsSync(target) ? readFileSync(target, "utf8").split("\n")[line - 1] : undefined;
+    };
+    const head = runGit(repo, ["rev-parse", "HEAD"]).trim();
+    problems.push(...(await rerunProblems(benchCase.previous, report.findings, lineTextOf, head)));
+  }
   return {
     findings,
     log,
@@ -150,6 +160,6 @@ export async function replayCase(
     milliseconds,
     ...(report?.cost !== undefined ? { cost: report.cost.total } : {}),
     ...(error !== undefined ? { error } : {}),
-    problems: missingLines(config, log, repo, report?.usage !== undefined),
+    problems,
   };
 }
