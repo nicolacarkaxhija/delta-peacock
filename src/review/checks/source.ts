@@ -298,6 +298,10 @@ export function commentAt(scan: SourceScan, line: number): CommentBlock | undefi
 const GROUP_MEMBER =
   /^\s*(?:export\s+)?(?:(?:private|protected|public|static|readonly|declare)\s+)*(?:(?:const|let|var)\s+)?#?[\w$]+\s*(?::[^=]+)?=.*;\s*$/;
 
+/** The start of a declaration statement, module, class or function level. */
+const DECLARATION =
+  /^\s*(?:export\s+)?(?:(?:private|protected|public|static|readonly|declare)\s+)*(?:(?:const|let|var)\s+)?#?[\w$]+\s*(?::[^=]+)?=(?![=>])/;
+
 /**
  * The comments that may carry a line's reason: on the line, just above it,
  * above its statement, heading its group of declarations, and the doc comment
@@ -317,6 +321,20 @@ export function reasonComments(scan: SourceScan, line: number): CommentBlock[] {
     while (first > 1 && GROUP_MEMBER.test(item(scan.lines, first - 2, ""))) first -= 1;
     add(commentEndingAt(scan, first - 1));
     add(commentOn(scan, start));
+  } else if (DECLARATION.test(item(scan.masked, start - 1, ""))) {
+    // a run of multi-line declarations shares the comment heading it
+    let first = start;
+    while (
+      first > 1 &&
+      item(scan.lines, first - 2, "")
+        .trim()
+        .endsWith(";")
+    ) {
+      const prior = statementStart(scan, first - 1);
+      if (prior >= first || !DECLARATION.test(item(scan.masked, prior - 1, ""))) break;
+      first = prior;
+    }
+    add(commentEndingAt(scan, first - 1));
   }
   let brace = item(scan.braceAtStart, start - 1, 0);
   while (brace > 0) {

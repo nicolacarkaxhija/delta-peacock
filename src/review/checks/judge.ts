@@ -12,6 +12,8 @@ import { item } from "./source.js";
 const RULE_WORDS: Readonly<Record<Shape, readonly RegExp[]>> = {
   "test-id": [/comment saying why/i, /\bCSS\b/],
   "test-id-list": [/comment saying why/i, /\bCSS\b/],
+  "test-id-prefix": [/comment saying why/i, /\bCSS\b/],
+  "derived-hook": [/comment saying why/i, /\bCSS\b/],
   css: [/comment saying why/i, /\bCSS\b/],
   "multi-line": [/\bone (?:short )?(?:natural )?line\b/i, /stays one line/i],
   dash: [/\bdash/i],
@@ -19,6 +21,8 @@ const RULE_WORDS: Readonly<Record<Shape, readonly RegExp[]>> = {
   snapshot: [/awaited getter/i, /\bgetter/i, /snapshot/i],
   "undeclared-tag": [/neither an axis tag nor declared/i, /\bdeclared\b|does not list/i],
   "title-tag": [/rather than the title/i, /\btitle\b/i],
+  sleep: [/waitForTimeout is never/i, /\bsleeps?\b/i, /named entry/i, /\btimeouts?\b/i],
+  "inline-timeout": [/named entry/i, /\bnamed\b/i, /\btimeouts?\b/i],
 };
 
 /** The prose sentences of a guideline body, before its examples. */

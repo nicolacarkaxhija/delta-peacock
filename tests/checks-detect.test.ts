@@ -26,6 +26,12 @@ const BOUND: Record<GuidelineCheck, Guideline> = {
   comments: guideline("natural-comments", ["pages/**", "tests/**", "components/**"]),
   assertions: guideline("web-first-assertions", ["tests/**"]),
   tags: guideline("axis-tags", ["tests/**"]),
+  timeouts: guideline("no-inline-timeouts", [
+    "tests/**",
+    "pages/**",
+    "components/**",
+    "support/**",
+  ]),
 };
 
 const TAGS: DeclaredTags = {
@@ -126,18 +132,141 @@ describe("the selector check", () => {
     "}",
   ].join("\n");
 
-  it("flags test ids joined into a CSS list, not the derived hook getByTestId cannot read", () => {
+  it("flags test ids joined into a CSS list, and a derived hook with no reason", () => {
     const found = run({
       files: { "components/footer.ts": FOOTER },
       changed: { "components/footer.ts": "all" },
     });
     expect(brief(found)).toEqual([
+      "components/footer.ts:8 derived-hook",
       "components/footer.ts:14 test-id-list",
       "components/footer.ts:19 test-id-list",
     ]);
-    expect(found[0]?.body).toContain("getByTestId(new RegExp(`^(${KEY_REGION_IDS.join('|')})$`))");
-    expect(found[1]?.body).toContain("getByTestId(/^(a|b)$/)");
+    expect(found[0]?.body).toContain("selects a derived hook attribute through CSS");
     expect(found[0]?.suggestion).toBeUndefined();
+    expect(found[1]?.body).toContain("getByTestId(new RegExp(`^(${KEY_REGION_IDS.join('|')})$`))");
+    expect(found[2]?.body).toContain("getByTestId(/^(a|b)$/)");
+    expect(found[1]?.suggestion).toBeUndefined();
+  });
+
+  const HOOKS = [
+    "/** Saved cards: item_default for the default one, a sibling id for the rest. */",
+    "const SAVED = 'address_book_item';",
+    "export class AccountPage extends BasePage {",
+    "  /** One saved card, by its title. */",
+    "  saved(title: string): Locator {",
+    '    return this.cards().and(this.page.locator(`[data-ref="${title}"]`)).first();',
+    "  }",
+    "  cards(): Locator {",
+    '    return this.page.locator(`[${this.hookAttribute()}^="${SAVED}"]`);',
+    "  }",
+    "  literal(): Locator {",
+    '    return this.page.locator(`[data-tau^="card."]`);',
+    "  }",
+    "  mixed(id: string): Locator {",
+    '    return this.page.locator(`[data-tau^="card_${id}."]`);',
+    "  }",
+    "  exact(id: string): Locator {",
+    '    return this.page.locator(`[${this.hookAttribute()}="${id}"]`);',
+    "  }",
+    "  exactText(): Locator {",
+    '    return this.page.locator(`[data-tau="card"]`);',
+    "  }",
+    "  exactMixed(id: string): Locator {",
+    "    return this.page.locator(`[data-tau='card_${id}']`);",
+    "  }",
+    "  unique(): Locator {",
+    "    return this.page.locator(`[${this.hookAttribute('unique')}=\"card\"]`);",
+    "  }",
+    "  other(): Locator {",
+    '    return this.page.locator(`[${this.other()}="card"]`);',
+    "  }",
+    "  contains(): Locator {",
+    '    return this.page.locator(`[data-tau*="card"]`);',
+    "  }",
+    "  label(id: string): Locator {",
+    '    return this.page.locator(`label[for="${id}"]`);',
+    "  }",
+    "  alone(): Locator {",
+    "    return this.page.locator(`${SAVED}`);",
+    "  }",
+    "  empty(): Locator {",
+    "    return this.page.locator(`${ }`);",
+    "  }",
+    "  escaped(): Locator {",
+    '    return this.page.locator(`[data-ref="a\\`b"]`);',
+    "  }",
+    "}",
+  ].join("\n");
+
+  it("reads template selectors: attribute selectors, data hooks and test id prefixes", () => {
+    const found = run({
+      files: { "pages/account.ts": HOOKS },
+      changed: { "pages/account.ts": "all" },
+    });
+    expect(brief(found)).toEqual([
+      "pages/account.ts:2 css judged",
+      "pages/account.ts:6 css judged",
+      "pages/account.ts:9 test-id-prefix",
+      "pages/account.ts:12 test-id-prefix",
+      "pages/account.ts:15 test-id-prefix",
+      "pages/account.ts:18 test-id",
+      "pages/account.ts:21 test-id",
+      "pages/account.ts:24 test-id",
+      "pages/account.ts:27 derived-hook",
+      "pages/account.ts:30 css",
+      "pages/account.ts:33 css",
+      "pages/account.ts:36 css",
+      "pages/account.ts:45 css",
+    ]);
+    const byLine = new Map(found.map((one) => [one.line, one]));
+    expect(byLine.get(6)?.judge?.comments).toEqual([
+      { line: 4, text: "One saved card, by its title." },
+    ]);
+    expect(byLine.get(6)?.body).toContain('`` `[data-ref="${title}"]` ``');
+    expect(byLine.get(9)?.suggestion).toBe(
+      "    return this.page.getByTestId(new RegExp(`^${SAVED}`));",
+    );
+    expect(byLine.get(12)?.suggestion).toBe("    return this.page.getByTestId(/^card\\./);");
+    expect(byLine.get(15)?.suggestion).toBe(
+      "    return this.page.getByTestId(new RegExp(`^card_${id}\\\\.`));",
+    );
+    expect(byLine.get(18)?.suggestion).toBe("    return this.page.getByTestId(id);");
+    expect(byLine.get(21)?.suggestion).toBe("    return this.page.getByTestId('card');");
+    expect(byLine.get(24)?.suggestion).toBe("    return this.page.getByTestId(`card_${id}`);");
+    expect(byLine.get(9)?.form).toBe("getByTestId");
+  });
+
+  const GROUP = [
+    "export class WishlistPage extends BasePage {",
+    "  /** Either root. */",
+    "  shell(): Locator {",
+    "    // Both roots carry only the derived unique hook, which getByTestId cannot address.",
+    "    const logged = this.page.locator(",
+    "      this.hookSelector({ suffix: 'unique', value: 'logged' }),",
+    "    );",
+    "    const guest = this.page.locator(",
+    "      this.hookSelector({ suffix: 'unique', value: 'guest' }),",
+    "    );",
+    "    return logged.or(guest);",
+    "  }",
+    "  split(): Locator {",
+    "    const a = 1;",
+    "",
+    "    const alone = this.page.locator(",
+    "      this.hookSelector({ suffix: 'unique', value: 'alone' }),",
+    "    );",
+    "    return alone;",
+    "  }",
+    "}",
+  ].join("\n");
+
+  it("lets one comment above a run of multi-line declarations cover them all", () => {
+    const found = run({
+      files: { "pages/wishlist.ts": GROUP },
+      changed: { "pages/wishlist.ts": "all" },
+    });
+    expect(brief(found)).toEqual(["pages/wishlist.ts:16 derived-hook"]);
   });
 
   const PLP = [
@@ -361,6 +490,156 @@ describe("the assertion check", () => {
     });
     expect(brief(found)).toEqual(["tests/smoke/a.spec.ts:7 snapshot"]);
   });
+
+  const ACCOUNT = [
+    "export class AccountPage extends BasePage {",
+    "  /** Whether the browser holds the remember me cookie. */",
+    "  async hasCookie(): Promise<boolean> {",
+    "    const cookies = await this.page.context().cookies();",
+    "    return cookies.some((cookie) => cookie.name.startsWith('dw'));",
+    "  }",
+    "  savedName(): Promise<string> {",
+    "    return readStored(this.page);",
+    "  }",
+    "  async total(): Promise<number> {",
+    "    return 1 + 2;",
+    "  }",
+    "}",
+  ].join("\n");
+
+  it("flags an awaited page object method that reads the browser, and polls it", () => {
+    const spec = [
+      "test('b', async ({ accountPage, page, row }) => {",
+      "  expect(",
+      "    await accountPage.hasCookie(),",
+      "    'the cookie is set exactly when ticked',",
+      "  ).toBe(row.rememberMe);",
+      "  expect(await accountPage.hasCookie(), 'set').not.toBe(false);",
+      "  await expect(await accountPage.savedName()).toBe('x');",
+      "  expect(await page.context().cookies()).toHaveLength(1);",
+      "  expect(await accountPage.total()).toBe(3);",
+      "  expect(accountPage.hasCookie()).toBeTruthy();",
+      "  expect(row.name).toBe(await accountPage.savedName());",
+      "});",
+    ].join("\n");
+    const found = run({
+      files: { "tests/b.spec.ts": spec, "pages/account.ts": ACCOUNT },
+      changed: { "tests/b.spec.ts": "all" },
+      checks: ["assertions"],
+    });
+    expect(brief(found)).toEqual([
+      "tests/b.spec.ts:3 snapshot",
+      "tests/b.spec.ts:6 snapshot",
+      "tests/b.spec.ts:7 snapshot",
+      "tests/b.spec.ts:8 snapshot",
+      "tests/b.spec.ts:11 snapshot",
+    ]);
+    const byLine = new Map(found.map((one) => [one.line, one]));
+    expect(byLine.get(3)?.title).toBe("Page state read once inside an assertion");
+    expect(byLine.get(3)?.body).toContain(
+      "`await expect.poll(() => accountPage.hasCookie()).toBe(...)`",
+    );
+    expect(byLine.get(3)?.form).toBe("expect.poll");
+    expect(byLine.get(3)?.suggestion).toBeUndefined();
+    expect(byLine.get(6)?.suggestion).toBe(
+      "  await expect.poll(() => accountPage.hasCookie(), { message: 'set' }).not.toBe(false);",
+    );
+    expect(byLine.get(7)?.suggestion).toBe(
+      "  await expect.poll(() => accountPage.savedName()).toBe('x');",
+    );
+    expect(byLine.get(8)?.body).toContain("`cookies()` reads the page state once");
+    expect(byLine.get(11)?.suggestion).toBeUndefined();
+  });
+});
+
+describe("the timeout check", () => {
+  const FINDER = [
+    "export class AddressFinder extends Component {",
+    "  async find(input: Locator, search: string): Promise<void> {",
+    "    await input.pressSequentially(search, { delay: 50 });",
+    "    await input.pressSequentially(search, { delay: this.timeouts.keystroke });",
+    "    await this.page.waitForTimeout(3000);",
+    "    await sleep(500);",
+    "    await new Promise((resolve) => setTimeout(resolve, 1_000));",
+    "    await expect(dialog).toBeVisible({ timeout: 6_000 });",
+    "    await expect(dialog).toBeVisible({ timeout: 2 * 1000 });",
+    "    await expect(dialog).toBeVisible({ timeout: 0 });",
+    "    await expect(dialog).toBeVisible({ timeout: STEP });",
+    "    await expect(dialog).toBeVisible({ timeout: step });",
+    "    await expect.poll(() => this.count(), { intervals: [500, 1_000] }).toBe(1);",
+    "    await expect.poll(() => this.count(), { intervals: pace }).toBe(1);",
+    "    await expect(dialog).toBeVisible({ timeout: fn(1) });",
+    "    test.setTimeout(60_000);",
+    "    await this.wait(200);",
+    "    await sleep(ms);",
+    "    setTimeout();",
+    "    const options = { timeout: 5000 };",
+    "  }",
+    "}",
+    "const STEP = 15_000;",
+    "function sleep(ms: number): Promise<void> {",
+    "  return new Promise((resolve) => setTimeout(resolve, ms));",
+    "}",
+  ].join("\n");
+
+  it("flags sleeps, inline delays, timeouts and intervals, and names the timeouts file", () => {
+    const found = run({
+      files: {
+        "components/address-finder.ts": FINDER,
+        "support/timeouts.ts": "export const timeouts = {};",
+      },
+      changed: { "components/address-finder.ts": "all" },
+      checks: ["timeouts"],
+    });
+    expect(brief(found)).toEqual([
+      "components/address-finder.ts:3 inline-timeout",
+      "components/address-finder.ts:5 sleep",
+      "components/address-finder.ts:6 sleep",
+      "components/address-finder.ts:7 sleep",
+      "components/address-finder.ts:8 inline-timeout",
+      "components/address-finder.ts:9 inline-timeout",
+      "components/address-finder.ts:11 inline-timeout",
+      "components/address-finder.ts:13 inline-timeout",
+      "components/address-finder.ts:20 inline-timeout",
+    ]);
+    const byLine = new Map(found.map((one) => [one.line, one]));
+    expect(byLine.get(3)?.title).toBe("Inline 50 ms delay");
+    expect(byLine.get(3)?.body).toContain("a named entry in `support/timeouts.ts`");
+    expect(byLine.get(3)?.body).toContain("`delay: this.timeouts.<name>`");
+    expect(byLine.get(5)?.title).toBe("Fixed sleep with waitForTimeout");
+    expect(byLine.get(5)?.body).toContain("waitForTimeout is never correct");
+    expect(byLine.get(6)?.title).toBe("Fixed sleep of 500 ms");
+    expect(byLine.get(7)?.title).toBe("Fixed sleep of 1_000 ms");
+    expect(byLine.get(8)?.body).toContain("or drop the option where the default timeout is enough");
+    expect(byLine.get(11)?.title).toBe("Inline 15_000 ms timeout");
+    expect(byLine.get(13)?.title).toBe("Inline poll intervals");
+  });
+
+  it("names the suite's timeouts file generically when the repository has none", () => {
+    const spec = "await page.getByRole('button').click({ timeout: 3000 });";
+    const found = run({
+      files: { "tests/c.spec.ts": spec },
+      changed: { "tests/c.spec.ts": "all" },
+      checks: ["timeouts"],
+    });
+    expect(brief(found)).toEqual(["tests/c.spec.ts:1 inline-timeout"]);
+    expect(found[0]?.body).toContain("the suite's timeouts file");
+    expect(found[0]?.body).toContain("`timeout: timeouts.<name>`");
+    expect(
+      run({
+        files: { "tests/c.spec.ts": spec },
+        changed: { "tests/c.spec.ts": [] },
+        checks: ["timeouts"],
+      }),
+    ).toEqual([]);
+    expect(
+      run({
+        files: { "tests/d.spec.ts": "await page.waitForTimeout(" },
+        changed: { "tests/d.spec.ts": "all" },
+        checks: ["timeouts"],
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("the tag check", () => {
@@ -435,7 +714,7 @@ describe("edges of each check", () => {
       "    return this.page.locator(",
     ].join("\n");
     const found = run({ files: { "pages/p.ts": page }, changed: { "pages/p.ts": "all" } });
-    expect(brief(found)).toEqual(["pages/p.ts:3 test-id"]);
+    expect(brief(found)).toEqual(["pages/p.ts:3 test-id", "pages/p.ts:6 derived-hook"]);
     expect(found[0]?.suggestion).toBe("    return this.page.getByTestId(value);");
     const spec = "test('cut', async () => {\n  expect(await x.isVisible()).toBe(";
     expect(

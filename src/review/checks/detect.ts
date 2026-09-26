@@ -21,13 +21,17 @@ export type CheckName = GuidelineCheck;
 export type Shape =
   | "test-id"
   | "test-id-list"
+  | "test-id-prefix"
+  | "derived-hook"
   | "css"
   | "multi-line"
   | "dash"
   | "narration"
   | "snapshot"
   | "undeclared-tag"
-  | "title-tag";
+  | "title-tag"
+  | "sleep"
+  | "inline-timeout";
 
 /** A line a static check found; the only way a checked guideline yields a finding. */
 export interface Candidate {
@@ -85,8 +89,8 @@ const DASH = /\s(?:-{1,2}|\u2013|\u2014)(?:\s|$)|\w-{2}\w|[\u2013\u2014]/;
 const NARRATION =
   /\b(?:(?:i|we) (?:fixed|tried|changed|added|removed)|fixed (?:this|it|that)|tried (?:\w+ )?(?:selectors?|first|again)|finally works|now (?:it )?works|debugg(?:ed|ing)|this session|the chat|this (?:change|commit|pr|pull request)|as discussed|as requested|before it was)\b/i;
 
-const code = (text: string): string => `\`${text.replace(/`/g, "'")}\``;
 const codeSpan = (text: string): string => `\`\` ${text} \`\``;
+const code = (text: string): string => (text.includes("`") ? codeSpan(text) : `\`${text}\``);
 const wordsOf = (comment: CommentBlock): string => comment.texts.join(" ").trim();
 
 interface Parsed {
@@ -123,9 +127,11 @@ function reasonGiven(comments: readonly CommentBlock[]): boolean {
 // selectors
 
 interface Selector {
-  kind: "test-id" | "test-id-list" | "css" | "derived" | "unknown";
+  kind: "test-id" | "test-id-list" | "test-id-prefix" | "css" | "derived" | "unknown";
   /** The test id expression, quoted or a name, for a single test id. */
   id?: string;
+  /** The regex getByTestId takes for a prefix match. */
+  regex?: string;
   /** The source of the ids, for a list. */
   ids?: string;
   /** Declaration lines whose comments may carry the reason. */
@@ -147,12 +153,13 @@ function stringValue(text: string): string | undefined {
 
 function classifyString(value: string, attribute: string): Selector {
   const escaped = attribute.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const plain = new RegExp(`^\\[(?:${escaped}|data-testid)=["']?([^"'\\]]+)["']?\\]$`).exec(
+  const plain = new RegExp(`^\\[(?:${escaped}|data-testid)(\\^?)=["']?([^"'\\]]+)["']?\\]$`).exec(
     value.trim(),
   );
-  return plain !== null
-    ? { kind: "test-id", id: `'${String(plain[1])}'`, declarations: [] }
-    : { kind: "css", declarations: [] };
+  if (plain === null) return { kind: "css", declarations: [] };
+  return plain[1] === "^"
+    ? { kind: "test-id-prefix", regex: `/^${escapeRegex(String(plain[2]))}/`, declarations: [] }
+    : { kind: "test-id", id: `'${String(plain[2])}'`, declarations: [] };
 }
 
 function classifyHelper(args: string): Selector {
@@ -161,6 +168,119 @@ function classifyHelper(args: string): Selector {
   if (value?.[1] !== undefined) return { kind: "test-id", id: value[1], declarations: [] };
   if (/\{\s*value\s*\}/.test(args)) return { kind: "test-id", id: "value", declarations: [] };
   return { kind: "unknown", declarations: [] };
+}
+
+const MARK = "\u0001";
+const ATTRIBUTE_SELECTOR = new RegExp(
+  `^\\[\\s*([\\w-]+|${MARK}\\d+${MARK})\\s*([~|^$*]?=)\\s*(["']?)([^"'\\]]*)\\3\\s*\\]$`,
+);
+const HOOK_ATTRIBUTE = /^(?:this\s*\.\s*)?#?\w*hookAttribute\s*\(([\s\S]*)\)$/i;
+
+/** A template literal's text parts and its substitutions, with their offsets. */
+function templateParts(
+  original: string,
+  from: number,
+  to: number,
+): { chunks: string[]; subs: [number, number][] } {
+  const chunks: string[] = [];
+  const subs: [number, number][] = [];
+  let current = "";
+  let at = from + 1;
+  while (at < to - 1) {
+    const char = original.charAt(at);
+    if (char === "\\") {
+      current += original.slice(at, at + 2);
+      at += 2;
+      continue;
+    }
+    if (char === "$" && original.charAt(at + 1) === "{") {
+      let depth = 1;
+      let end = at + 2;
+      while (end < to && depth > 0) {
+        if (original.charAt(end) === "{") depth += 1;
+        else if (original.charAt(end) === "}") depth -= 1;
+        end += 1;
+      }
+      subs.push([at + 2, end - 1]);
+      chunks.push(current);
+      current = "";
+      at = end;
+      continue;
+    }
+    current += char;
+    at += 1;
+  }
+  chunks.push(current);
+  return { chunks, subs };
+}
+
+const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/** A selector written as a template literal: an attribute selector, or CSS composed around values. */
+function classifyTemplate(
+  parsed: Parsed,
+  from: number,
+  to: number,
+  line: number,
+  attribute: string,
+  depth: number,
+): Selector {
+  const { original } = parsed;
+  const { chunks, subs } = templateParts(original, from, to);
+  const inner = subs.map(([start, end]) =>
+    classifyExpression(parsed, start, end, line, attribute, depth + 1),
+  );
+  const declarations = inner.flatMap((one) => one.declarations);
+  const text = (index: number): string => original.slice(...(subs[index] ?? [0, 0])).trim();
+  if (subs.length === 1 && chunks.every((chunk) => chunk.trim() === "")) {
+    return item(inner, 0, { kind: "unknown", declarations: [] });
+  }
+  const shape = chunks
+    .map((chunk, index) => (index === 0 ? chunk : `${MARK}${String(index - 1)}${MARK}${chunk}`))
+    .join("");
+  const match = ATTRIBUTE_SELECTOR.exec(shape.trim());
+  if (match === null) return { kind: "css", declarations };
+  const [, name = "", operator = "", , value = ""] = match;
+  const marked = (part: string): number | undefined => {
+    const hit = new RegExp(`^${MARK}(\\d+)${MARK}$`).exec(part);
+    return hit === null ? undefined : Number(hit[1]);
+  };
+  const nameAt = marked(name);
+  let owner: "test-id" | "derived" | "other" = "other";
+  if (nameAt === undefined) {
+    owner = name === attribute || name === "data-testid" ? "test-id" : "other";
+  } else {
+    const hook = HOOK_ATTRIBUTE.exec(text(nameAt));
+    if (hook !== null) owner = /['"`]|\bsuffix\b/.test(String(hook[1])) ? "derived" : "test-id";
+  }
+  if (owner === "derived") return { kind: "derived", declarations };
+  if (owner === "other" || (operator !== "=" && operator !== "^=")) {
+    return { kind: "css", declarations };
+  }
+  const valueAt = marked(value.trim());
+  if (!value.includes(MARK)) {
+    return operator === "="
+      ? { kind: "test-id", id: `'${value}'`, declarations }
+      : { kind: "test-id-prefix", regex: `/^${escapeRegex(value)}/`, declarations };
+  }
+  const templated = value.replace(
+    new RegExp(`${MARK}(\\d+)${MARK}`, "g"),
+    (_, index: string) => `\${${text(Number(index))}}`,
+  );
+  if (operator === "=") {
+    return {
+      kind: "test-id",
+      id: valueAt !== undefined ? text(valueAt) : `\`${templated}\``,
+      declarations,
+    };
+  }
+  const source = value
+    .split(new RegExp(`${MARK}(\\d+)${MARK}`))
+    .map((part, index) =>
+      index % 2 === 1 ? `\${${text(Number(part))}}` : escapeRegex(part).replace(/\\/g, "\\\\"),
+    )
+    .join("");
+  return { kind: "test-id-prefix", regex: `new RegExp(\`^${source}\`)`, declarations };
 }
 
 /** The declaration of `name` visible from `line`: its line and its initializer. */
@@ -243,6 +363,10 @@ function classifyExpression(
   }
   const value = stringValue(text);
   if (value !== undefined) return classifyString(value, attribute);
+  if (text.length > 1 && text.startsWith("`") && text.endsWith("`")) {
+    const start = from + parsed.original.slice(from, to).indexOf("`");
+    return classifyTemplate(parsed, start, start + text.length, line, attribute, depth);
+  }
   const helper = HELPER.exec(text);
   if (helper !== null) return classifyHelper(String(helper[2]));
   const list = LIST.exec(text);
@@ -295,7 +419,7 @@ function selectorCandidates(
     const useLine = lineOf(offsets, match.index);
     const lastLine = lineOf(offsets, argEnd);
     const selector = classifyExpression(parsed, open + 1, argEnd, useLine, context.testIdAttribute);
-    if (selector.kind === "derived" || selector.kind === "unknown") continue;
+    if (selector.kind === "unknown") continue;
     // a constant used alone takes the finding on its own changed declaration
     const constant = selector.declarations.length === 1 ? selector.constant : undefined;
     const site = constant !== undefined && changed.has(constant) ? constant : useLine;
@@ -317,13 +441,29 @@ function selectorCandidates(
       line: site,
       quote,
     };
+    const lineStart = item(offsets, useLine - 1, 0);
+    const oneLine = site === useLine && lineOf(offsets, close) === useLine;
+    const rewrite = (argument: string): { suggestion?: string } =>
+      oneLine
+        ? {
+            suggestion: `${quote.slice(0, match.index - lineStart)}.getByTestId(${argument})${quote.slice(close - lineStart + 1)}`,
+          }
+        : {};
+    if (selector.kind === "test-id-prefix") {
+      const regex = String(selector.regex);
+      found.push({
+        ...base,
+        shape: "test-id-prefix",
+        title: "Test id prefix matched through CSS",
+        body: `${codeSpan(expression)} matches test ids by their prefix through a CSS attribute selector, and no comment says why. getByTestId takes a regex and reads the same attribute: use ${codeSpan(`getByTestId(${regex})`)}.`,
+        form: "getByTestId",
+        ...rewrite(regex),
+      });
+      continue;
+    }
     if (selector.kind === "test-id") {
       const id = String(selector.id);
-      const lineStart = item(offsets, useLine - 1, 0);
-      const oneLine = site === useLine && lineOf(offsets, close) === useLine;
-      const suggestion = oneLine
-        ? `${quote.slice(0, match.index - lineStart)}.getByTestId(${id})${quote.slice(close - lineStart + 1)}`
-        : undefined;
+      const suggestion = rewrite(id).suggestion;
       found.push({
         ...base,
         shape: "test-id",
@@ -349,13 +489,22 @@ function selectorCandidates(
       continue;
     }
     const prose = comments.filter((comment) => wordsOf(comment) !== "");
-    const fix =
-      "Use getByTestId or getByRole with a name where the element offers one; otherwise add one short comment saying why CSS is needed.";
+    const derived = selector.kind === "derived";
+    const fix = derived
+      ? "Add one short comment saying why CSS is needed, such as `// only the derived hook marks this element, getByTestId cannot read it`."
+      : "Use getByTestId or getByRole with a name where the element offers one; otherwise add one short comment saying why CSS is needed.";
+    const fact = derived
+      ? `${code(expression)} selects a derived hook attribute through CSS.`
+      : `${code(expression)} is a CSS selector.`;
     found.push({
       ...base,
-      shape: "css",
-      title: "CSS selector without a reason",
-      body: `${code(expression)} is a CSS selector, and no comment on the line, above it or on its declaration says why nothing better exists. ${fix}`,
+      shape: derived ? "derived-hook" : "css",
+      title: derived
+        ? "Derived hook selected through CSS without a reason"
+        : "CSS selector without a reason",
+      body: derived
+        ? `${code(expression)} selects a derived hook attribute through CSS, and no comment on the line, above it or on its declaration says why nothing better exists. ${fix}`
+        : `${code(expression)} is a CSS selector, and no comment on the line, above it or on its declaration says why nothing better exists. ${fix}`,
       ...(prose.length > 0
         ? {
             judge: {
@@ -365,7 +514,7 @@ function selectorCandidates(
                 line: comment.start,
                 text: wordsOf(comment),
               })),
-              fact: `${code(expression)} is a CSS selector.`,
+              fact,
               fix,
             },
           }
@@ -472,7 +621,8 @@ type ReadKind =
   | "value"
   | "attribute"
   | "count"
-  | "title";
+  | "title"
+  | "state";
 
 const GETTERS: Readonly<Record<string, ReadKind>> = {
   isVisible: "visible",
@@ -491,7 +641,15 @@ const GETTERS: Readonly<Record<string, ReadKind>> = {
   count: "count",
   url: "url",
   title: "title",
+  cookies: "state",
+  evaluate: "state",
+  storageState: "state",
+  boundingBox: "state",
 };
+
+/** A method body that reads the browser: the page, its context, cookies, storage or a script. */
+const BROWSER_READ =
+  /\bpage\b|\bcontext\s*\(|\.\s*cookies\s*\(|\.\s*evaluate\w*\s*\(|\blocalStorage\b|\bsessionStorage\b/;
 
 /** The web-first matcher for each read, and how the reading is named in prose. */
 const WEB_FIRST: Readonly<Record<ReadKind, { what: string; on: string; call: string }>> = {
@@ -507,6 +665,7 @@ const WEB_FIRST: Readonly<Record<ReadKind, { what: string; on: string; call: str
   value: { what: "value", on: "locator", call: "toHaveValue(...)" },
   attribute: { what: "attribute", on: "locator", call: "toHaveAttribute(...)" },
   count: { what: "count", on: "locator", call: "toHaveCount(...)" },
+  state: { what: "page state", on: "", call: "" },
 };
 
 interface MethodBody {
@@ -586,6 +745,14 @@ function readOf(
     if (!awaited && (kind !== "url" || method.async)) return undefined;
     return { kind, at: call.at, name: call.name };
   }
+  // an awaited method that reads the browser returns a value read once, whatever it computes
+  if (
+    awaited &&
+    (method.async || /\bPromise\b/.test(method.returns)) &&
+    BROWSER_READ.test(method.body)
+  ) {
+    return { kind: "state", at: call.at, name: call.name };
+  }
   return undefined;
 }
 
@@ -617,6 +784,7 @@ function assertionCandidates(
     const awaitedSubject = /^\s*await\s/.exec(subject);
     let read: { kind: ReadKind; at: number; name: string } | undefined;
     let base = open + 1;
+    let readEnd = subjectEnd;
     if (awaitedSubject !== null) {
       base += awaitedSubject[0].length;
       read = readOf(subject.slice(awaitedSubject[0].length), true, methods);
@@ -630,12 +798,44 @@ function assertionCandidates(
         base = matcherOpen + 1 + awaited.index + awaited[0].length;
         const end = topLevelCommas(joined, base, matcherClose)[0] ?? matcherClose;
         read = readOf(joined.slice(base, end), true, methods);
+        readEnd = end;
       }
     }
     if (read === undefined) continue;
     const readLine = lineOf(offsets, base + read.at);
     const anchor = changed.has(readLine) ? readLine : touched;
     const quote = item(scan.lines, anchor - 1, "");
+    if (read.kind === "state") {
+      const call = original.slice(base, readEnd).trim().replace(/\s+/g, " ");
+      const polled = `await expect.poll(() => ${call}).${String(tail[1])}(...)`;
+      const lineStart = item(offsets, anchor - 1, 0);
+      const inSubject = readEnd === subjectEnd;
+      const message = original
+        .slice(subjectEnd + 1, close)
+        .trim()
+        .replace(/,$/, "");
+      const oneLine =
+        inSubject &&
+        match.index >= lineStart &&
+        matcherClose > 0 &&
+        matcherClose < lineStart + quote.length;
+      const suggestion = oneLine
+        ? `${quote.slice(0, match.index - lineStart).replace(/await\s+$/, "")}await expect.poll(() => ${call}${message !== "" ? `, { message: ${message} }` : ""})${original.slice(close + 1, matcherClose + 1)}${quote.slice(matcherClose - lineStart + 1)}`
+        : undefined;
+      found.push({
+        guidelineId: guideline.id,
+        check: "assertions",
+        shape: "snapshot",
+        file,
+        line: anchor,
+        quote,
+        title: "Page state read once inside an assertion",
+        body: `${code(`${read.name}()`)} reads the page state once, so the assertion checks a snapshot and cannot retry while the page settles. Poll it instead: ${code(polled)} retries until it holds.`,
+        form: "expect.poll",
+        ...(suggestion !== undefined ? { suggestion } : {}),
+      });
+      continue;
+    }
     const form = WEB_FIRST[read.kind];
     const readText = original.slice(base + read.at, base + read.at + read.name.length) + "()";
     const either =
@@ -817,6 +1017,130 @@ function tagCandidates(
   return found;
 }
 
+// timeouts
+
+/** A literal number of milliseconds, a product of literals allowed; zero is no wait. */
+const MILLISECONDS = /^\d[\d_]*(?:\.\d+)?(?:\s*\*\s*\d[\d_]*(?:\.\d+)?)*$/;
+
+function literalMs(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (!MILLISECONDS.test(trimmed)) return undefined;
+  const value = trimmed
+    .split("*")
+    .reduce((product, part) => product * Number(part.trim().replace(/_/g, "")), 1);
+  return value > 0 ? trimmed : undefined;
+}
+
+/** The repository file that names the suite's waits, such as support/timeouts.ts. */
+function timeoutsFile(context: CheckContext): string | undefined {
+  return context.files().find((file) => /(?:^|\/)timeouts\.(?:[cm]?[jt]s)$/.test(file));
+}
+
+function timeoutCandidates(
+  guideline: Guideline,
+  file: string,
+  parsed: Parsed,
+  changed: ReadonlySet<number>,
+  context: CheckContext,
+): Candidate[] {
+  const { scan, joined, original, offsets } = parsed;
+  const found: Candidate[] = [];
+  const named = timeoutsFile(context);
+  const home = named !== undefined ? code(named) : "the suite's timeouts file";
+  const entry = /\bthis\s*\.\s*#?timeouts\b/.test(joined) ? "this.timeouts" : "timeouts";
+  const add = (at: number, candidate: Pick<Candidate, "shape" | "title" | "body">): void => {
+    const line = lineOf(offsets, at);
+    if (!changed.has(line)) return;
+    found.push({
+      guidelineId: guideline.id,
+      check: "timeouts",
+      file,
+      line,
+      quote: item(scan.lines, line - 1, ""),
+      ...candidate,
+    });
+  };
+  const waitFirst = `Wait web first for the state the pause stands in for, such as ${code("await expect(locator).toBeVisible()")}; a wait the page truly needs is a named entry in ${home}.`;
+  for (const match of joined.matchAll(
+    /(?<![\w$])(waitForTimeout|setTimeout|sleep|delay|pause|wait)\s*\(/g,
+  )) {
+    const name = String(match[1]);
+    const open = match.index + match[0].length - 1;
+    const close = closingParen(joined, open);
+    if (close < 0) continue;
+    const dotted = /\.\s*$/.test(joined.slice(0, match.index));
+    const args = topLevelCommas(joined, open + 1, close);
+    const call = original.slice(match.index, close + 1).replace(/\s+/g, " ");
+    if (name === "waitForTimeout") {
+      add(match.index, {
+        shape: "sleep",
+        title: "Fixed sleep with waitForTimeout",
+        body: `${code(call)} sleeps a fixed time instead of waiting for a state, and waitForTimeout is never correct. ${waitFirst}`,
+      });
+      continue;
+    }
+    if (dotted) continue;
+    const bounds: [number, number] =
+      name === "setTimeout"
+        ? [(args[0] ?? close) + 1, args[1] ?? close]
+        : [open + 1, args[0] ?? close];
+    if (name === "setTimeout" && args[0] === undefined) continue;
+    const ms = literalMs(joined.slice(...bounds));
+    if (ms === undefined) continue;
+    add(match.index, {
+      shape: "sleep",
+      title: `Fixed sleep of ${ms} ms`,
+      body: `${code(call)} pauses a fixed ${ms} ms instead of waiting for a state. ${waitFirst}`,
+    });
+  }
+  for (const match of joined.matchAll(/(?<![\w$.])(timeout|delay|intervals)\s*:\s*/g)) {
+    const key = String(match[1]);
+    const from = match.index + match[0].length;
+    let to = from;
+    let depth = 0;
+    while (to < joined.length) {
+      const char = joined.charAt(to);
+      if (char === "(" || char === "[" || char === "{") depth += 1;
+      else if (char === ")" || char === "]" || char === "}") {
+        if (depth === 0) break;
+        depth -= 1;
+      } else if ((char === "," || char === ";" || char === "\n") && depth === 0) break;
+      to += 1;
+    }
+    const value = original.slice(from, to).trim();
+    let ms: string | undefined;
+    if (key === "intervals") {
+      const list = /^\[([\s\S]*)\]$/.exec(value);
+      const parts =
+        list === null
+          ? []
+          : String(list[1])
+              .split(",")
+              .filter((part) => part.trim() !== "");
+      ms =
+        parts.length > 0 && parts.every((part) => literalMs(part) !== undefined)
+          ? value
+          : undefined;
+    } else {
+      ms = literalMs(value);
+      if (ms === undefined && /^[A-Za-z_$][\w$]*$/.test(value)) {
+        const declaration = declarationOf(parsed, value, lineOf(offsets, match.index));
+        const literal = declaration === undefined ? undefined : literalMs(declaration.init);
+        if (literal !== undefined) ms = literal;
+      }
+    }
+    if (ms === undefined) continue;
+    const what = key === "delay" ? "delay" : key === "intervals" ? "poll intervals" : "timeout";
+    const option = `${key}: ${value}`;
+    add(match.index, {
+      shape: "inline-timeout",
+      title: key === "intervals" ? "Inline poll intervals" : `Inline ${ms} ms ${what}`,
+      body: `${code(option)} writes the ${what} inline, and every wait beyond Playwright's own timeouts is a named entry in ${home}. Add one there and pass it here, such as ${code(`${key}: ${entry}.<name>`)}${key === "timeout" ? ", or drop the option where the default timeout is enough" : ""}.`,
+    });
+  }
+  return found;
+}
+
 /** The attribute getByTestId reads, from the repository config; data-testid when it names none. */
 export function testIdAttributeOf(texts: readonly (string | undefined)[]): string {
   for (const text of texts) {
@@ -851,7 +1175,9 @@ export function findCandidates(
             ? commentCandidates(guideline, file, parsed, changed)
             : check === "assertions"
               ? assertionCandidates(guideline, file, parsed, changed, methods)
-              : tagCandidates(guideline, file, parsed, changed, context.declared);
+              : check === "timeouts"
+                ? timeoutCandidates(guideline, file, parsed, changed, context)
+                : tagCandidates(guideline, file, parsed, changed, context.declared);
       for (const candidate of candidates) {
         const key = `${candidate.file}:${String(candidate.line)}:${candidate.guidelineId}`;
         if (seen.has(key)) continue;
