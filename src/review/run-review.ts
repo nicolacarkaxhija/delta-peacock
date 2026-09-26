@@ -49,6 +49,7 @@ import { declaredTagsBlock, readDeclaredTags, type DeclaredTags } from "./declar
 import {
   dropCommentMoves,
   dropGoodExamples,
+  dropUnfitTags,
   linesFromDiff,
   placeFindings,
   vetSuggestions,
@@ -245,17 +246,23 @@ export async function runReview(
     }),
   );
   // a fix that only repeats a reason already written just above is no fix
-  const moved = dropCommentMoves(placed, (file) =>
+  const reviewedLines = (file: string): readonly string[] | undefined =>
     fromApi
       ? linesFromDiff(diffLines.get(file) ?? new Map<number, string>())
-      : linesAtHead(deps.cwd, file, diffLines.get(file), options.staged === true),
-  );
+      : linesAtHead(deps.cwd, file, diffLines.get(file), options.staged === true);
+  const moved = dropCommentMoves(placed, reviewedLines);
   if (moved.dropped.length > 0) {
     deps.err(
-      `${String(moved.dropped.length)} finding(s) dropped: the reason they ask for already sits above the line\n`,
+      `${String(moved.dropped.length)} finding(s) dropped: the reason they ask for already sits above the line or on the declaration\n`,
     );
   }
-  const vetted = vetSuggestions(moved.kept, {
+  const fitted = dropUnfitTags(moved.kept, reviewedLines, declared);
+  if (fitted.dropped.length > 0) {
+    deps.err(
+      `${String(fitted.dropped.length)} finding(s) dropped: the feature tag they add fits no word of the test\n`,
+    );
+  }
+  const vetted = vetSuggestions(fitted.kept, {
     cwd: deps.cwd,
     ...(declared !== undefined ? { tags: declared } : {}),
   });
@@ -281,6 +288,7 @@ export async function runReview(
     rejected: [
       ...executed.parsed.rejected,
       ...moved.dropped,
+      ...fitted.dropped,
       ...exemplary.dropped,
       ...structural.dropped,
     ],

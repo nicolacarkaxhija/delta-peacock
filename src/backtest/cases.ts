@@ -25,14 +25,25 @@ const ExpectedFindingSchema = z.strictObject({
 
 const NoFindingSchema = z.strictObject(Location);
 
+const PriorFindingSchema = z.strictObject({
+  file: z.string().min(1),
+  line: z.number().int().positive(),
+  guidelineId: z.string().min(1),
+  severity: z.enum(SEVERITIES),
+  title: z.string().min(1),
+});
+
 const ExpectedFileSchema = z.strictObject({
   findings: z.array(ExpectedFindingSchema),
   /** Lines a reviewer flagged before and a human judged wrong. */
   noFinding: z.array(NoFindingSchema).default([]),
+  /** Findings posted on the revision before the fix; a rerun must resolve them cleanly. */
+  previous: z.array(PriorFindingSchema).default([]),
 });
 
 export type ExpectedFinding = z.infer<typeof ExpectedFindingSchema>;
 export type NoFinding = z.infer<typeof NoFindingSchema>;
+export type PriorFindingEntry = z.infer<typeof PriorFindingSchema>;
 
 export interface BacktestCase {
   name: string;
@@ -43,9 +54,14 @@ export interface BacktestCase {
   diffPath: string;
   expected: ExpectedFinding[];
   noFinding: NoFinding[];
+  previous: PriorFindingEntry[];
 }
 
-function readExpected(file: string): { findings: ExpectedFinding[]; noFinding: NoFinding[] } {
+function readExpected(file: string): {
+  findings: ExpectedFinding[];
+  noFinding: NoFinding[];
+  previous: PriorFindingEntry[];
+} {
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(file, "utf8"));
@@ -91,6 +107,7 @@ export function loadBacktestCases(casesDir: string, only?: readonly string[]): B
       diffPath,
       expected: expected.findings,
       noFinding: expected.noFinding,
+      previous: expected.previous,
     });
   }
   const missing = (only ?? []).filter((name) => !cases.some((one) => one.name === name));
