@@ -153,8 +153,12 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
   async function getText(): Promise<PullRequestText> {
     const meta = (await (
       await request("GET", `${base}/repositories/${repo}/pullrequests/${pr}`)
-    ).json()) as { title: string; description: string | null };
-    return { title: meta.title, body: meta.description ?? "" };
+    ).json()) as {
+      title: string;
+      description: string | null;
+      links?: { html?: { href?: string } };
+    };
+    return { title: meta.title, body: meta.description ?? "", url: meta.links?.html?.href };
   }
 
   async function resolveSource(): Promise<{ sha: string; branch: string | undefined }> {

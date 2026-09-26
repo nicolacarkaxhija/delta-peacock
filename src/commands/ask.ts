@@ -9,7 +9,7 @@ import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
 import { buildModelPort } from "../model/build.js";
 import type { ModelRequest } from "../model/port.js";
-import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { buildAskSystem, buildAskUser, type Turn } from "../review/ask.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
 import { isDryRun } from "../scm/publish.js";
@@ -145,8 +145,8 @@ export async function runAsk(
       if (error instanceof ToolError) throw error;
       throw new ToolError(`model call failed: ${(error as Error).message}`);
     }
-    if (reply.usage && anyRateConfigured(config.cost)) {
-      const spent = computeCost(reply.usage, config.cost).total;
+    if (reply.usage && anyRateConfigured(modelRates(config))) {
+      const spent = computeCost(reply.usage, modelRates(config)).total;
       await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
     }
     deps.out(`${reply.text.trim()}\n`);

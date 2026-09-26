@@ -5,7 +5,7 @@ import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { buildModelPort } from "../model/build.js";
-import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { renderDraft } from "../guidelines/draft.js";
 import { buildLearnRequest, evidenceFrom, parseDrafts } from "../guidelines/learn.js";
 import { buildScmPort } from "../scm/build.js";
@@ -59,8 +59,8 @@ export async function runLearn(
     if (error instanceof ToolError) throw error;
     throw new ToolError(`model call failed: ${(error as Error).message}`);
   }
-  if (reply.usage && anyRateConfigured(config.cost)) {
-    const spent = computeCost(reply.usage, config.cost).total;
+  if (reply.usage && anyRateConfigured(modelRates(config))) {
+    const spent = computeCost(reply.usage, modelRates(config)).total;
     await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
   }
 

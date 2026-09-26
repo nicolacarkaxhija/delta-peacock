@@ -35,7 +35,7 @@ Exit codes: 0 clean or advisory, 1 tool error, 2 findings at or above the thresh
 
 ## Costs
 
-Set `cost` rates for your model and, optionally, caps: `maxPerReview` blocks a single expensive review before any model call; `monthlyCap` tracks cumulative spend through a local counter (or AWS Cost Explorer for Bedrock). In CI the local counter lives on a runner that is thrown away after every pipeline run, so it restarts at zero each time and the monthly cap never bites there; see [the monthly cap in CI](ci-recipes.md#the-monthly-cap-in-ci).
+Set `cost` rates for your model (or per model id under `cost.rates`, see [pricing per model](stats-ledger.md#pricing-per-model)) and, optionally, caps: `maxPerReview` blocks a single expensive review before any model call; `monthlyCap` tracks cumulative spend through a local counter (or AWS Cost Explorer for Bedrock). In CI the local counter lives on a runner that is thrown away after every pipeline run, so it restarts at zero each time and the monthly cap never bites there; see [the monthly cap in CI](ci-recipes.md#the-monthly-cap-in-ci).
 
 ## Starting from nothing
 

@@ -477,6 +477,7 @@ describe("pull request text on the other adapters", () => {
       expect(await port.getPullRequestText?.()).toEqual({
         title: "original title",
         body: "author prose",
+        url: "https://gitlab.com/acme/widgets/-/merge_requests/7",
       });
       await port.updatePullRequestText?.({ body: "new body", title: "new title" });
       expect(fake.prText).toEqual({ title: "new title", body: "new body" });

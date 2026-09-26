@@ -5,7 +5,7 @@ import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { acquireDiff, resolveTargetRef } from "../git/diff.js";
 import { buildModelPort } from "../model/build.js";
-import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import {
   buildDescribeRequest,
   parseDescribeReply,
@@ -81,8 +81,8 @@ export async function runDescribe(
   }
   const described = parseDescribeReply(reply.text);
 
-  if (reply.usage && anyRateConfigured(config.cost)) {
-    const spent = computeCost(reply.usage, config.cost).total;
+  if (reply.usage && anyRateConfigured(modelRates(config))) {
+    const spent = computeCost(reply.usage, modelRates(config)).total;
     await recordSpend(config.cost.counterPath ?? defaultCounterPath(), monthKey(now), spent);
   }
 

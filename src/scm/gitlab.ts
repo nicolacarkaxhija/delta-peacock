@@ -156,8 +156,9 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
       const current = (await (await request("GET", mr)).json()) as {
         title: string;
         description: string | null;
+        web_url?: string;
       };
-      return { title: current.title, body: current.description ?? "" };
+      return { title: current.title, body: current.description ?? "", url: current.web_url };
     },
     async updatePullRequestText(text: { title?: string; body: string }): Promise<void> {
       await request("PUT", mr, {

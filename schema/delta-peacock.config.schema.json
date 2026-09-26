@@ -316,6 +316,36 @@
           "type": "number",
           "minimum": 0
         },
+        "rates": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "rateInputPer1M": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rateOutputPer1M": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rateCacheReadPer1M": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rateCacheWritePer1M": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "rateEmbedPer1M": {
           "default": 0,
           "type": "number",

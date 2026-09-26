@@ -1,7 +1,7 @@
 import type { Config } from "../config/schema.js";
 import { approximateTokens } from "../context/port.js";
 import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelRequest } from "../model/port.js";
-import { anyRateConfigured, computeCost } from "../model/usage.js";
+import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { costExplorerMonthToDate, type CostExplorerSend } from "./cost-explorer.js";
 import { defaultCounterPath, monthKey, readMonthSpend } from "./counter.js";
 
@@ -47,7 +47,8 @@ export async function checkCostGuard(
   const reasons: string[] = [];
   const batches = Math.max(1, options.batches ?? 1);
 
-  if (!anyRateConfigured(config.cost)) {
+  const rates = modelRates(config);
+  if (!anyRateConfigured(rates)) {
     notices.push(
       "cost caps are set but no rates are configured; the estimate is zero and the caps cannot bite",
     );
@@ -61,7 +62,7 @@ export async function checkCostGuard(
       inputTokens: approximateTokens(request.system) * batches + approximateTokens(request.user),
       outputTokens: ESTIMATED_OUTPUT_TOKENS * batches,
     },
-    config.cost,
+    rates,
   ).total;
   const estimated = perStrategy * modelCallCount(config);
 

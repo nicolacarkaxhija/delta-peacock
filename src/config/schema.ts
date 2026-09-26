@@ -156,6 +156,18 @@ export const CostSchema = z.strictObject({
   rateOutputPer1M: z.number().min(0).default(0),
   rateCacheReadPer1M: z.number().min(0).default(0),
   rateCacheWritePer1M: z.number().min(0).default(0),
+  /** Rates keyed by model id; the entry for the model in use wins over the flat keys above. */
+  rates: z
+    .record(
+      z.string().min(1),
+      z.strictObject({
+        rateInputPer1M: z.number().min(0).optional(),
+        rateOutputPer1M: z.number().min(0).optional(),
+        rateCacheReadPer1M: z.number().min(0).optional(),
+        rateCacheWritePer1M: z.number().min(0).optional(),
+      }),
+    )
+    .default({}),
   /** USD per million embedded tokens; prices the rag embeddings backend. */
   rateEmbedPer1M: z.number().min(0).default(0),
   /** Pre-flight ceiling per review in USD; zero switches the check off. */

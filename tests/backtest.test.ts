@@ -236,7 +236,9 @@ describe("replaying a case", () => {
     expect(replay.cost).toBeCloseTo(0.0015);
     expect(replay.problems).toEqual([]);
     expect(replay.log).toMatch(/^full_files context: 1 changed file\(s\)/m);
-    expect(replay.log).toMatch(/^cost: 1000 tokens in, 100 out, 0\.0015 USD; \d{4}-\d{2} spend/m);
+    expect(replay.log).toMatch(
+      /^cost: 1000 tokens in, 100 out on .+, 0\.0015 USD; \d{4}-\d{2} spend/m,
+    );
     expect(replay.log).toMatch(/^stats: review recorded in delta-peacock\.stats\.jsonl/m);
     expect(replay.report).toContain('"findings"');
   });
