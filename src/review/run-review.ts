@@ -67,6 +67,7 @@ import { verifyStructural } from "./structural.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import type { PullRequestText } from "../scm/port.js";
 import { appendRecord, attributionOf, ledgerRecords, type Attribution } from "../stats/record.js";
+import { dropChecked, runChecks, splitChecked } from "./checks/index.js";
 
 export type ReviewDeps = RuntimeDeps;
 
@@ -188,6 +189,9 @@ export async function runReview(
   }
 
   const declared = readDeclaredTags(deps.cwd, config.review.repoConfigPath);
+  // a checked guideline yields findings only on the lines its static check flags;
+  // the open prompt still shows it, so the open review reads the same corpus
+  const { bound, free } = splitChecked(guidelines, config.review.checks);
   const { redacted, request, passes, batchCount, parseOptions, budgetDegraded, linters } =
     await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
 
@@ -226,8 +230,13 @@ export async function runReview(
   }
 
   let executed: ExecuteResult;
+  // with every applicable guideline checked, an open call could only produce what is dropped
+  const allChecked = free.length === 0 && bound.length > 0 && !config.review.generalPass;
   try {
-    executed = await executeReview(deps, config, request, passes, batchCount, parseOptions);
+    if (allChecked) deps.err("every applicable guideline is checked; no open review call\n");
+    executed = allChecked
+      ? idleExecution()
+      : await executeReview(deps, config, request, passes, batchCount, parseOptions);
   } catch (error) {
     if (error instanceof ToolError) await publishFailure(deps, config, failureReason(error));
     throw error;
@@ -237,14 +246,37 @@ export async function runReview(
   const diffLines = newLineTexts(redacted.text);
   // an API diff means the checkout is not the pull request; only the diff knows its lines
   const fromApi = acquired.targetRef === "scm api";
+  const linesOfFile = (file: string): readonly string[] | undefined => {
+    const known = diffLines.get(file);
+    if (fromApi) return known === undefined ? undefined : linesFromDiff(known);
+    return linesAtHead(deps.cwd, file, known, options.staged === true);
+  };
+  const open = dropChecked(executed.parsed.findings, bound);
+  if (open.dropped.length > 0) {
+    deps.err(
+      `${String(open.dropped.length)} finding(s) dropped: their guideline is checked, and only its check's lines count\n`,
+    );
+  }
   // two findings that quote one line under one guideline are one finding
-  const placed = dedupeFindings(
-    placeFindings(executed.parsed.findings, (file) => {
-      const known = diffLines.get(file);
-      if (fromApi) return known === undefined ? undefined : linesFromDiff(known);
-      return linesAtHead(deps.cwd, file, known, options.staged === true);
-    }),
-  );
+  const placed = dedupeFindings(placeFindings(open.kept, linesOfFile));
+  const checks =
+    bound.length > 0
+      ? await runChecks({
+          bound,
+          diff: redacted.text,
+          read: (file) => linesOfFile(file)?.join("\n"),
+          // an API diff has no checkout to follow a method into
+          files: fromApi ? () => [] : () => trackedFiles(deps.cwd),
+          ...(declared !== undefined ? { declared } : {}),
+          configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
+          port: () => reviewPort(deps, config),
+          redact: (text) =>
+            redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
+              strict: config.redaction.strict,
+            }).text,
+        })
+      : undefined;
+  for (const notice of checks?.notices ?? []) deps.err(`${notice}\n`);
   // a fix that only repeats a reason already written just above is no fix
   const reviewedLines = (file: string): readonly string[] | undefined =>
     fromApi
@@ -272,7 +304,12 @@ export async function runReview(
       `${String(exemplary.dropped.length)} finding(s) dropped: the code matches the guideline's own Good example\n`,
     );
   }
-  const relocated = exemplary.kept;
+  // checked findings sit on the line the check measured; only their suggestions are vetted
+  const checked = vetSuggestions(placeFindings(checks?.findings ?? [], linesOfFile), {
+    cwd: deps.cwd,
+    ...(declared !== undefined ? { tags: declared } : {}),
+  });
+  const relocated = dedupeFindings([...exemplary.kept, ...checked]);
   // deterministic and therefore allowed to drop outright (ADR 0008, unlike
   // calibration below): refutes a finding whose structural claim -- "this is
   // a loop", "this is top level" -- the AST itself contradicts. Reads source
@@ -287,6 +324,8 @@ export async function runReview(
     findings: structural.kept,
     rejected: [
       ...executed.parsed.rejected,
+      ...open.dropped,
+      ...(checks?.rejected ?? []),
       ...moved.dropped,
       ...fitted.dropped,
       ...exemplary.dropped,
@@ -311,6 +350,9 @@ export async function runReview(
     }
   }
   let usage = executed.usage;
+  if (checks?.usage !== undefined) {
+    usage = usage === undefined ? checks.usage : addUsage(usage, checks.usage);
+  }
   const ensembleMembers = executed.ensembleMembers;
   const toolCalls = executed.toolCalls;
   const cachedResponse = executed.cachedResponse;
@@ -425,6 +467,7 @@ export async function runReview(
       ...(budgetDegraded ? { budgetDegraded: true as const } : {}),
       ...(linters.length > 0 ? { lintersDetected: linters } : {}),
       ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
+      ...(checks !== undefined ? { checks: checks.tally } : {}),
     });
     if (config.output.report !== undefined) {
       writeFileSync(
@@ -471,6 +514,9 @@ export async function runReview(
         addedLines: addedLineCount(diff),
         findings: kept,
         misquoted: parsed.droppedMisquoted,
+        ...(checks !== undefined && checks.tally.judgeFailed > 0
+          ? { judgeFailed: checks.tally.judgeFailed }
+          : {}),
         attribution: await pullRequestAttribution(deps, config),
         ...(config.model.id !== undefined ? { model: config.model.id } : {}),
         ...(usage !== undefined ? { usage } : {}),
@@ -737,7 +783,19 @@ async function executeReview(
     };
   }
 
-  const modelPort = withResponseCache(
+  const modelPort = reviewPort(deps, config);
+  if (batchCount > 1) {
+    deps.err(`budget: reviewing the diff in ${String(batchCount)} batch(es)\n`);
+  }
+  return {
+    ...(await runPasses(deps, modelPort, passes, parseOptions)),
+    ensembleMembers: undefined,
+  };
+}
+
+/** The review's model behind the response cache; the open passes and the judge share it. */
+function reviewPort(deps: ReviewDeps, config: Config): ModelPort {
+  return withResponseCache(
     deps.modelPort ?? buildModelPort(config, deps.credentials),
     config,
     deps.cwd,
@@ -746,13 +804,6 @@ async function executeReview(
       deps.err(`${notice}\n`);
     },
   );
-  if (batchCount > 1) {
-    deps.err(`budget: reviewing the diff in ${String(batchCount)} batch(es)\n`);
-  }
-  return {
-    ...(await runPasses(deps, modelPort, passes, parseOptions)),
-    ensembleMembers: undefined,
-  };
 }
 
 /** Passes in flight at once; a focused review fans out one call per guideline. */
@@ -1078,6 +1129,37 @@ function failureReason(error: ToolError): string {
     return "the model's reply held no readable findings, twice";
   }
   return first;
+}
+
+/** A review whose every applicable guideline is checked makes no open call. */
+function idleExecution(): ExecuteResult {
+  return {
+    parsed: {
+      findings: [],
+      droppedUncited: 0,
+      droppedOutOfScope: 0,
+      adjustedLines: 0,
+      droppedMalformed: 0,
+      droppedMisquoted: 0,
+      rejected: [],
+    },
+    usage: undefined,
+    ensembleMembers: undefined,
+    toolCalls: undefined,
+    cachedResponse: false,
+    unparsedBatches: [],
+  };
+}
+
+/** The repository's tracked files, for following a method to its body; empty outside git. */
+export function trackedFiles(cwd: string): string[] {
+  try {
+    return runGit(cwd, ["ls-files"])
+      .split("\n")
+      .filter((file) => file !== "" && !/(?:^|\/)(?:node_modules|dist)\//.test(file));
+  } catch {
+    return [];
+  }
 }
 
 /** The checked out commit, short; undefined outside a git checkout. */

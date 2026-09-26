@@ -168,6 +168,23 @@
         "repoConfigPath": {
           "default": "test-runner.config.ts",
           "type": "string"
+        },
+        "checks": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "selectors",
+              "comments",
+              "assertions",
+              "tags"
+            ]
+          }
         }
       },
       "additionalProperties": false

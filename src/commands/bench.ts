@@ -35,6 +35,17 @@ import { buildModelPort } from "../model/build.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { readSourceForStructuralCheck } from "../review/run-review.js";
 import { verifyStructural } from "../review/structural.js";
+import { dropChecked, runChecks, splitChecked } from "../review/checks/index.js";
+import { DEFAULT_SKIP_DIRS, walkFiles } from "../util/walk.js";
+
+const NO_FINDINGS = {
+  findings: [],
+  droppedUncited: 0,
+  droppedOutOfScope: 0,
+  adjustedLines: 0,
+  droppedMalformed: 0,
+  droppedMisquoted: 0,
+};
 
 /**
  * Each case is self-contained: its own guidelines, its own optional files/
@@ -64,6 +75,8 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       readWorkingTreeGuidelines(guidelinesDirFor(benchCase.dir)),
       config.review.frontmatterContract,
     ).guidelines;
+    // the same split a live review makes: a checked guideline counts only on its check's lines
+    const { bound, free } = splitChecked(guidelines, config.review.checks);
 
     const filesRoot = path.join(benchCase.dir, "files");
     const changedFiles = changedFilesFromDiff(benchCase.diff);
@@ -131,13 +144,16 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       for (const notice of ensemble.notices) deps.err(`${notice}\n`);
       for (const member of ensemble.members) addTo(usage, member.id, member.usage);
       parsed = ensemble.parsed;
-    } else {
+    } else if (free.length > 0 || bound.length === 0 || config.review.generalPass) {
       const port = deps.modelPort ?? buildModelPort(config, deps.credentials);
       // the passes, retry and merge a live review runs
       const executed = await runPasses(deps, port, passes, parseOptions);
       addTo(usage, config.model.id ?? config.model.provider, executed.usage);
       parsed = executed.parsed;
+    } else {
+      parsed = { ...NO_FINDINGS, rejected: [] };
     }
+    parsed = { ...parsed, findings: dropChecked(parsed.findings, bound).kept };
     // the same placement and Good example gate a live review applies
     const diffLines = newLineTexts(benchCase.diff);
     const linesOf = (file: string): readonly string[] | undefined => {
@@ -153,7 +169,30 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       config.review.repoConfigPath,
     );
     const fitted = dropUnfitTags(dropCommentMoves(placed, linesOf).kept, linesOf, tags).kept;
-    const kept = dropGoodExamples(fitted, guidelinesById).kept;
+    const checks =
+      bound.length > 0
+        ? await runChecks({
+            bound,
+            diff: benchCase.diff,
+            read: (file) => linesOf(file)?.join("\n"),
+            files: () =>
+              existsSync(filesRoot)
+                ? walkFiles(filesRoot, { skipDirs: DEFAULT_SKIP_DIRS }).map((file) =>
+                    path.relative(filesRoot, file).replaceAll("\\", "/"),
+                  )
+                : [],
+            ...(tags !== undefined ? { declared: tags } : {}),
+            configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
+            port: () => deps.modelPort ?? buildModelPort(config, deps.credentials),
+            redact: (text) => text,
+          })
+        : undefined;
+    for (const notice of checks?.notices ?? []) deps.err(`${notice}\n`);
+    addTo(usage, config.model.id ?? config.model.provider, checks?.usage);
+    const kept = [
+      ...dropGoodExamples(fitted, guidelinesById).kept,
+      ...placeFindings(checks?.findings ?? [], linesOf),
+    ];
     // same AST gate a live review applies, reading the case's files/ tree
     const structural = verifyStructural(kept, guidelinesById, (file) =>
       readSourceForStructuralCheck(filesRoot, file),

@@ -17,6 +17,14 @@ export { createAnthropicPort } from "./model/anthropic.js";
 export { buildModelPort } from "./model/build.js";
 export type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "./model/port.js";
 export { parseReviewResponse, type ParsedReview } from "./review/parse.js";
+export {
+  findCandidates,
+  testIdAttributeOf,
+  type BoundGuideline,
+  type Candidate,
+  type CheckContext,
+} from "./review/checks/detect.js";
+export { readDeclaredTags, type DeclaredTags } from "./review/declared.js";
 export { buildReviewPrompt } from "./review/prompt.js";
 export { buildReport, type ReviewReport } from "./review/report.js";
 export { runReview, type ReviewDeps } from "./review/run-review.js";

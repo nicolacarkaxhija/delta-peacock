@@ -91,6 +91,16 @@ export interface ReviewReport {
   lintersDetected?: string[];
   /** Batches whose reply held no parseable findings; every other batch's findings still stand. */
   unparsedBatches?: UnparsedBatch[];
+  /** What the static checks found and what became of it; present when a guideline is checked. */
+  checks?: CheckTally;
+}
+
+/** Candidates the static checks found, and how each ended. */
+export interface CheckTally {
+  candidates: number;
+  findings: number;
+  dropped: number;
+  judgeFailed: number;
 }
 
 export function buildReport(input: {
@@ -123,6 +133,7 @@ export function buildReport(input: {
   rejected?: readonly RejectedCandidate[];
   /** Looks up the flagged line's text; absent entries simply carry none. */
   lineTextOf?: (finding: Finding) => string | undefined;
+  checks?: CheckTally;
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => {
     const lineText = input.lineTextOf?.(finding);
@@ -168,5 +179,6 @@ export function buildReport(input: {
     ...(input.unparsedBatches && input.unparsedBatches.length > 0
       ? { unparsedBatches: [...input.unparsedBatches] }
       : {}),
+    ...(input.checks !== undefined ? { checks: input.checks } : {}),
   };
 }
