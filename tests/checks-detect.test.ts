@@ -593,7 +593,7 @@ describe("the timeout check", () => {
     });
     expect(brief(found)).toEqual([
       "components/address-finder.ts:3 inline-timeout",
-      "components/address-finder.ts:5 sleep",
+      "components/address-finder.ts:5 wait-for-timeout",
       "components/address-finder.ts:6 sleep",
       "components/address-finder.ts:7 sleep",
       "components/address-finder.ts:8 inline-timeout",

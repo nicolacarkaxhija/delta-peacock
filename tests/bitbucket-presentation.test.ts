@@ -91,7 +91,7 @@ describe("bitbucket presentation", () => {
       // no heading: the bot's name, the status and the card already say who reviewed
       expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("2 findings: 1 critical, 1 high");
       expect(inline(fake)[0]?.content.raw).toBe(
-        "**Critical** · [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md)\n\nUse the logger.",
+        "**Critical** · [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md)\n\nUse the logger.\n\nGuideline: Use the logger.",
       );
 
       const again = await review(fake);

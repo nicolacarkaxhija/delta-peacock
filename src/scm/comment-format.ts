@@ -82,6 +82,13 @@ export function twoSentences(text: string): string {
   return sentences.slice(0, 2).join(" ");
 }
 
+/** "Guideline: <the sentence the finding applies>"; undefined when it quotes none. */
+export function guidelineLine(finding: Finding): string | undefined {
+  if (finding.kind !== "violation" || finding.guidelineQuote === undefined) return undefined;
+  const quote = finding.guidelineQuote.trim().replace(/\s+/g, " ");
+  return quote === "" ? undefined : `Guideline: ${quote}`;
+}
+
 export function renderCommentBody(
   finding: Finding,
   fingerprint: string,
@@ -93,6 +100,8 @@ export function renderCommentBody(
     "",
     reason,
   ];
+  const rule = guidelineLine(finding);
+  if (rule !== undefined) lines.push("", rule);
   if (finding.suggestion !== undefined) {
     lines.push("", `\`\`\`${presentation.suggestionFence}`, finding.suggestion, "```");
   }

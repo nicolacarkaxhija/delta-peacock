@@ -35,7 +35,13 @@ import { buildModelPort } from "../model/build.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { readSourceForStructuralCheck } from "../review/run-review.js";
 import { verifyStructural } from "../review/structural.js";
-import { dropChecked, runChecks, splitChecked } from "../review/checks/index.js";
+import {
+  checkSentenceProblems,
+  dropChecked,
+  runChecks,
+  splitChecked,
+} from "../review/checks/index.js";
+import { ConfigError } from "../config/loader.js";
 import { DEFAULT_SKIP_DIRS, walkFiles } from "../util/walk.js";
 
 const NO_FINDINGS = {
@@ -77,6 +83,8 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     ).guidelines;
     // the same split a live review makes: a checked guideline counts only on its check's lines
     const { bound, free } = splitChecked(guidelines, config.review.checks);
+    const unquotable = checkSentenceProblems(guidelines, config.review.checks);
+    if (unquotable.length > 0) throw new ConfigError(unquotable);
 
     const filesRoot = path.join(benchCase.dir, "files");
     const changedFiles = changedFilesFromDiff(benchCase.diff);

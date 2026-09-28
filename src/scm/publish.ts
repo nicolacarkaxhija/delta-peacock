@@ -4,6 +4,7 @@ import { fingerprintFrom, fingerprintOf, type Finding } from "../domain/finding.
 import {
   blockedLine,
   DEFAULT_PRESENTATION,
+  guidelineLine,
   guidelineUrl,
   headingAnchor,
   markerFingerprint,
@@ -78,6 +79,18 @@ export interface PublishOutcome {
   tasksResolved?: number;
 }
 
+/** Code Insights caps a summary at 450 characters; the reason is cut before the guideline line. */
+const ANNOTATION_MAX = 450;
+
+function annotationSummary(finding: Finding): string {
+  const reason = twoSentences(finding.body === "" ? finding.title : finding.body);
+  const rule = guidelineLine(finding);
+  if (rule === undefined) return reason.slice(0, ANNOTATION_MAX);
+  const room = ANNOTATION_MAX - rule.length - 1;
+  if (room < 1) return rule.slice(0, ANNOTATION_MAX);
+  return `${reason.slice(0, room)} ${rule}`;
+}
+
 export function buildInsightReport(
   input: SummaryInput,
   presentation: Presentation = DEFAULT_PRESENTATION,
@@ -103,7 +116,7 @@ export function buildInsightReport(
       return {
         externalId: fingerprint,
         title: finding.title,
-        summary: twoSentences(finding.body === "" ? finding.title : finding.body).slice(0, 450),
+        summary: annotationSummary(finding),
         severity: finding.severity,
         path: finding.file,
         ...(finding.unplaced === true ? {} : { line: finding.line }),

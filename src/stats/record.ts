@@ -54,6 +54,8 @@ export interface FindingRecord extends Attribution {
   severity: Severity;
   file: string;
   line: number;
+  /** The guideline sentence the finding applies, as its comment quotes it. */
+  guidelineQuote?: string;
 }
 
 export type LedgerRecord = StatsRecord | FindingRecord;
@@ -139,6 +141,9 @@ export function ledgerRecords(input: LedgerInput): LedgerRecord[] {
     severity: finding.severity,
     file: finding.file,
     line: finding.line,
+    ...(finding.kind === "violation" && finding.guidelineQuote !== undefined
+      ? { guidelineQuote: finding.guidelineQuote }
+      : {}),
   }));
   return [review, ...findings];
 }

@@ -3,13 +3,8 @@ import type { Guideline } from "../src/domain/guideline.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import { runChecks, splitChecked } from "../src/review/checks/index.js";
 import type { Candidate } from "../src/review/checks/detect.js";
-import {
-  agreesWithCatalog,
-  excerptOf,
-  judgeRequest,
-  ruleSentence,
-  settle,
-} from "../src/review/checks/judge.js";
+import { agreesWithCatalog, excerptOf, judgeRequest, settle } from "../src/review/checks/judge.js";
+import { sentenceOf } from "../src/review/checks/rules.js";
 
 const PREFER: Guideline = {
   id: "prefer-test-ids",
@@ -82,18 +77,11 @@ function scripted(...texts: (string | Error)[]): { port: ModelPort; requests: Mo
 const verdict = (fields: Record<string, string>): string => JSON.stringify(fields);
 
 describe("the rule sentence a checked finding quotes", () => {
-  it("picks the sentence that names the shape, else the title", () => {
-    expect(ruleSentence(PREFER, "css")).toBe(RULE);
-    expect(ruleSentence(COMMENTS, "multi-line")).toBe("One plain single-line comment");
-    expect(ruleSentence(COMMENTS, "dash")).toContain("instead of dashes.");
-    expect(ruleSentence(COMMENTS, "snapshot")).toBe(COMMENTS.title);
-    const fenced: Guideline = {
-      ...COMMENTS,
-      body: "```ts\n// one short line\n```\n# Heading\nA comment stays one line, always.",
-    };
-    expect(ruleSentence(fenced, "multi-line")).toBe(COMMENTS.title);
-    expect(ruleSentence({ ...fenced, title: "Comments" }, "multi-line")).toBe(
-      "A comment stays one line, always.",
+  it("is the sentence the check declares for the shape", () => {
+    expect(sentenceOf("selectors", "css")).toBe(RULE);
+    expect(sentenceOf("comments", "dash")).toBe(COMMENTS.body);
+    expect(sentenceOf("comments", "multi-line")).toContain(
+      "a comment never runs past a single line.",
     );
   });
 });

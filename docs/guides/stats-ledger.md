@@ -24,7 +24,7 @@ With `stats.enabled: true` every review appends to `delta-peacock.stats.jsonl` (
 
 ## Finding line
 
-`kind` is `"finding"`; `at`, `author`, `pr`, `title`, `scope` and `type` repeat the review's values, so each line stands alone. Then `guideline` (the cited id, or `(observation)`), `severity`, `file` and `line`.
+`kind` is `"finding"`; `at`, `author`, `pr`, `title`, `scope` and `type` repeat the review's values, so each line stands alone. Then `guideline` (the cited id, or `(observation)`), `severity`, `file`, `line` and, for a finding that cites a guideline, `guidelineQuote`: the sentence its comment quotes.
 
 ## Example
 

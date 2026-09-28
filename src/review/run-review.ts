@@ -67,7 +67,8 @@ import { verifyStructural } from "./structural.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import type { PullRequestText } from "../scm/port.js";
 import { appendRecord, attributionOf, ledgerRecords, type Attribution } from "../stats/record.js";
-import { dropChecked, runChecks, splitChecked } from "./checks/index.js";
+import { checkSentenceProblems, dropChecked, runChecks, splitChecked } from "./checks/index.js";
+import { ConfigError } from "../config/loader.js";
 
 export type ReviewDeps = RuntimeDeps;
 
@@ -127,6 +128,9 @@ export async function runReview(
   }
   for (const notice of loaded.notices) deps.err(`${notice}\n`);
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);
+  // a check posts only a sentence its guideline really says
+  const unquotable = checkSentenceProblems(loaded.guidelines, config.review.checks);
+  if (unquotable.length > 0) throw new ConfigError(unquotable);
   if (loaded.guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no usable guidelines found; nothing to review against\n");
     await publishAllClear(deps, config, NOT_REVIEWED.noGuidelines);

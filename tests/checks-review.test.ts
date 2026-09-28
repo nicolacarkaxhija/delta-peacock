@@ -163,6 +163,39 @@ describe("a review with checked guidelines", () => {
     expect(ledger.find((line) => line.kind === "review")?.errors).toEqual({ judgeFailed: 1 });
   });
 
+  it("carries the quoted sentence into the ledger", async () => {
+    const repo = scenario(false);
+    const judge = JSON.stringify({ verdict: "confirm", guidelineQuote: null, reason: null });
+    await review(repo, scripted(judge).port);
+    const findings = readFileSync(path.join(repo, "delta-peacock.stats.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { kind: string; guidelineQuote?: string })
+      .filter((line) => line.kind === "finding");
+    expect(findings.map((line) => line.guidelineQuote)).toEqual([
+      "Where a CSS selector is unavoidable, a comment next to it gives the reason.",
+      "Where a CSS selector is unavoidable, a comment next to it gives the reason.",
+    ]);
+  });
+
+  it("stops with a configuration error before any call when the guideline lacks the check's sentence", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/prefer-test-ids.md", PREFER.replace("a comment next to it", "a note"));
+    write(repo, "delta-peacock.config.yaml", CONFIG);
+    commitAll(repo, "guidelines");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "pages/plp.ts", PAGE);
+    commitAll(repo, "change");
+    const { port, requests } = scripted("not json");
+    const { code, err } = await review(repo, port);
+    expect(code).toBe(1);
+    expect(requests).toHaveLength(0);
+    expect(err).toContain(
+      'review.checks: prefer-test-ids is bound to the selectors check, which quotes "Where a CSS selector is unavoidable, a comment next to it gives the reason."',
+    );
+    expect(err).toContain("invalid configuration: 1 problem(s)");
+  });
+
   it("lists tracked files for method lookups, and none outside git", () => {
     const repo = scenario(false);
     expect(trackedFiles(repo)).toContain("pages/plp.ts");

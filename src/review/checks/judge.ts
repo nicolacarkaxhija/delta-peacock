@@ -5,64 +5,9 @@ import { addUsage } from "../../model/usage.js";
 import type { ModelPort, ModelRequest, ModelUsage } from "../../model/port.js";
 import { parseJson, quotesGuideline, type RejectedCandidate } from "../parse.js";
 import { plainBody } from "../prose.js";
-import type { Candidate, Shape } from "./detect.js";
+import type { Candidate } from "./detect.js";
+import { sentenceOf } from "./rules.js";
 import { item } from "./source.js";
-
-/** Where each shape's rule is written: the first guideline sentence matching, in this order. */
-const RULE_WORDS: Readonly<Record<Shape, readonly RegExp[]>> = {
-  "test-id": [/comment next to it/i, /\bCSS\b/],
-  "test-id-list": [/comment next to it/i, /\bCSS\b/],
-  "test-id-prefix": [/comment next to it/i, /\bCSS\b/],
-  "derived-hook": [/comment next to it/i, /\bCSS\b/],
-  css: [/comment next to it/i, /\bCSS\b/],
-  "multi-line": [
-    /\bsingle-line comment\b|\bone (?:short )?(?:natural )?line\b/i,
-    /past a single line/i,
-  ],
-  dash: [/\bdash/i],
-  narration: [/\bnarrat|how the change was made/i],
-  snapshot: [/awaited getter/i, /\bgetter/i, /snapshot/i],
-  "undeclared-tag": [/config declares are accepted/i, /\bdeclared\b|does not list/i],
-  "title-tag": [/never in the test title/i, /\btitle\b/i],
-  sleep: [/waitForTimeout has no valid use/i, /\bsleeps?\b/i, /named value/i, /\btimeouts?\b/i],
-  "inline-timeout": [/named value/i, /\bnamed\b/i, /\btimeouts?\b/i],
-};
-
-/** The prose sentences of a guideline body, before its examples. */
-function proseSentences(body: string): string[] {
-  const kept: string[] = [];
-  let fenced = false;
-  for (const line of body.split("\n")) {
-    if (/^\s*```/.test(line)) {
-      fenced = !fenced;
-      continue;
-    }
-    if (fenced) continue;
-    if (
-      /^\s*(?:\*\*|__)?(?:good|bad|correct|wrong|do|don'?t)\b[^:]*:\s*(?:\*\*|__)?\s*$/i.test(line)
-    )
-      break;
-    if (line.trim().startsWith("#")) continue;
-    kept.push(line.trim());
-  }
-  return kept
-    .join(" ")
-    .split(/(?<=[.!?])\s+(?=[A-Z`@])/)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence !== "");
-}
-
-/** The guideline sentence a shape breaks; the title when no sentence names it. */
-export function ruleSentence(guideline: Guideline, shape: Shape): string {
-  const sentences = [guideline.title, ...proseSentences(guideline.body)];
-  for (const pattern of RULE_WORDS[shape]) {
-    const hit = sentences.find(
-      (sentence) => pattern.test(sentence) && quotesGuideline(sentence, guideline),
-    );
-    if (hit !== undefined) return hit;
-  }
-  return guideline.title;
-}
 
 const Verdict = z.object({
   verdict: z.enum(["confirm", "drop"]),
@@ -206,7 +151,7 @@ export async function settle(
   guideline: Guideline,
   excerpt: string,
 ): Promise<JudgedCandidate> {
-  const rule = ruleSentence(guideline, candidate.shape);
+  const rule = sentenceOf(candidate.check, candidate.shape);
   if (candidate.judge === undefined || port === undefined) {
     return {
       outcome: "finding",
@@ -274,12 +219,7 @@ export async function settle(
   const kept = reason !== undefined && agreesWithCatalog(reason, candidate) ? reason : undefined;
   return {
     outcome: "finding",
-    finding: findingOf(
-      candidate,
-      guideline,
-      quoteHolds && quoted !== undefined ? quoted : rule,
-      kept,
-    ),
+    finding: findingOf(candidate, guideline, rule, kept),
     notice: `check: ${where(candidate)}: finding, confirmed by the judge`,
     ...spent,
   };

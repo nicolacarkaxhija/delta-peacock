@@ -52,3 +52,26 @@ change. For those the judge answers one question per candidate.
 The finding's title, body, quoted guideline sentence and suggestion come from the check, so a
 rerun on the same change posts the same words. The report carries a `checks` tally: candidates,
 findings, drops and judge failures.
+
+## The sentence each check quotes
+
+Every check declares the guideline sentence it enforces, one per kind of candidate, and every
+finding it produces quotes that sentence. The comment shows it as a `Guideline: ...` line under
+the reason, like a model finding; the Code Insights annotation ends with the same line and the
+stats ledger's finding line carries it as `guidelineQuote`.
+
+| Check        | Candidate                        | Sentence the bound guideline must contain                                                                                                                                |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `selectors`  | every kind                       | Where a CSS selector is unavoidable, a comment next to it gives the reason.                                                                                              |
+| `comments`   | a comment spanning lines         | Any punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line.                                          |
+| `comments`   | a dash, narration                | It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.                       |
+| `assertions` | a snapshot read                  | What counts is the read itself: expect wrapped around an awaited getter.                                                                                                 |
+| `tags`       | an undeclared tag                | Only axis tags and tags the config declares are accepted, so a suggestion never proposes `@smoke` or another unlisted word; the test's folder states its intent already. |
+| `tags`       | a tag in the title               | Tags belong in the tag option, never in the test title.                                                                                                                  |
+| `timeouts`   | `waitForTimeout`                 | waitForTimeout has no valid use.                                                                                                                                         |
+| `timeouts`   | another sleep, an inline timeout | Waits longer than the framework defaults live as named values in one timeouts module, which then explains every slow run in one place.                                   |
+
+At startup the review confirms that each bound guideline says its check's sentences word for word
+(whitespace, backticks and emphasis aside). A missing sentence is a configuration error: the run
+stops with exit code 1 before any model call and posts nothing, and `doctor` fails its guidelines
+check with the same message. Add the sentence to the guideline or unbind the check.

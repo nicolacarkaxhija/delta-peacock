@@ -6,6 +6,7 @@ import type { RuntimeDeps } from "../deps.js";
 import { resolveTargetRef } from "../git/diff.js";
 import { runGit } from "../git/git.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
+import { checkSentenceProblems } from "../review/checks/rules.js";
 import { buildScmPort } from "../scm/build.js";
 
 type CheckLevel = "ok" | "warn" | "fail";
@@ -56,6 +57,8 @@ function checkGuidelines(deps: RuntimeDeps, config: Config): CheckResult {
         `${String(resolved.problems.length)} unusable file(s); run guidelines lint for the list`,
       );
     }
+    const unquotable = checkSentenceProblems(resolved.guidelines, config.review.checks);
+    if (unquotable.length > 0) return check("guidelines", "fail", unquotable.join("; "));
     if (resolved.guidelines.length === 0) {
       return check(
         "guidelines",

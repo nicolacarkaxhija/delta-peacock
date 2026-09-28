@@ -30,6 +30,7 @@ export type Shape =
   | "snapshot"
   | "undeclared-tag"
   | "title-tag"
+  | "wait-for-timeout"
   | "sleep"
   | "inline-timeout";
 
@@ -1073,7 +1074,7 @@ function timeoutCandidates(
     const call = original.slice(match.index, close + 1).replace(/\s+/g, " ");
     if (name === "waitForTimeout") {
       add(match.index, {
-        shape: "sleep",
+        shape: "wait-for-timeout",
         title: "Fixed sleep with waitForTimeout",
         body: `${code(call)} sleeps a fixed time instead of waiting for a state, and waitForTimeout has no valid use. ${waitFirst}`,
       });

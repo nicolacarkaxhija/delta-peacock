@@ -16,6 +16,7 @@ import {
 import { excerptOf, settle } from "./judge.js";
 
 export { CHECKS, type CheckName } from "./detect.js";
+export { CHECK_SENTENCES, checkSentenceProblems, sentenceOf } from "./rules.js";
 
 /** The guidelines a static check owns, and the ones the model reviews freely. */
 export function splitChecked(

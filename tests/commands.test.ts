@@ -112,6 +112,19 @@ describe("doctor", () => {
     expect(stdout).toContain("not found");
   });
 
+  it("fails the guidelines check when a bound guideline lacks its check's sentence", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    write(repo, "delta-peacock.config.yaml", "review:\n  checks:\n    no-console: timeouts\n");
+    commitAll(repo, "rules");
+    const { code, stdout } = await run(["doctor"], repo);
+    expect(code).toBe(1);
+    expect(stdout).toContain(
+      "FAIL  guidelines: review.checks: no-console is bound to the timeouts check",
+    );
+    expect(stdout).toContain('"waitForTimeout has no valid use."');
+  });
+
   it("fails on unresolvable configuration and skips the rest", async () => {
     const repo = makeRepo();
     write(repo, "delta-peacock.config.yaml", "gate:\n  failOn: WHENEVER\n");

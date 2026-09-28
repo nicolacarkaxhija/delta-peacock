@@ -632,4 +632,28 @@ describe("bench runs the static checks a live review runs", () => {
     expect(rows.find((line) => line.startsWith("| only-checked |"))).toContain("| 1 |");
     expect(calls).toBe(1);
   });
+
+  it("refuses a checked guideline that lacks its check's sentence", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-unquotable-"));
+    const one = path.join(dir, "unquotable");
+    mkdirSync(path.join(one, "guidelines"), { recursive: true });
+    writeFileSync(
+      path.join(one, "guidelines", "prefer-test-ids.md"),
+      "---\nid: prefer-test-ids\nseverity: MINOR\n---\nCSS is a last resort.\n",
+    );
+    writeFileSync(path.join(one, "diff.patch"), "");
+    writeFileSync(path.join(one, "expected.json"), JSON.stringify({ findings: [] }));
+    let stderr = "";
+    const code = await runCli(["bench", "--cases", dir, "--context", "none"], {
+      cwd: makeRepo(),
+      env: { DELTA_PEACOCK_REVIEW_CHECKS: '{"prefer-test-ids":"selectors"}' },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: { complete: () => Promise.reject(new Error("no call expected")) },
+    });
+    expect(code).toBe(1);
+    expect(stderr).toContain("review.checks: prefer-test-ids is bound to the selectors check");
+  });
 });

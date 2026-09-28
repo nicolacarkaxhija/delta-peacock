@@ -20,7 +20,8 @@ from a clean checkout; a red line blocks it.
   its own: `pnpm docs:check`.
 - `secrets`: gitleaks finds nothing outside the documented fixtures. On its own:
   `gitleaks detect --no-banner`.
-- `review config`: the configuration validates and every guideline is usable. On its own: `pnpm build && node dist/cli.js doctor` ends with `all checks passed`.
+- `review config`: the configuration validates and every bound guideline quotes its check's
+  sentence. On its own: `pnpm build && node dist/cli.js doctor` ends with `all checks passed`.
 
 ## Release
 

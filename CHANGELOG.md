@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.12 (2026-09-28)
+
+A finding from a static check now shows which rule it applies, as a model finding does.
+
+### Features
+
+- Every check declares the guideline sentence it enforces, one per kind of candidate, and each finding it produces quotes it: a `Guideline: ...` line under the reason in the comment, the end of the Code Insights annotation, and `guidelineQuote` on the stats ledger's finding line. Model findings get the same line.
+- At startup the review confirms that each bound guideline says its check's sentences word for word; a missing sentence stops the run with a configuration error before any model call or post, and `doctor` fails with the same message.
+
 ## 0.1.11 (2026-09-26)
 
 Three misses from the Bitbucket consumer's pull requests 39 and 44 close in the static checks, not in the prompt.
