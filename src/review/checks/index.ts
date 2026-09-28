@@ -1,7 +1,7 @@
 import type { Finding, Violation } from "../../domain/finding.js";
 import type { Guideline } from "../../domain/guideline.js";
 import { newLineTexts } from "../../git/diff.js";
-import type { JevPort } from "../../model/jev.js";
+import { DEFAULT_MIN_CONFIDENCE, type JevPort } from "../../model/jev.js";
 import type { ModelPort, ModelUsage } from "../../model/port.js";
 import { addUsage } from "../../model/usage.js";
 import { inPool } from "../../util/pool.js";
@@ -129,7 +129,7 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
               candidate,
               guideline,
               excerpt,
-              input.minConfidence ?? 0.7,
+              input.minConfidence ?? DEFAULT_MIN_CONFIDENCE,
             );
           }
           if (candidate.judge !== undefined) port ??= input.port();

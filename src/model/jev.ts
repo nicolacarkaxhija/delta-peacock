@@ -64,6 +64,9 @@ const RETRYABLE = new Set([429, 529]);
 
 // The first retry waits a quarter second and doubles, so the default attempts back off under a second.
 const BACKOFF_BASE_MS = 250;
+const BACKOFF_FACTOR = 2;
+// No measurement set it yet: a starting floor that drops only weak verdicts, tuned per repository through judge.minConfidence.
+export const DEFAULT_MIN_CONFIDENCE = 0.7;
 // A longer Retry-After would stall the whole review, so no wait goes beyond five seconds.
 const BACKOFF_CAP_MS = 5000;
 // Two retries ride out a short overload without stretching a slow review further.
@@ -76,7 +79,9 @@ const ERROR_EXCERPT_CHARS = 200;
 function backoffOf(response: Response, attempt: number): number {
   const header = Number(response.headers.get("retry-after"));
   const wanted =
-    Number.isFinite(header) && header > 0 ? header * 1000 : BACKOFF_BASE_MS * 2 ** attempt;
+    Number.isFinite(header) && header > 0
+      ? header * 1000
+      : BACKOFF_BASE_MS * BACKOFF_FACTOR ** attempt;
   return Math.min(wanted, BACKOFF_CAP_MS);
 }
 

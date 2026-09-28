@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GUIDELINE_CHECKS } from "../domain/guideline.js";
 import { SEVERITIES } from "../domain/severity.js";
+import { DEFAULT_MIN_CONFIDENCE } from "../model/jev.js";
 import { DEFAULT_MAX_TOOL_ROUNDS } from "../model/port.js";
 
 export const DEFAULT_DISPLAY_NAME = "Code review";
@@ -136,7 +137,7 @@ export const JudgeSchema = z.strictObject({
   /** The Jev model or alias; pin a versioned id to keep tuned thresholds. */
   model: z.string().min(1).default("jev-latest"),
   /** A Jev verdict under this confidence drops the candidate, logged. */
-  minConfidence: z.number().min(0).max(1).default(0.7),
+  minConfidence: z.number().min(0).max(1).default(DEFAULT_MIN_CONFIDENCE),
   /** API base override for tests and proxies. */
   baseUrl: z.url().optional(),
 });
