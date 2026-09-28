@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Violation } from "../../domain/finding.js";
+import type { JudgeTrace, Violation } from "../../domain/finding.js";
 import type { Guideline } from "../../domain/guideline.js";
 import { addUsage } from "../../model/usage.js";
 import type { ModelPort, ModelRequest, ModelUsage } from "../../model/port.js";
@@ -107,13 +107,18 @@ export interface JudgedCandidate {
   rejected?: RejectedCandidate;
   notice: string;
   usage?: ModelUsage;
+  /** Jev tokens, priced apart from the review model's. */
+  jevUsage?: ModelUsage;
+  /** Present whenever a judge was asked. */
+  judged?: JudgeTrace;
 }
 
-function findingOf(
+export function findingOf(
   candidate: Candidate,
   guideline: Guideline,
   quote: string,
   reason?: string,
+  judged?: JudgeTrace,
 ): Violation {
   const own = reason?.trim() ?? "";
   const body =
@@ -131,12 +136,13 @@ function findingOf(
     body: plainBody(body),
     guidelineQuote: quote,
     quote: candidate.quote,
-    confidence: 1,
+    confidence: judged?.confidence ?? 1,
     ...(candidate.suggestion !== undefined ? { suggestion: candidate.suggestion } : {}),
+    ...(judged !== undefined ? { judgedBy: judged } : {}),
   };
 }
 
-const where = (candidate: Candidate): string =>
+export const where = (candidate: Candidate): string =>
   `${candidate.file}:${String(candidate.line)} ${candidate.guidelineId} ${candidate.shape}`;
 
 /**
@@ -150,6 +156,7 @@ export async function settle(
   candidate: Candidate,
   guideline: Guideline,
   excerpt: string,
+  now: () => number = () => performance.now(),
 ): Promise<JudgedCandidate> {
   const rule = sentenceOf(candidate.check, candidate.shape);
   if (candidate.judge === undefined || port === undefined) {
@@ -163,6 +170,7 @@ export async function settle(
   let usage: ModelUsage | undefined;
   let verdict: Verdict | undefined;
   let failure = "";
+  const started = now();
   for (let attempt = 0; attempt < 2 && verdict === undefined; attempt += 1) {
     try {
       const reply = await port.complete(request);
@@ -174,7 +182,8 @@ export async function settle(
       failure = (error as Error).message.replace(/\n[\s\S]*/, "");
     }
   }
-  const spent = usage !== undefined ? { usage } : {};
+  const judged: JudgeTrace = { provider: "model", latencyMs: Math.round(now() - started) };
+  const spent = { ...(usage !== undefined ? { usage } : {}), judged };
   if (verdict === undefined) {
     return {
       outcome: "failed",
@@ -210,7 +219,7 @@ export async function settle(
     }
     return {
       outcome: "finding",
-      finding: findingOf(candidate, guideline, rule),
+      finding: findingOf(candidate, guideline, rule, undefined, judged),
       notice: `check: ${where(candidate)}: finding, the judge's drop cites no listed comment or guideline sentence`,
       ...spent,
     };
@@ -219,7 +228,7 @@ export async function settle(
   const kept = reason !== undefined && agreesWithCatalog(reason, candidate) ? reason : undefined;
   return {
     outcome: "finding",
-    finding: findingOf(candidate, guideline, rule, kept),
+    finding: findingOf(candidate, guideline, rule, kept, judged),
     notice: `check: ${where(candidate)}: finding, confirmed by the judge`,
     ...spent,
   };

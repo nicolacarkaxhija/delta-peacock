@@ -10,6 +10,7 @@ export interface Credentials {
   readonly ANTHROPIC_API_KEY?: string;
   readonly OPENROUTER_API_KEY?: string;
   readonly OPENAI_API_KEY?: string;
+  readonly JEV_API_KEY?: string;
   readonly AWS_REGION?: string;
   readonly AWS_ACCESS_KEY_ID?: string;
   readonly AWS_SECRET_ACCESS_KEY?: string;
@@ -23,6 +24,7 @@ const CREDENTIAL_NAMES = [
   "ANTHROPIC_API_KEY",
   "OPENROUTER_API_KEY",
   "OPENAI_API_KEY",
+  "JEV_API_KEY",
   "AWS_REGION",
   "AWS_ACCESS_KEY_ID",
   "AWS_SECRET_ACCESS_KEY",

@@ -60,6 +60,10 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_CACHE_PATH: "cache.path",
   DELTA_PEACOCK_CALIBRATION_ENABLED: "calibration.enabled",
   DELTA_PEACOCK_CALIBRATION_MODEL: "calibration.model",
+  DELTA_PEACOCK_JUDGE_PROVIDER: "judge.provider",
+  DELTA_PEACOCK_JUDGE_MODEL: "judge.model",
+  DELTA_PEACOCK_JUDGE_MIN_CONFIDENCE: "judge.minConfidence",
+  DELTA_PEACOCK_JUDGE_BASE_URL: "judge.baseUrl",
   DELTA_PEACOCK_ENSEMBLE_ENABLED: "ensemble.enabled",
   DELTA_PEACOCK_ENSEMBLE_MEMBERS: "ensemble.members",
   DELTA_PEACOCK_ENSEMBLE_MODE: "ensemble.mode",
@@ -109,6 +113,7 @@ const NUMBER_PATHS = new Set([
   "cost.maxPerReview",
   "cost.monthlyCap",
   "cache.ttlHours",
+  "judge.minConfidence",
 ]);
 const BOOLEAN_PATHS = new Set([
   "review.fetchTarget",

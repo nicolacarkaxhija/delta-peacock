@@ -1,6 +1,7 @@
 import type { Finding, Violation } from "../../domain/finding.js";
 import type { Guideline } from "../../domain/guideline.js";
 import { newLineTexts } from "../../git/diff.js";
+import type { JevPort } from "../../model/jev.js";
 import type { ModelPort, ModelUsage } from "../../model/port.js";
 import { addUsage } from "../../model/usage.js";
 import { inPool } from "../../util/pool.js";
@@ -13,6 +14,7 @@ import {
   type BoundGuideline,
   type CheckName,
 } from "./detect.js";
+import { settleWithJev } from "./jev-judge.js";
 import { excerptOf, settle } from "./judge.js";
 
 export { CHECKS, type CheckName } from "./detect.js";
@@ -69,6 +71,18 @@ export interface ChecksInput {
   port: () => ModelPort;
   /** Applied to every excerpt before it leaves the process. */
   redact: (text: string) => string;
+  /** Present when judge.provider is jev and its key is set; the model port judges otherwise. */
+  jev?: JevPort;
+  /** A Jev verdict under this confidence drops the candidate. */
+  minConfidence?: number;
+}
+
+/** What the judge calls of one review cost in time, and how many fell under the floor. */
+export interface JudgeSummary {
+  provider: "model" | "jev";
+  calls: number;
+  latencyMs: number;
+  lowConfidence: number;
 }
 
 export interface ChecksOutcome {
@@ -77,6 +91,10 @@ export interface ChecksOutcome {
   notices: string[];
   tally: CheckTally;
   usage?: ModelUsage;
+  /** Jev tokens, priced apart from the review model's. */
+  jevUsage?: ModelUsage;
+  /** Present when any candidate went to a judge. */
+  judge?: JudgeSummary;
 }
 
 /** Judge calls in flight at once. */
@@ -103,9 +121,19 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
       candidates
         .filter((candidate) => candidate.guidelineId === guideline.id)
         .map((candidate) => async () => {
-          if (candidate.judge !== undefined) port ??= input.port();
           const lines = (input.read(candidate.file) ?? "").split("\n");
-          return settle(port, candidate, guideline, input.redact(excerptOf(lines, candidate)));
+          const excerpt = input.redact(excerptOf(lines, candidate));
+          if (candidate.judge !== undefined && input.jev !== undefined) {
+            return settleWithJev(
+              input.jev,
+              candidate,
+              guideline,
+              excerpt,
+              input.minConfidence ?? 0.7,
+            );
+          }
+          if (candidate.judge !== undefined) port ??= input.port();
+          return settle(port, candidate, guideline, excerpt);
         }),
     ),
     JUDGE_CONCURRENCY,
@@ -113,6 +141,8 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
   const findings: Violation[] = [];
   const rejected: RejectedCandidate[] = [];
   let usage: ModelUsage | undefined;
+  let jevUsage: ModelUsage | undefined;
+  let judge: JudgeSummary | undefined;
   const tally: CheckTally = {
     candidates: candidates.length,
     findings: 0,
@@ -124,6 +154,14 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
     if (outcome.rejected !== undefined) rejected.push(outcome.rejected);
     if (outcome.usage !== undefined)
       usage = usage === undefined ? outcome.usage : addUsage(usage, outcome.usage);
+    if (outcome.jevUsage !== undefined)
+      jevUsage = jevUsage === undefined ? outcome.jevUsage : addUsage(jevUsage, outcome.jevUsage);
+    if (outcome.judged !== undefined) {
+      judge ??= { provider: outcome.judged.provider, calls: 0, latencyMs: 0, lowConfidence: 0 };
+      judge.calls += 1;
+      judge.latencyMs += outcome.judged.latencyMs;
+      if (outcome.rejected?.reason === "judge-low-confidence") judge.lowConfidence += 1;
+    }
     if (outcome.outcome === "finding") tally.findings += 1;
     else if (outcome.outcome === "dropped") tally.dropped += 1;
     else tally.judgeFailed += 1;
@@ -134,5 +172,7 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
     notices: outcomes.map((outcome) => outcome.notice),
     tally,
     ...(usage !== undefined ? { usage } : {}),
+    ...(jevUsage !== undefined ? { jevUsage } : {}),
+    ...(judge !== undefined ? { judge } : {}),
   };
 }

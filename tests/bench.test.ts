@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { loadCases, runBench } from "../src/bench/harness.js";
 import { overlapMatrix, scoreFindings } from "../src/bench/scoring.js";
 import { runCli } from "../src/index.js";
+import type { JevReply } from "../src/model/jev.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import { makeRepo } from "./helpers/git.js";
 
@@ -631,6 +632,99 @@ describe("bench runs the static checks a live review runs", () => {
     );
     expect(rows.find((line) => line.startsWith("| only-checked |"))).toContain("| 1 |");
     expect(calls).toBe(1);
+  });
+
+  it("judges and calibrates on Jev when asked, and says once when its key is missing", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "peacock-bench-jev-"));
+    for (const name of ["one", "two"]) {
+      const one = path.join(dir, name);
+      mkdirSync(path.join(one, "guidelines"), { recursive: true });
+      writeFileSync(
+        path.join(one, "guidelines", "prefer-test-ids.md"),
+        "---\nid: prefer-test-ids\nseverity: MINOR\n---\nWhere a CSS selector is unavoidable, a comment next to it gives the reason.\n",
+      );
+      writeFileSync(
+        path.join(one, "diff.patch"),
+        [
+          "diff --git a/pages/a.ts b/pages/a.ts",
+          "new file mode 100644",
+          "--- /dev/null",
+          "+++ b/pages/a.ts",
+          "@@ -0,0 +1,4 @@",
+          "+export function a(page) {",
+          "+  // the banner of the page",
+          "+  return page.locator('.a');",
+          "+}",
+          "",
+        ].join("\n"),
+      );
+      writeFileSync(
+        path.join(one, "expected.json"),
+        JSON.stringify({
+          findings: [{ file: "pages/a.ts", line: 3, guidelineId: "prefer-test-ids" }],
+        }),
+      );
+    }
+    const env = {
+      DELTA_PEACOCK_REVIEW_CHECKS: '{"prefer-test-ids":"selectors"}',
+      DELTA_PEACOCK_JUDGE_PROVIDER: "jev",
+      DELTA_PEACOCK_CALIBRATION_ENABLED: "true",
+    };
+    const judged = JSON.stringify({
+      verdict: "confirm",
+      guidelineQuote: "Where a CSS selector is unavoidable, a comment next to it gives the reason.",
+      decisions: [],
+    });
+    let fallback = "";
+    let modelCalls = 0;
+    await runCli(["bench", "--cases", dir, "--context", "none"], {
+      cwd: makeRepo(),
+      env,
+      out: () => undefined,
+      err: (text) => {
+        fallback += text;
+      },
+      modelPort: {
+        complete: () => {
+          modelCalls += 1;
+          return Promise.resolve({ text: judged });
+        },
+      },
+    });
+    expect(fallback.match(/JEV_API_KEY is not set/g)).toHaveLength(1);
+    expect(modelCalls).toBeGreaterThan(0);
+    const fixture = (name: string): string =>
+      readFileSync(path.join(import.meta.dirname, "fixtures", "jev", `${name}.json`), "utf8");
+    let stderr = "";
+    const code = await runCli(["bench", "--cases", dir, "--context", "none"], {
+      cwd: makeRepo(),
+      env,
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: { complete: () => Promise.reject(new Error("no model call expected")) },
+      jevPort: {
+        model: "jev-latest",
+        decide: (request) => {
+          const name = "verdict" in request.questions ? "judge-keep" : "calibration";
+          const body = JSON.parse(fixture(name)) as {
+            model: string;
+            answers: JevReply["answers"];
+            usage: { input_tokens: number; output_tokens: number };
+          };
+          return Promise.resolve({
+            model: body.model,
+            answers: body.answers,
+            usage: { inputTokens: body.usage.input_tokens, outputTokens: 0 },
+            latencyMs: 80,
+          });
+        },
+      },
+    });
+    expect(code).toBe(0);
+    expect(stderr).toContain("confirmed by the judge (jev) at 0.86");
+    expect(stderr).not.toContain("calibration failed");
   });
 
   it("refuses a checked guideline that lacks its check's sentence", async () => {

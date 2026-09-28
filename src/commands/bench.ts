@@ -9,10 +9,11 @@ import {
   type ReviewResult,
 } from "../bench/harness.js";
 import type { Finding } from "../domain/finding.js";
-import { buildModelPortFor } from "../model/build.js";
+import { buildJevPort, buildModelPortFor } from "../model/build.js";
+import type { JevPort } from "../model/jev.js";
 import type { ModelUsage } from "../model/port.js";
 import { addUsage } from "../model/usage.js";
-import { calibrate } from "../review/calibrate.js";
+import { calibrate, calibrateWithJev } from "../review/calibrate.js";
 import { runEnsemble } from "../review/ensemble.js";
 import type { ParsedReview } from "../review/parse.js";
 import { planPasses, runPasses, type PromptOf } from "../review/run-review.js";
@@ -75,8 +76,23 @@ function addTo(
 }
 
 function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>): ReviewFn {
+  // resolved once per run, so a missing key is said once
+  let jevOnce: { port: JevPort | undefined } | undefined;
   return async (benchCase: BenchCase): Promise<ReviewResult> => {
     const config = deps.loadConfig(flags);
+    const jevOf = (): JevPort | undefined => {
+      jevOnce ??= {
+        port: buildJevPort(
+          config,
+          deps.credentials,
+          (line) => {
+            deps.err(`${line}\n`);
+          },
+          deps.jevPort,
+        ),
+      };
+      return jevOnce.port;
+    };
     const guidelines = loadGuidelinesFromFiles(
       readWorkingTreeGuidelines(guidelinesDirFor(benchCase.dir)),
       config.review.frontmatterContract,
@@ -177,6 +193,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       config.review.repoConfigPath,
     );
     const fitted = dropUnfitTags(dropCommentMoves(placed, linesOf).kept, linesOf, tags).kept;
+    const judgeJev = bound.length > 0 ? jevOf() : undefined;
     const checks =
       bound.length > 0
         ? await runChecks({
@@ -192,11 +209,15 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
             ...(tags !== undefined ? { declared: tags } : {}),
             configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
             port: () => deps.modelPort ?? buildModelPort(config, deps.credentials),
+            ...(judgeJev !== undefined
+              ? { jev: judgeJev, minConfidence: config.judge.minConfidence }
+              : {}),
             redact: (text) => text,
           })
         : undefined;
     for (const notice of checks?.notices ?? []) deps.err(`${notice}\n`);
     addTo(usage, config.model.id ?? config.model.provider, checks?.usage);
+    addTo(usage, config.judge.model, checks?.jevUsage);
     const kept = [
       ...dropGoodExamples(fitted, guidelinesById).kept,
       ...placeFindings(checks?.findings ?? [], linesOf),
@@ -206,7 +227,18 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       readSourceForStructuralCheck(filesRoot, file),
     );
     let findings: Finding[] = structural.kept;
-    if (config.calibration.enabled && findings.length > 0) {
+    const calibrationJev = config.calibration.enabled ? jevOf() : undefined;
+    if (calibrationJev !== undefined && findings.length > 0) {
+      const outcome = await calibrateWithJev(
+        calibrationJev,
+        findings,
+        benchCase.diff,
+        config.judge.minConfidence,
+      );
+      for (const notice of outcome.notices) deps.err(`${notice}\n`);
+      findings = outcome.findings;
+      addTo(usage, config.judge.model, outcome.jevUsage);
+    } else if (config.calibration.enabled && findings.length > 0) {
       // advisory as in a live review: a drop note is recorded, the finding stays
       const ref = config.calibration.model;
       const calibrationPort = ref

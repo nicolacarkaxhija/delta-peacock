@@ -1,4 +1,5 @@
 import { fingerprintOf, type Finding } from "../domain/finding.js";
+import type { JevPort, JevRequest } from "../model/jev.js";
 import type { ModelPort, ModelRequest, ModelUsage } from "../model/port.js";
 import { parseJson } from "./parse.js";
 
@@ -110,6 +111,71 @@ export async function calibrate(
       ...(reply.usage ? { usage: reply.usage } : {}),
       notices: [],
     };
+  } catch (error) {
+    return {
+      findings: [...findings],
+      notices: [
+        `calibration failed (${(error as Error).message}); publishing the uncalibrated findings`,
+      ],
+    };
+  }
+}
+
+const JEV_ACTIONS = {
+  keep: "Real and worth a comment.",
+  drop: "A false positive or trivial.",
+  demote: "Real but not worth blocking anything.",
+};
+
+/** One Choice per finding over the same diff; Jev evaluates them in parallel. */
+export function buildJevCalibrationRequest(findings: readonly Finding[], diff: string): JevRequest {
+  return {
+    state: diff,
+    questions: Object.fromEntries(
+      findings.map((finding, index) => [
+        `f${String(index)}`,
+        {
+          type: "choice" as const,
+          instructions: {
+            finding: {
+              kind: finding.kind,
+              severity: finding.severity,
+              file: finding.file,
+              line: finding.line,
+              title: finding.title,
+              body: finding.body,
+            },
+            question:
+              "Another pass raised `finding` against this diff. Judge only its signal quality: keep, drop or demote it?",
+          },
+          criteria: JEV_ACTIONS,
+        },
+      ]),
+    ),
+  };
+}
+
+/**
+ * Calibration on Jev: the same advisory notes, each carrying Jev's confidence;
+ * a decision under the floor leaves the finding unannotated.
+ */
+export async function calibrateWithJev(
+  jev: JevPort,
+  findings: readonly Finding[],
+  diff: string,
+  minConfidence: number,
+): Promise<CalibrationOutcome & { jevUsage?: ModelUsage }> {
+  if (findings.length === 0) return { findings: [], notices: [] };
+  try {
+    const reply = await jev.decide(buildJevCalibrationRequest(findings, diff));
+    const annotated = findings.map((finding, index): Finding => {
+      const answer = reply.answers[`f${String(index)}`];
+      if (answer === undefined || answer.confidence < minConfidence) return finding;
+      if (answer.choice !== "drop" && answer.choice !== "demote") return finding;
+      const reason = `jev ${answer.choice} at confidence ${answer.confidence.toFixed(2)}`;
+      return { ...finding, calibration: { action: answer.choice, reason } };
+    });
+    return { findings: annotated, notices: [], jevUsage: reply.usage };
   } catch (error) {
     return {
       findings: [...findings],

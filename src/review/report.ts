@@ -93,6 +93,20 @@ export interface ReviewReport {
   unparsedBatches?: UnparsedBatch[];
   /** What the static checks found and what became of it; present when a guideline is checked. */
   checks?: CheckTally;
+  /** Who judged the checked candidates, how long it took, what Jev cost; present when any was judged. */
+  judge?: JudgeReport;
+}
+
+/** The judge calls of one review. */
+export interface JudgeReport {
+  provider: "model" | "jev";
+  calls: number;
+  latencyMs: number;
+  lowConfidence: number;
+  /** Jev tokens; the model judge's tokens sit in the review usage. */
+  usage?: ModelUsage;
+  /** Jev USD, already inside cost.total when rates are set. */
+  cost?: number;
 }
 
 /** Candidates the static checks found, and how each ended. */
@@ -134,6 +148,7 @@ export function buildReport(input: {
   /** Looks up the flagged line's text; absent entries simply carry none. */
   lineTextOf?: (finding: Finding) => string | undefined;
   checks?: CheckTally;
+  judge?: JudgeReport;
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => {
     const lineText = input.lineTextOf?.(finding);
@@ -180,5 +195,6 @@ export function buildReport(input: {
       ? { unparsedBatches: [...input.unparsedBatches] }
       : {}),
     ...(input.checks !== undefined ? { checks: input.checks } : {}),
+    ...(input.judge !== undefined ? { judge: input.judge } : {}),
   };
 }

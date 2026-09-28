@@ -37,6 +37,16 @@ export interface Violation {
   note?: string;
   /** True when the quoted line could not be found, so no line carries the finding. */
   unplaced?: boolean;
+  /** Who confirmed a checked candidate, how long it took, and how sure it was. */
+  judgedBy?: JudgeTrace;
+}
+
+/** The judge call behind one checked candidate. */
+export interface JudgeTrace {
+  provider: "model" | "jev";
+  latencyMs: number;
+  /** Jev's calibrated confidence; the model judge reports none. */
+  confidence?: number;
 }
 
 export interface ProposedGuideline {

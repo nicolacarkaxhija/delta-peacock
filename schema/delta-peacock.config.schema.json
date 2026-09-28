@@ -585,6 +585,36 @@
       },
       "additionalProperties": false
     },
+    "judge": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "model",
+          "type": "string",
+          "enum": [
+            "model",
+            "jev"
+          ]
+        },
+        "model": {
+          "default": "jev-latest",
+          "type": "string",
+          "minLength": 1
+        },
+        "minConfidence": {
+          "default": 0.7,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "baseUrl": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
     "cache": {
       "default": {},
       "type": "object",

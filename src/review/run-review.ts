@@ -29,13 +29,14 @@ import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
-import { buildModelPortFor } from "../model/build.js";
+import { buildJevPort, buildModelPortFor } from "../model/build.js";
+import { JEV_RATE_INPUT_PER_1M, type JevPort } from "../model/jev.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { planBatches, planBudget } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
-import { calibrate } from "./calibrate.js";
+import { calibrate, calibrateWithJev } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
@@ -196,6 +197,17 @@ export async function runReview(
   // a checked guideline yields findings only on the lines its static check flags;
   // the open prompt still shows it, so the open review reads the same corpus
   const { bound, free } = splitChecked(guidelines, config.review.checks);
+  const jev =
+    bound.length > 0 || config.calibration.enabled
+      ? buildJevPort(
+          config,
+          deps.credentials,
+          (line) => {
+            deps.err(`${line}\n`);
+          },
+          deps.jevPort,
+        )
+      : undefined;
   const { redacted, request, passes, batchCount, parseOptions, budgetDegraded, linters } =
     await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
 
@@ -274,6 +286,7 @@ export async function runReview(
           ...(declared !== undefined ? { declared } : {}),
           configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
           port: () => reviewPort(deps, config),
+          ...(jev !== undefined ? { jev, minConfidence: config.judge.minConfidence } : {}),
           redact: (text) =>
             redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
               strict: config.redaction.strict,
@@ -369,10 +382,20 @@ export async function runReview(
     parsed.findings,
     redacted.text,
     usage,
+    jev,
   );
   const filtered = finalized.filtered;
   const baselined = finalized.baselined;
   usage = finalized.usage;
+  const jevUsage = addOptional(checks?.jevUsage, finalized.jevUsage);
+  const judgeCost = jevUsage !== undefined ? jevCostOf(config, jevUsage) : undefined;
+  const reviewCost = costWithJudge(config, usage, judgeCost);
+  if (checks?.judge !== undefined) {
+    const summary = checks.judge;
+    deps.err(
+      `judge: ${summary.provider}${jev !== undefined ? ` ${jev.model}` : ""}, ${String(summary.calls)} call(s), ${String(summary.latencyMs)} ms, ${String(summary.lowConfidence)} under judge.minConfidence${judgeCost !== undefined ? `, ${judgeCost.toFixed(6)} USD` : ""}\n`,
+    );
+  }
   // an in-code waiver moves a violation out of the gate but not out of the report
   const waivers = parseWaivers(newLineTexts(redacted.text)).waivers;
   const waived: { finding: Finding; waiver: Waiver }[] = [];
@@ -460,8 +483,15 @@ export async function runReview(
       redactions: redacted.counts,
       gate,
       ...(usage ? { usage } : {}),
-      ...(usage && anyRateConfigured(modelRates(config))
-        ? { cost: computeCost(usage, modelRates(config)) }
+      ...(reviewCost !== undefined ? { cost: reviewCost } : {}),
+      ...(checks?.judge !== undefined
+        ? {
+            judge: {
+              ...checks.judge,
+              ...(jevUsage !== undefined ? { usage: jevUsage } : {}),
+              ...(judgeCost !== undefined ? { cost: judgeCost } : {}),
+            },
+          }
         : {}),
       ...(ensembleMembers !== undefined
         ? { ensemble: { mode: config.ensemble.mode, members: ensembleMembers } }
@@ -507,7 +537,6 @@ export async function runReview(
   }
 
   if (config.stats.enabled) {
-    const rates = modelRates(config);
     // the recorded findings are what survived to the gate, not what was baselined
     await appendRecord(
       deps.cwd,
@@ -521,12 +550,13 @@ export async function runReview(
         ...(checks !== undefined && checks.tally.judgeFailed > 0
           ? { judgeFailed: checks.tally.judgeFailed }
           : {}),
+        ...(checks?.judge !== undefined
+          ? { judge: { ...checks.judge, ...(judgeCost !== undefined ? { cost: judgeCost } : {}) } }
+          : {}),
         attribution: await pullRequestAttribution(deps, config),
         ...(config.model.id !== undefined ? { model: config.model.id } : {}),
         ...(usage !== undefined ? { usage } : {}),
-        ...(usage !== undefined && anyRateConfigured(rates)
-          ? { cost: computeCost(usage, rates).total }
-          : {}),
+        ...(reviewCost !== undefined ? { cost: reviewCost.total } : {}),
         durationMs: Math.round(performance.now() - startedAt),
       }),
     );
@@ -955,6 +985,32 @@ interface FinalizedFindings {
   filtered: Finding[];
   baselined: Finding[];
   usage: ModelUsage | undefined;
+  jevUsage?: ModelUsage;
+}
+
+/** Jev's tokens at its cost.rates entry, else the documented rate; output is free. */
+export function jevCostOf(config: Config, usage: ModelUsage): number {
+  const rate = config.cost.rates[config.judge.model]?.rateInputPer1M ?? JEV_RATE_INPUT_PER_1M;
+  return (usage.inputTokens / 1_000_000) * rate;
+}
+
+/** The model's cost at its rates plus Jev's; Jev alone still prices a review. */
+function costWithJudge(
+  config: Config,
+  usage: ModelUsage | undefined,
+  judge: number | undefined,
+): ReturnType<typeof computeCost> | undefined {
+  const rates = modelRates(config);
+  const model =
+    usage !== undefined && anyRateConfigured(rates) ? computeCost(usage, rates) : undefined;
+  if (judge === undefined) return model;
+  const base = model ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+  return { ...base, total: base.total + judge };
+}
+
+function addOptional(a: ModelUsage | undefined, b: ModelUsage | undefined): ModelUsage | undefined {
+  if (a === undefined) return b;
+  return b === undefined ? a : addUsage(a, b);
 }
 
 /**
@@ -972,12 +1028,23 @@ async function finalizeFindings(
   findings: readonly Finding[],
   diffText: string,
   usageIn: ModelUsage | undefined,
+  jev?: JevPort,
 ): Promise<FinalizedFindings> {
   const partitioned = partitionFindings(findings, config);
   const filtered = partitioned.filtered;
   let kept = partitioned.kept;
   let usage = usageIn;
-  if (config.calibration.enabled) {
+  let jevUsage: ModelUsage | undefined;
+  if (config.calibration.enabled && jev !== undefined) {
+    const outcome = await calibrateWithJev(jev, kept, diffText, config.judge.minConfidence);
+    for (const notice of outcome.notices) deps.err(`${notice}\n`);
+    kept = outcome.findings;
+    jevUsage = outcome.jevUsage;
+    const flagged = kept.filter((finding) => finding.calibration !== undefined).length;
+    if (flagged > 0) {
+      deps.err(`calibration (jev) flagged ${String(flagged)} finding(s) for human triage\n`);
+    }
+  } else if (config.calibration.enabled) {
     const ref = config.calibration.model;
     const calibrationPort = ref
       ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.credentials))
@@ -1011,7 +1078,7 @@ async function finalizeFindings(
       );
     }
   }
-  return { kept, filtered, baselined, usage };
+  return { kept, filtered, baselined, usage, ...(jevUsage !== undefined ? { jevUsage } : {}) };
 }
 
 function partitionFindings(findings: readonly Finding[], config: Config) {

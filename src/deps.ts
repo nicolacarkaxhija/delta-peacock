@@ -3,6 +3,7 @@ import type { Credentials } from "./config/credentials.js";
 import type { Config } from "./config/schema.js";
 import type { EmbeddingPort } from "./context/embedding.js";
 import type { ModelRef } from "./model/build.js";
+import type { JevPort } from "./model/jev.js";
 import type { ModelPort } from "./model/port.js";
 import type { ScmPort } from "./scm/port.js";
 
@@ -31,6 +32,8 @@ export interface RuntimeDeps {
   modelPort?: ModelPort;
   /** SCM override; adapters are normally tested at the HTTP boundary instead. */
   scmPort?: ScmPort;
+  /** The Jev seam: tests inject recorded replies; the HTTP adapter otherwise. */
+  jevPort?: JevPort;
   /** Per-member model ports for ensemble tests; falls back to real adapters. */
   modelPortFor?: (member: ModelRef) => ModelPort;
   /** Injectable time for monthly-cap rollover; defaults to the system clock. */

@@ -6,6 +6,7 @@ import type { EmbeddingPort } from "./context/embedding.js";
 import type { RuntimeDeps } from "./deps.js";
 import { ExitCodeError } from "./errors.js";
 import type { ModelRef } from "./model/build.js";
+import type { JevPort } from "./model/jev.js";
 import type { ModelPort } from "./model/port.js";
 import { buildProgram } from "./program.js";
 import type { ScmPort } from "./scm/port.js";
@@ -28,6 +29,8 @@ export interface CliDeps {
   scmPort?: ScmPort;
   /** Per-member model ports for ensemble tests; falls back to real adapters. */
   modelPortFor?: (member: ModelRef) => ModelPort;
+  /** The Jev seam: tests inject recorded replies here. */
+  jevPort?: JevPort;
   /** Injectable time for monthly-cap rollover; defaults to the system clock. */
   clock?: () => Date;
   /** Line source for interactive commands; null means end of input. Tests inject it. */

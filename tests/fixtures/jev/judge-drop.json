@@ -1,0 +1,24 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "verdict": {
+      "type": "choice",
+      "choice": "drop",
+      "probabilities": { "keep": 0.05, "drop": 0.95 },
+      "confidence": 0.9
+    },
+    "quote": {
+      "type": "choice",
+      "choice": "s0",
+      "probabilities": { "s0": 0.97, "s1": 0.02, "s2": 0.01 },
+      "confidence": 0.96
+    },
+    "comment": {
+      "type": "choice",
+      "choice": "c0",
+      "probabilities": { "none": 0.04, "c0": 0.96 },
+      "confidence": 0.92
+    }
+  },
+  "usage": { "input_tokens": 598, "output_tokens": 39 }
+}

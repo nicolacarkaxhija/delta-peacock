@@ -53,6 +53,24 @@ The finding's title, body, quoted guideline sentence and suggestion come from th
 rerun on the same change posts the same words. The report carries a `checks` tally: candidates,
 findings, drops and judge failures.
 
+## Jev as the judge
+
+`judge.provider: jev` hands the judge to TypeSafe's Jev, a typed-decision model that answers in
+70 to 500 ms with calibrated probabilities. It takes effect only when `JEV_API_KEY` is set;
+without it the review says so once and the configured model judges. One request per candidate
+asks three Choice questions: keep or drop, which guideline sentence the decision rests on, and
+which listed comment settles it. The decision is `{ keep, confidence, quotedSentence }`.
+
+- A verdict under `judge.minConfidence` (default 0.7) drops the candidate and logs it as
+  `judge-low-confidence`.
+- A drop still stands only on a guideline sentence and a listed comment.
+- With `calibration.enabled`, Jev calibrates too: one Choice per finding, keep, drop or demote,
+  advisory as ever; a decision under the floor leaves the finding alone.
+- `judge.model` picks the model (`jev-latest`); pin a versioned id such as `jev-1.13.0` to keep a
+  tuned threshold. Jev is priced at 0.042 USD per million input tokens unless `cost.rates` names
+  the model. The report's `judge` block and the stats ledger carry provider, calls, latency and
+  confidence.
+
 ## The sentence each check quotes
 
 Every check declares the guideline sentence it enforces, one per kind of candidate, and every

@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import type { Finding } from "../domain/finding.js";
+import type { Finding, JudgeTrace } from "../domain/finding.js";
 import { SEVERITIES, type Severity } from "../domain/severity.js";
 import type { ModelUsage } from "../model/port.js";
 import { withLock } from "../util/lockfile.js";
@@ -36,6 +36,8 @@ export interface StatsRecord extends Attribution {
   byGuideline: Record<string, number>;
   /** Reviewer errors caught before posting; absent when there were none. */
   errors?: { misquoted?: number; judgeFailed?: number };
+  /** The judge calls of the review; absent when no candidate was judged. */
+  judge?: ReviewJudge;
   /** The review model id in use, env override included. */
   model?: string;
   tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -56,6 +58,18 @@ export interface FindingRecord extends Attribution {
   line: number;
   /** The guideline sentence the finding applies, as its comment quotes it. */
   guidelineQuote?: string;
+  /** The judge that confirmed a checked finding: provider, latency and confidence. */
+  judge?: JudgeTrace;
+}
+
+/** Provider, call count, wall time and floor drops of one review's judge. */
+export interface ReviewJudge {
+  provider: "model" | "jev";
+  calls: number;
+  latencyMs: number;
+  lowConfidence: number;
+  /** Jev USD; the model judge is inside the review cost. */
+  cost?: number;
 }
 
 export type LedgerRecord = StatsRecord | FindingRecord;
@@ -91,6 +105,7 @@ export interface LedgerInput {
   misquoted: number;
   /** Checked candidates whose judge gave no readable verdict twice. */
   judgeFailed?: number;
+  judge?: ReviewJudge;
   attribution: Attribution;
   model?: string;
   usage?: ModelUsage;
@@ -117,6 +132,7 @@ export function ledgerRecords(input: LedgerInput): LedgerRecord[] {
           },
         }
       : {}),
+    ...(input.judge !== undefined ? { judge: input.judge } : {}),
     ...attribution,
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.usage !== undefined
@@ -143,6 +159,9 @@ export function ledgerRecords(input: LedgerInput): LedgerRecord[] {
     line: finding.line,
     ...(finding.kind === "violation" && finding.guidelineQuote !== undefined
       ? { guidelineQuote: finding.guidelineQuote }
+      : {}),
+    ...(finding.kind === "violation" && finding.judgedBy !== undefined
+      ? { judge: finding.judgedBy }
       : {}),
   }));
   return [review, ...findings];

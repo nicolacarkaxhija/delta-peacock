@@ -3,6 +3,7 @@ import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
 import { createAnthropicPort } from "./anthropic.js";
 import { createBedrockPort } from "./bedrock.js";
+import { createJevPort, type JevPort } from "./jev.js";
 import { createOpenAiishPort } from "./openaiish.js";
 import type { ModelPort } from "./port.js";
 
@@ -82,4 +83,30 @@ export function buildModelPortFor(ref: ModelRef, credentials: Credentials): Mode
         ...(ref.baseUrl !== undefined ? { baseUrl: ref.baseUrl } : {}),
       });
   }
+}
+
+/**
+ * Jev when judge.provider asks for it and JEV_API_KEY is set. Without the key
+ * the caller hears it once and the configured model judges instead.
+ */
+export function buildJevPort(
+  config: Config,
+  credentials: Credentials,
+  notify: (line: string) => void,
+  injected?: JevPort,
+): JevPort | undefined {
+  if (config.judge.provider !== "jev") return undefined;
+  if (injected !== undefined) return injected;
+  const apiKey = credentials.JEV_API_KEY;
+  if (apiKey === undefined || apiKey === "") {
+    notify(
+      `judge: judge.provider is jev but JEV_API_KEY is not set; the ${config.model.provider} model judges instead`,
+    );
+    return undefined;
+  }
+  return createJevPort({
+    apiKey,
+    model: config.judge.model,
+    ...(config.judge.baseUrl !== undefined ? { baseUrl: config.judge.baseUrl } : {}),
+  });
 }

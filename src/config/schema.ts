@@ -129,6 +129,18 @@ export const CalibrationSchema = z.strictObject({
   model: ModelRefSchema.optional(),
 });
 
+/** Who settles a checked candidate that turns on prose, and calibrates when that is on. */
+export const JudgeSchema = z.strictObject({
+  /** model: the configured model provider; jev: TypeSafe's Jev, only when JEV_API_KEY is set. */
+  provider: z.enum(["model", "jev"]).default("model"),
+  /** The Jev model or alias; pin a versioned id to keep tuned thresholds. */
+  model: z.string().min(1).default("jev-latest"),
+  /** A Jev verdict under this confidence drops the candidate, logged. */
+  minConfidence: z.number().min(0).max(1).default(0.7),
+  /** API base override for tests and proxies. */
+  baseUrl: z.url().optional(),
+});
+
 /** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */
 export const RagSchema = z.strictObject({
   backend: z.enum(["tfidf", "embeddings"]).default("tfidf"),
@@ -227,6 +239,7 @@ export const ConfigSchema = z
     context: ContextSchema.prefault({}),
     ensemble: EnsembleSchema.prefault({}),
     calibration: CalibrationSchema.prefault({}),
+    judge: JudgeSchema.prefault({}),
     cache: CacheSchema.prefault({}),
     stats: StatsSchema.prefault({}),
   })

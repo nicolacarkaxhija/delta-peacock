@@ -4,27 +4,28 @@ With `stats.enabled: true` every review appends to `delta-peacock.stats.jsonl` (
 
 ## Review line
 
-| Field         | Meaning                                                                                 |
-| ------------- | --------------------------------------------------------------------------------------- |
-| `kind`        | `"review"`                                                                              |
-| `at`          | ISO timestamp of the run                                                                |
-| `author`      | Commit author of the reviewed head                                                      |
-| `addedLines`  | Lines the change adds                                                                   |
-| `bySeverity`  | Finding counts per severity                                                             |
-| `byGuideline` | Finding counts per guideline id; observations count under `(observation)`               |
-| `errors`      | `{ "misquoted": n }` when the reviewer invented rules; absent otherwise                 |
-| `pr`          | `{ "number", "url" }`, each part only when the SCM provides it; absent in local runs    |
-| `title`       | The pull request title, when the SCM provides it                                        |
-| `scope`       | Parsed from a conventional title `type(scope): ...`; empty when the title has none      |
-| `type`        | The conventional type (`feat`, `fix`, ...), lower case; empty when the title is not one |
-| `model`       | The review model id in use, `DELTA_PEACOCK_MODEL_ID` included                           |
-| `tokens`      | `{ "input", "output", "cacheRead", "cacheWrite" }` summed over every call of the review |
-| `cost`        | USD, priced with the model's rates; absent when the model has none                      |
-| `durationMs`  | Wall time of the review                                                                 |
+| Field         | Meaning                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`        | `"review"`                                                                                                                                  |
+| `at`          | ISO timestamp of the run                                                                                                                    |
+| `author`      | Commit author of the reviewed head                                                                                                          |
+| `addedLines`  | Lines the change adds                                                                                                                       |
+| `bySeverity`  | Finding counts per severity                                                                                                                 |
+| `byGuideline` | Finding counts per guideline id; observations count under `(observation)`                                                                   |
+| `errors`      | `{ "misquoted": n }` when the reviewer invented rules; absent otherwise                                                                     |
+| `pr`          | `{ "number", "url" }`, each part only when the SCM provides it; absent in local runs                                                        |
+| `title`       | The pull request title, when the SCM provides it                                                                                            |
+| `scope`       | Parsed from a conventional title `type(scope): ...`; empty when the title has none                                                          |
+| `type`        | The conventional type (`feat`, `fix`, ...), lower case; empty when the title is not one                                                     |
+| `model`       | The review model id in use, `DELTA_PEACOCK_MODEL_ID` included                                                                               |
+| `tokens`      | `{ "input", "output", "cacheRead", "cacheWrite" }` summed over every call of the review                                                     |
+| `cost`        | USD, priced with the model's rates; absent when the model has none                                                                          |
+| `durationMs`  | Wall time of the review                                                                                                                     |
+| `judge`       | `{ "provider", "calls", "latencyMs", "lowConfidence", "cost" }` when a checked candidate was judged; `cost` is Jev's USD, already in `cost` |
 
 ## Finding line
 
-`kind` is `"finding"`; `at`, `author`, `pr`, `title`, `scope` and `type` repeat the review's values, so each line stands alone. Then `guideline` (the cited id, or `(observation)`), `severity`, `file`, `line` and, for a finding that cites a guideline, `guidelineQuote`: the sentence its comment quotes.
+`kind` is `"finding"`; `at`, `author`, `pr`, `title`, `scope` and `type` repeat the review's values, so each line stands alone. Then `guideline` (the cited id, or `(observation)`), `severity`, `file`, `line` and, for a finding that cites a guideline, `guidelineQuote`: the sentence its comment quotes. A checked finding a judge confirmed adds `judge`: `{ "provider", "latencyMs", "confidence" }`, confidence only from Jev.
 
 ## Example
 
