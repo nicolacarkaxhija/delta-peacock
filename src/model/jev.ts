@@ -62,10 +62,22 @@ export interface JevPortOptions {
 
 const RETRYABLE = new Set([429, 529]);
 
+// The first retry waits a quarter second and doubles, so the default attempts back off under a second.
+const BACKOFF_BASE_MS = 250;
+// A longer Retry-After would stall the whole review, so no wait goes beyond five seconds.
+const BACKOFF_CAP_MS = 5000;
+// Two retries ride out a short overload without stretching a slow review further.
+const DEFAULT_ATTEMPTS = 3;
+// The slowest measured call took 8.3 s on a cold start (docs/jev-comparison.md), so about twice that.
+const REQUEST_TIMEOUT_MS = 15_000;
+// Enough of an error body to name the cause, short enough for one log line.
+const ERROR_EXCERPT_CHARS = 200;
+
 function backoffOf(response: Response, attempt: number): number {
   const header = Number(response.headers.get("retry-after"));
-  const wanted = Number.isFinite(header) && header > 0 ? header * 1000 : 250 * 2 ** attempt;
-  return Math.min(wanted, 5000);
+  const wanted =
+    Number.isFinite(header) && header > 0 ? header * 1000 : BACKOFF_BASE_MS * 2 ** attempt;
+  return Math.min(wanted, BACKOFF_CAP_MS);
 }
 
 /** Calls POST /v1/systemone; overload and rate limits back off, anything else throws. */
@@ -74,7 +86,7 @@ export function createJevPort(options: JevPortOptions): JevPort {
   const now = options.now ?? (() => performance.now());
   const sleep =
     options.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
-  const attempts = options.attempts ?? 3;
+  const attempts = options.attempts ?? DEFAULT_ATTEMPTS;
   const url = `${(options.baseUrl ?? JEV_BASE_URL).replace(/\/+$/, "")}/v1/systemone`;
   return {
     model: options.model,
@@ -89,7 +101,7 @@ export function createJevPort(options: JevPortOptions): JevPort {
             "content-type": "application/json",
           },
           body,
-          signal: AbortSignal.timeout(options.timeoutMs ?? 15_000),
+          signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS),
         });
         if (RETRYABLE.has(response.status) && attempt + 1 < attempts) {
           await sleep(backoffOf(response, attempt));
@@ -97,7 +109,9 @@ export function createJevPort(options: JevPortOptions): JevPort {
         }
         const text = await response.text();
         if (!response.ok) {
-          throw new Error(`jev answered ${String(response.status)}: ${text.slice(0, 200)}`);
+          throw new Error(
+            `jev answered ${String(response.status)}: ${text.slice(0, ERROR_EXCERPT_CHARS)}`,
+          );
         }
         const parsed = Reply.safeParse(JSON.parse(text));
         if (!parsed.success) throw new Error("jev reply does not match the documented shape");

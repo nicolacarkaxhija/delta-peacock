@@ -18,13 +18,17 @@ export interface JevDecision {
 /** A Choice holds at most 255 options. */
 const MAX_OPTIONS = 255;
 const NONE = "none";
+// Shorter fragments, such as a lone heading word, name no rule the judge could pick.
+const MIN_SENTENCE_CHARS = 12;
+// One retry rides out a dropped connection, as the model judge allows.
+const JEV_ATTEMPTS = 2;
 
 /** The guideline's own sentences, code examples left out, the check's rule first. */
 export function guidelineSentences(guideline: Guideline, rule: string): string[] {
   const prose = guideline.body.replace(/```[\s\S]*?```/g, " ");
   const found = [guideline.title, ...prose.split(/(?<=[.!?])\s+|\n+/)]
     .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length >= 12 && !/^good:|^bad:/i.test(sentence));
+    .filter((sentence) => sentence.length >= MIN_SENTENCE_CHARS && !/^good:|^bad:/i.test(sentence));
   return [...new Set([rule, ...found])].slice(0, MAX_OPTIONS);
 }
 
@@ -111,11 +115,7 @@ export function decisionOf(
   };
 }
 
-/**
- * Settles a judged candidate on Jev. A verdict under the confidence floor
- * drops the candidate; a drop stands only on a guideline sentence and a
- * listed comment, as with the model judge. A failed call is retried once.
- */
+/** Settles a candidate on Jev: under the confidence floor it drops, a drop needs a guideline sentence and a listed comment. */
 export async function settleWithJev(
   jev: JevPort,
   candidate: Candidate,
@@ -129,7 +129,7 @@ export async function settleWithJev(
   const request = jevJudgeRequest(candidate, guideline, excerpt, sentences);
   let failure = "";
   let latencyMs = 0;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < JEV_ATTEMPTS; attempt += 1) {
     let reply: JevReply;
     let decision: JevDecision;
     try {
