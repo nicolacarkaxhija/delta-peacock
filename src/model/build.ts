@@ -85,10 +85,7 @@ export function buildModelPortFor(ref: ModelRef, credentials: Credentials): Mode
   }
 }
 
-/**
- * Jev when judge.provider asks for it and JEV_API_KEY is set. Without the key
- * the caller hears it once and the configured model judges instead.
- */
+/** Jev when judge.provider asks for it and JEV_API_KEY is set; without the key the caller hears it once and the model judges. */
 export function buildJevPort(
   config: Config,
   credentials: Credentials,

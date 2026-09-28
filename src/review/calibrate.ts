@@ -155,10 +155,7 @@ export function buildJevCalibrationRequest(findings: readonly Finding[], diff: s
   };
 }
 
-/**
- * Calibration on Jev: the same advisory notes, each carrying Jev's confidence;
- * a decision under the floor leaves the finding unannotated.
- */
+/** Calibration on Jev: the same advisory notes with Jev's confidence; a decision under the floor leaves the finding as it is. */
 export async function calibrateWithJev(
   jev: JevPort,
   findings: readonly Finding[],
