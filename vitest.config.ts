@@ -3,6 +3,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    // each test file's temp directories go under one root removed after the file
+    globalSetup: ["tests/helpers/temp-global.ts"],
+    setupFiles: ["tests/helpers/temp-root.ts"],
     testTimeout: 40000,
     // fake-server e2e tests occasionally lose a local socket under full
     // parallel load on Windows; deterministic failures still fail twice.
