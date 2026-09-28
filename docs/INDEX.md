@@ -7,3 +7,4 @@ How the repository works, one topic each. User guides live in [guides](guides/IN
 - [Acceptance checks](acceptance.md): every criterion the repository promises, each with its command
 - [Release](release.md): read before cutting a release; release-please and the human checks around it
 - [Review](review.md): how the reviewer reviews its own pull requests, and the secrets it needs
+- [Jev judge comparison](jev-comparison.md): the Jev judge against the Haiku judge on the backtest and the bench
