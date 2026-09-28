@@ -61,7 +61,8 @@ without it the review says so once and the configured model judges. One request 
 asks three Choice questions: keep or drop, which guideline sentence the decision rests on, and
 which listed comment settles it. The decision is `{ keep, confidence, quotedSentence }`.
 
-- A verdict under `judge.minConfidence` (default 0.7) drops the candidate and logs it as
+- A verdict under `judge.minConfidence` (default 0.6, measured on 49 candidates, see
+  [the comparison](../jev-comparison.md)) drops the candidate and logs it as
   `judge-low-confidence`.
 - A drop still stands only on a guideline sentence and a listed comment.
 - With `calibration.enabled`, Jev calibrates too: one Choice per finding, keep, drop or demote,

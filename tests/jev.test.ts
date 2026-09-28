@@ -6,7 +6,7 @@ import type { Finding } from "../src/domain/finding.js";
 import type { Guideline } from "../src/domain/guideline.js";
 import { runCli } from "../src/index.js";
 import { buildJevPort } from "../src/model/build.js";
-import { createJevPort, type JevPort } from "../src/model/jev.js";
+import { createJevPort, DEFAULT_MIN_CONFIDENCE, type JevPort } from "../src/model/jev.js";
 import type { ModelPort } from "../src/model/port.js";
 import { buildJevCalibrationRequest, calibrateWithJev } from "../src/review/calibrate.js";
 import type { Candidate } from "../src/review/checks/detect.js";
@@ -146,7 +146,7 @@ describe("choosing the judge", () => {
     expect(config({}).judge).toEqual({
       provider: "model",
       model: "jev-latest",
-      minConfidence: 0.7,
+      minConfidence: 0.6,
     });
     expect(
       buildJevPort(config({}), { JEV_API_KEY: "k" }, (line) => lines.push(line)),
@@ -358,7 +358,8 @@ describe("the checks on Jev", () => {
     expect(outcome.usage).toBeUndefined();
   });
 
-  it("defaults the floor to 0.7 when the caller names none", async () => {
+  it("defaults the floor to the measured 0.6 when the caller names none", async () => {
+    expect(DEFAULT_MIN_CONFIDENCE).toBe(0.6);
     const { bound } = splitChecked([PREFER], { "prefer-test-ids": "selectors" });
     const outcome = await runChecks({
       bound,

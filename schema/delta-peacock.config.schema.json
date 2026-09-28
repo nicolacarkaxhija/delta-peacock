@@ -603,7 +603,7 @@
           "minLength": 1
         },
         "minConfidence": {
-          "default": 0.7,
+          "default": 0.6,
           "type": "number",
           "minimum": 0,
           "maximum": 1

@@ -35,6 +35,24 @@ Checks bound: selectors, assertions, tags, timeouts. The comments check stays un
 
 The default stays `judge.provider: model`. Jev is faster and far cheaper per call, but it missed a real finding in every repeat, and a switch needs Jev at least as good on every count.
 
+## Confidence floor
+
+Measured on 2026-09-29 on a local merge of this branch with `fix/checks-decide-facts` (the numbers check), so the judge saw the candidates it will see after both merge. Every judged check candidate of the 13 self cases, the 20 consumer cases and the judge case `numbers-reasons` went to `jev-latest` (answered as `jev-1.13.0`) once, at floor 0, and each answer's choice and confidence were recorded; each floor was then applied to the recorded answers, no further call. A candidate is real when the case lists it as a finding; the other 23 are 10 the cases list as no finding and 13 the cases leave unlisted, which the Haiku judge drops in every green backtest run.
+
+| floor | real findings kept (of 26) | wrong findings passed (of 23) | of them listed (of 10) |
+| ----- | -------------------------- | ----------------------------- | ---------------------- |
+| 0.50  | 23                         | 13                            | 3                      |
+| 0.55  | 22                         | 10                            | 1                      |
+| 0.60  | 22                         | 9                             | 1                      |
+| 0.65  | 22                         | 9                             | 1                      |
+| 0.70  | 21                         | 8                             | 1                      |
+| 0.75  | 21                         | 8                             | 1                      |
+| 0.80  | 21                         | 8                             | 1                      |
+| 0.85  | 20                         | 6                             | 0                      |
+| 0.90  | 17                         | 4                             | 0                      |
+
+The default is 0.6: 0.60 and 0.65 give the best F1 over all 49 (0.77) and the best net count over the 36 listed ones (22 kept, 1 passed). The sample is small: 49 candidates from 11 cases, one answer each, so one candidate moves a floor's count; tune `judge.minConfidence` per repository. No floor fixes the passes: Jev keeps 7 unlisted CSS candidates of the consumer's pr73 and pr06 at 0.66 to 0.94, and keeps the real pr09 candidate at only 0.03, so every floor drops it. The floor also gates Jev calibration, which this sample did not measure. Jev spend: 62,354 input tokens, 0.0026 USD.
+
 ## Notes
 
 - `DELTA_PEACOCK_JUDGE_PROVIDER` does not reach backtest replays, which read the `--config` file only; the Jev arm needs `judge.provider: jev` in that file.

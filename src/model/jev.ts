@@ -65,8 +65,8 @@ const RETRYABLE = new Set([429, 529]);
 // The first retry waits a quarter second and doubles, so the default attempts back off under a second.
 const BACKOFF_BASE_MS = 250;
 const BACKOFF_FACTOR = 2;
-// No measurement set it yet: a starting floor that drops only weak verdicts, tuned per repository through judge.minConfidence.
-export const DEFAULT_MIN_CONFIDENCE = 0.7;
+// Best F1 of 0.5 to 0.9 over 49 judged backtest candidates on 2026-09-29 (docs/jev-comparison.md): 22 of 26 real kept, 9 of 23 wrong passed.
+export const DEFAULT_MIN_CONFIDENCE = 0.6;
 // A longer Retry-After would stall the whole review, so no wait goes beyond five seconds.
 const BACKOFF_CAP_MS = 5000;
 // Two retries ride out a short overload without stretching a slow review further.
