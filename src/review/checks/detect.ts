@@ -64,6 +64,8 @@ export interface Candidate {
     fix: string;
     /** The kinds the guideline names; a judge answering none of them drops the candidate. */
     kinds?: readonly string[];
+    /** Set when the code alone settles the question: with no model, the candidate is still a finding. */
+    decided?: string;
   };
 }
 

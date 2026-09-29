@@ -8,6 +8,8 @@ export interface NumberLiteral {
   /** Column of its first character on the line. */
   column: number;
   text: string;
+  /** Set on a regex quantifier's bound. */
+  quantifier?: true;
 }
 
 const NUMBER =
@@ -37,8 +39,13 @@ export function numberLiterals(text: string): NumberLiteral[] {
   let word = "";
   // one entry per open template expression: the brace depth inside it
   const templates: number[] = [];
-  const push = (at: number, literal: string): void => {
-    found.push({ line, column: at - lineStart, text: literal });
+  const push = (at: number, literal: string, quantifier = false): void => {
+    found.push({
+      line,
+      column: at - lineStart,
+      text: literal,
+      ...(quantifier ? { quantifier: true as const } : {}),
+    });
   };
   const newlines = (from: number, to: number): void => {
     for (let at = from; at < to; at += 1) {
@@ -141,9 +148,9 @@ export function numberLiterals(text: string): NumberLiteral[] {
       }
       const body = text.slice(at + 1, end);
       for (const match of body.matchAll(QUANTIFIER)) {
-        push(at + 1 + match.index + 1, String(match[1]));
+        push(at + 1 + match.index + 1, String(match[1]), true);
         if (match[2] !== undefined && match[2] !== "") {
-          push(at + 1 + match.index + 2 + String(match[1]).length, match[2]);
+          push(at + 1 + match.index + 2 + String(match[1]).length, match[2], true);
         }
       }
       at = Math.min(end + 1, text.length);
@@ -239,6 +246,19 @@ function isIndex(line: string, literal: NumberLiteral): boolean {
   return /[\w$)\]]\s*\[\s*$/.test(before) && /^\s*\]/.test(after);
 }
 
+/** A status or exit code compared or set: `res.status === 429`, `exitCode: 2`. */
+function isStatusCode(line: string, literal: NumberLiteral): boolean {
+  const before = line.slice(0, literal.column);
+  return /\b(?:status|statusCode|exitCode|exitStatus)\s*(?:[!=]==?|:|=)\s*$/.test(before);
+}
+
+/** A constant named for a status or exit code, whatever else its name says. */
+const CODE_NAME = /(?:exit|status)_?code$|(?:^|_)status$|[a-z\d]Status$/i;
+
+/** Test files and fixtures, whose literals may only describe the case. */
+const TEST_FILE =
+  /(?:^|\/)(?:__fixtures__|fixtures?|__tests__|__mocks__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/;
+
 /** A declaration naming a numeric value: `const NAME = 4;`, a class field, or `name=4` in shell. */
 const TS_CONSTANT =
   /^\s*(?:export\s+)?(?:(?:private|protected|public|static|readonly|declare)\s+)*(?:(?:const|let|var)\s+)?#?([\w$]+)\s*(?::[^=]+)?=\s*([-+*/%()\s\d._xXa-fA-FeEn]+?)\s*;?\s*$/;
@@ -272,6 +292,70 @@ export function statesReason(comment: string): boolean {
   return comment
     .split(/(?<=[.!?])\s+/)
     .some((sentence) => (SOURCE.test(sentence) && FOLLOWS.test(sentence)) || BOUND.test(sentence));
+}
+
+/** Name words that say a value is a timeout, delay, retry count, limit or threshold. */
+const PURPOSE_WORDS: Readonly<Record<string, (typeof KINDS)[number]>> = {
+  timeout: "timeout",
+  timeouts: "timeout",
+  ttl: "timeout",
+  delay: "delay",
+  interval: "delay",
+  backoff: "delay",
+  retry: "retry count",
+  retries: "retry count",
+  attempt: "retry count",
+  attempts: "retry count",
+  limit: "limit",
+  max: "limit",
+  maximum: "limit",
+  min: "limit",
+  minimum: "limit",
+  cap: "limit",
+  ceiling: "limit",
+  threshold: "threshold",
+};
+
+/** A min or max call clamps plain arithmetic as often as it sets a limit. */
+const CLAMP_CALLS = new Set(["min", "max", "minimum", "maximum"]);
+
+/** What a name says its value is for, by one of its words, such as RETRY_LIMIT or maxBuffer. */
+export function namedPurpose(name: string): string | undefined {
+  const words = name
+    .replace(/^[#$]/, "")
+    .split(/_+|(?<=[a-z\d])(?=[A-Z])/)
+    .map((word) => word.toLowerCase());
+  for (const word of words) {
+    const purpose = PURPOSE_WORDS[word];
+    if (purpose !== undefined) return purpose;
+  }
+  return undefined;
+}
+
+/** What the code plainly says an inline number is for; quantifiers, cuts and clamps say nothing. */
+export function statedPurpose(line: string, literal: NumberLiteral): string | undefined {
+  if (literal.quantifier === true) return undefined;
+  const before = line.slice(0, literal.column);
+  // a key, a default after ?? or ||, or a comparison, whose own name says it
+  const key = /([A-Za-z_$#][\w$]*)\s*(?:[:=]|\?\?|\|\||[<>]=?)\s*-?\s*$|\$\{(\w+):?[-=]$/.exec(
+    before,
+  );
+  const named = namedPurpose(key?.[1] ?? key?.[2] ?? "");
+  if (named !== undefined) return named;
+  // an exact count or a bound of two tests a shape, such as a pair, not a threshold
+  const bound = Number(literal.text.replace(/_/g, ""));
+  if (/\.(?:length|size)\s*[<>]=?\s*$/.test(before) && bound > 2) return "threshold";
+  if (/\bset(?:Timeout|Interval)\s*\([^()]*$/.test(before)) return "delay";
+  // an argument of a call whose name says it, such as AbortSignal.timeout
+  const callee = /([A-Za-z_$][\w$]*)\s*\([^()]*$/.exec(before)?.[1] ?? "";
+  if (callee === "sleep") return "delay";
+  // a schema default takes its purpose from the key it sits on
+  const owner =
+    callee === "default" ? (/^\s*["']?([A-Za-z_$][\w$]*)["']?\s*:/.exec(line)?.[1] ?? "") : callee;
+  const called = CLAMP_CALLS.has(owner.toLowerCase()) ? undefined : namedPurpose(owner);
+  if (called !== undefined) return called;
+  if (/(?:^|[\s;&|(])sleep\s+$/.test(before)) return "delay";
+  return undefined;
 }
 
 const code = (text: string): string => (text.includes("`") ? `\`\` ${text} \`\`` : `\`${text}\``);
@@ -317,11 +401,14 @@ export function numberCandidates(
     if (!changed.has(literal.line) || isPlain(literal.text)) continue;
     const source = item(lines, literal.line - 1, "");
     if (isUnitFactor(source, literal) || isIndex(source, literal)) continue;
+    if (isStatusCode(source, literal)) continue;
     if (isFormatArgument(source, literal)) continue;
     byLine.set(literal.line, [...(byLine.get(literal.line) ?? []), literal]);
   }
   const found: Candidate[] = [];
   const base = { guidelineId: guideline.id, check: "numbers" as const, file };
+  // literals in tests may only describe the case, so only a judgement decides them
+  const decides = !TEST_FILE.test(file);
   for (const [line, numbers] of [...byLine].sort((a, b) => a[0] - b[0])) {
     const quote = item(lines, line - 1, "");
     const listed = [...new Set(numbers.map((one) => one.text))];
@@ -331,8 +418,10 @@ export function numberCandidates(
       shell ? shellComments(lines, line) : reasonComments(scan ?? scanSource(text), line)
     ).filter((comment) => words(comment) !== "");
     if (name !== undefined) {
-      if (PER.test(name)) continue;
+      if (PER.test(name) || CODE_NAME.test(name)) continue;
       if (comments.some((comment) => statesReason(words(comment)))) continue;
+      // no comment at all and a name that says what it is for: nothing is left to weigh
+      const purpose = comments.length === 0 && decides ? namedPurpose(name) : undefined;
       found.push({
         ...base,
         shape: "unexplained-constant",
@@ -346,10 +435,18 @@ export function numberCandidates(
           fact: `${code(name)} has no comment saying why it is ${code(listed.join(", "))}.`,
           fix: "Add one short comment above it with the reason.",
           kinds: KINDS,
+          ...(purpose !== undefined
+            ? { decided: `${code(name)} names a ${purpose} and has no comment next to it` }
+            : {}),
         },
       });
       continue;
     }
+    const stated = decides
+      ? numbers
+          .map((one) => ({ one, purpose: statedPurpose(quote, one) }))
+          .find((entry) => entry.purpose !== undefined)
+      : undefined;
     found.push({
       ...base,
       shape: "inline-number",
@@ -363,6 +460,11 @@ export function numberCandidates(
         fact: `${code(listed.join(", "))} is written inline.`,
         fix: "Name it once as a constant, next to a comment with the reason it has that value, and use the name here.",
         kinds: KINDS,
+        ...(stated?.purpose !== undefined
+          ? {
+              decided: `${code(stated.one.text)} is written inline where the code sets a ${stated.purpose}`,
+            }
+          : {}),
       },
     });
   }

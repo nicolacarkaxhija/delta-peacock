@@ -175,11 +175,15 @@ export async function settle(
   excerpt: string,
 ): Promise<JudgedCandidate> {
   const rule = sentenceOf(candidate.check, candidate.shape);
-  if (candidate.judge === undefined) {
+  if (
+    candidate.judge === undefined ||
+    (port === undefined && candidate.judge.decided !== undefined)
+  ) {
+    const decided = candidate.judge?.decided;
     return {
       outcome: "finding",
       finding: findingOf(candidate, guideline, rule),
-      notice: `check: ${where(candidate)}: finding`,
+      notice: `check: ${where(candidate)}: finding${decided !== undefined ? `, a fact: ${decided}` : ""}`,
     };
   }
   if (port === undefined) {
