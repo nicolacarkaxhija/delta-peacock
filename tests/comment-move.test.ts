@@ -11,7 +11,7 @@ severity: MINOR
 ---
 # Test ids before roles, CSS selectors only as a last resort
 
-Where a CSS selector is unavoidable, a comment next to it gives the reason.
+A CSS selector needs a note explaining why no test id or role works.
 `;
 
 const PAGE = [
@@ -40,8 +40,7 @@ describe("a finding that asks to move a reason already above the line", () => {
           file: "pages/home.js",
           line: 4,
           quote,
-          guidelineQuote:
-            "Where a CSS selector is unavoidable, a comment next to it gives the reason.",
+          guidelineQuote: "A CSS selector needs a note explaining why no test id or role works.",
           title: "CSS selector needs its comment on the line",
           body: "Put the reason on the selector line.",
           suggestion: `${quote} // No test id on the panel; the class is the same in every language.`,

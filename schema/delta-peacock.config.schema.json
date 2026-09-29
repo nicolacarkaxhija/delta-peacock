@@ -183,7 +183,9 @@
               "comments",
               "assertions",
               "tags",
-              "timeouts"
+              "timeouts",
+              "numbers",
+              "rows"
             ]
           }
         }

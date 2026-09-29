@@ -32,6 +32,8 @@ const BOUND: Record<GuidelineCheck, Guideline> = {
     "components/**",
     "support/**",
   ]),
+  numbers: guideline("no-magic-numbers", ["src/**"]),
+  rows: guideline("data-rows-not-copies", ["tests/**"]),
 };
 
 const TAGS: DeclaredTags = {

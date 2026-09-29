@@ -1,6 +1,8 @@
 import { GUIDELINE_CHECKS, type Guideline, type GuidelineCheck } from "../../domain/guideline.js";
 import { appliesTo } from "../../guidelines/languages.js";
 import type { DeclaredTags } from "../declared.js";
+import { numberCandidates } from "./numbers.js";
+import { rowCandidates } from "./rows.js";
 import {
   closingParen,
   item,
@@ -32,7 +34,10 @@ export type Shape =
   | "title-tag"
   | "wait-for-timeout"
   | "sleep"
-  | "inline-timeout";
+  | "inline-timeout"
+  | "inline-number"
+  | "unexplained-constant"
+  | "copy";
 
 /** A line a static check found; the only way a checked guideline yields a finding. */
 export interface Candidate {
@@ -57,6 +62,8 @@ export interface Candidate {
     /** The body around a confirmed judge's own reason: the measured fact, then the fix. */
     fact: string;
     fix: string;
+    /** The kinds the guideline names; a judge answering none of them drops the candidate. */
+    kinds?: readonly string[];
   };
 }
 
@@ -78,6 +85,7 @@ export interface BoundGuideline {
 }
 
 const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/;
+const SHELL_FILE = /\.(?:sh|bash)$/;
 
 /** Words that name why a selector is the best available: the locator vocabulary and a because. */
 const REASON =
@@ -1163,12 +1171,39 @@ export function findCandidates(
   const found: Candidate[] = [];
   const seen = new Set<string>();
   for (const [file, changed] of context.changed) {
-    if (!SOURCE_FILE.test(file) || changed.size === 0) continue;
+    const shell = SHELL_FILE.test(file);
+    if ((!SOURCE_FILE.test(file) && !shell) || changed.size === 0) continue;
     const text = context.read(file);
     if (text === undefined) continue;
-    const parsed = parse(text);
+    const parsed = shell ? undefined : parse(text);
     for (const { guideline, check } of bound) {
       if (!appliesTo(guideline, [file])) continue;
+      if (check === "numbers") {
+        for (const candidate of numberCandidates(guideline, file, text, changed)) {
+          const key = `${candidate.file}:${String(candidate.line)}:${candidate.guidelineId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          found.push(candidate);
+        }
+        continue;
+      }
+      if (parsed === undefined) continue;
+      if (check === "rows") {
+        for (const candidate of rowCandidates(
+          guideline,
+          file,
+          text,
+          changed,
+          context.read,
+          context.files,
+        )) {
+          const key = `${candidate.file}:${String(candidate.line)}:${candidate.guidelineId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          found.push(candidate);
+        }
+        continue;
+      }
       const candidates =
         check === "selectors"
           ? selectorCandidates(guideline, file, parsed, changed, context)

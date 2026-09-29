@@ -11,6 +11,8 @@ import { item } from "./source.js";
 
 const Verdict = z.object({
   verdict: z.enum(["confirm", "drop"]),
+  kind: z.string().nullish(),
+  says: z.string().nullish(),
   guidelineQuote: z.string().nullish(),
   comment: z.string().nullish(),
   reason: z.string().nullish(),
@@ -49,6 +51,22 @@ export function judgeRequest(
       ...comments.map((comment) => `- line ${String(comment.line)}: "${comment.text}"`),
       "",
       `Question: ${candidate.judge?.question ?? ""}`,
+      ...(candidate.judge?.kinds !== undefined
+        ? [
+            `Also answer "kind": ${candidate.judge.kinds.map((kind) => `"${kind}"`).join(", ")}, or "none" when the flagged code is none of them, judged by what it does in the code.`,
+            ...(comments.length === 0
+              ? []
+              : [
+                  'And answer "says": "why" when a listed comment tells where the amount comes from or what a different amount would break: a document or rule that sets it, a service, API, type or format that caps it at that amount (a comment saying some named thing holds, accepts or allows at most that amount gives the cap as the reason), a measurement, or what a smaller or larger value fails to do; "what" when the comments only name what the value counts or is used for; "none" when no comment is listed. Decide "says" before the verdict; a drop stands only with "why".',
+                  'Reply with JSON only, in this shape: {"kind": "<one of the kinds, or none>", "says": "why, what or none", "verdict": "confirm" or "drop", "guidelineQuote": "<the guideline sentence your answer rests on, copied word for word>", "comment": "<for a drop, the listed comment that settles it>", "reason": "<one plain sentence without dashes>"}',
+                ]),
+            ...(comments.length === 0
+              ? [
+                  'Reply with JSON only, in this shape: {"verdict": "confirm" or "drop", "kind": "<one of the kinds, or none>", "guidelineQuote": "<the guideline sentence your answer rests on, copied word for word>", "comment": "<for a drop, the listed comment that settles it>", "reason": "<one plain sentence without dashes>"}',
+                ]
+              : []),
+          ]
+        : []),
     ].join("\n"),
     temperature: 0,
     maxOutputTokens: 400,
@@ -190,8 +208,26 @@ export async function settle(
   }
   const quoted = verdict.guidelineQuote ?? undefined;
   const quoteHolds = quotesGuideline(quoted, guideline);
+  const none = verdict.kind?.trim().toLowerCase() === "none";
+  // the question names the kinds itself, so a none needs no quote to stand on
+  if (candidate.judge.kinds !== undefined && none) {
+    return {
+      outcome: "dropped",
+      rejected: {
+        reason: "judge-outside",
+        raw: JSON.stringify({ file: candidate.file, line: candidate.line, reason: verdict.reason }),
+        guidelineId: guideline.id,
+        title: candidate.title,
+      },
+      notice: `check: ${where(candidate)}: dropped, the judge finds none of the kinds the guideline names`,
+      ...spent,
+    };
+  }
   if (verdict.verdict === "drop") {
-    if (quoteHolds && citesListedComment(candidate.judge.comments, verdict.comment)) {
+    // a number's comment settles it only when the judge calls it a cause for the amount
+    const gives =
+      candidate.judge.kinds === undefined || verdict.says?.trim().toLowerCase() === "why";
+    if (gives && quoteHolds && citesListedComment(candidate.judge.comments, verdict.comment)) {
       return {
         outcome: "dropped",
         rejected: {
@@ -211,7 +247,7 @@ export async function settle(
     return {
       outcome: "finding",
       finding: findingOf(candidate, guideline, rule),
-      notice: `check: ${where(candidate)}: finding, the judge's drop cites no listed comment or guideline sentence`,
+      notice: `check: ${where(candidate)}: finding, the judge's drop cites no listed comment or guideline sentence${verdict.kind != null ? ` (kind ${verdict.kind}, quote ${quoteHolds ? "holds" : "fails"})` : ""}`,
       ...spent,
     };
   }

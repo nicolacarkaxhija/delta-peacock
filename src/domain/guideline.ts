@@ -22,6 +22,8 @@ export const GUIDELINE_CHECKS = [
   "assertions",
   "tags",
   "timeouts",
+  "numbers",
+  "rows",
 ] as const;
 
 export type GuidelineCheck = (typeof GUIDELINE_CHECKS)[number];

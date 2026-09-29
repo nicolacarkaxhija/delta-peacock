@@ -58,6 +58,18 @@ const GUIDELINES: Readonly<Record<GuidelineCheck, Guideline>> = {
     "Waits longer than the framework defaults live as named values in one timeouts module, which then explains every slow run in one place. waitForTimeout has no valid use.",
     [],
   ),
+  numbers: guideline(
+    "no-magic-numbers",
+    "No inline timeouts, sleeps or magic numbers",
+    "Every timeout, delay, retry count, limit or threshold is a named constant declared once, next to the reason it has that value, so one place answers why the code waits or stops where it does.",
+    [],
+  ),
+  rows: guideline(
+    "data-rows-not-copies",
+    "Data rows instead of copied scenarios",
+    "Duplicated tests diverge once a fix reaches only one copy. Sites, products, payment methods and addresses become data rows of one scenario.",
+    ["tests/**"],
+  ),
 };
 
 /** One changed file per check, each line added. */
@@ -81,6 +93,14 @@ const SOURCES: Readonly<Record<GuidelineCheck, { file: string; text: string }>> 
   timeouts: {
     file: "support/wait.ts",
     text: "export async function settle(page: Page): Promise<void> {\n  await page.waitForTimeout(2500);\n  await expect(page.getByTestId('x')).toBeVisible({ timeout: 6000 });\n}\n",
+  },
+  numbers: {
+    file: "src/retry.ts",
+    text: "export const attempts = (options: { tries?: number }) => options.tries ?? 3;\n",
+  },
+  rows: {
+    file: "tests/smoke/cart.spec.ts",
+    text: "test('the EU cart', async ({ cart }) => {\n  await cart.open('EU');\n});\ntest('the US cart', async ({ cart }) => {\n  await cart.open('US');\n});\n",
   },
 };
 

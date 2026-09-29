@@ -14,11 +14,12 @@ import {
   type CheckName,
 } from "./detect.js";
 import { excerptOf, settle } from "./judge.js";
+import { impliedCheck } from "./rules.js";
 
 export { CHECKS, type CheckName } from "./detect.js";
-export { CHECK_SENTENCES, checkSentenceProblems, sentenceOf } from "./rules.js";
+export { CHECK_SENTENCES, checkSentenceProblems, impliedCheck, sentenceOf } from "./rules.js";
 
-/** The guidelines a static check owns, and the ones the model reviews freely. */
+/** The guidelines a static check owns, bound in the config or by their own words, and the ones the model reviews freely. */
 export function splitChecked(
   guidelines: readonly Guideline[],
   bindings: Readonly<Record<string, CheckName>>,
@@ -26,7 +27,7 @@ export function splitChecked(
   const bound: BoundGuideline[] = [];
   const free: Guideline[] = [];
   for (const guideline of guidelines) {
-    const check = bindings[guideline.id];
+    const check = bindings[guideline.id] ?? impliedCheck(guideline);
     if (check === undefined) free.push(guideline);
     else bound.push({ guideline, check });
   }

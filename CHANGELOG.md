@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.13 (2026-09-28)
+
+Mechanical facts are decided by static checks, never by the model: the replay of this repository's own pull requests 52 to 82 and the consumer's pull request 73 showed wrong dash, line count, number and copy findings and missed ones.
+
+### Bug Fixes
+
+- A guideline that says every sentence of a check word for word is checked by it without a binding in `review.checks`; an explicit binding still wins. A model can no longer call a comma, a semicolon or parentheses a dash, or miss a comment that spans lines.
+- New `numbers` check for guidelines on timeouts, delays, retry counts, limits and thresholds: inline numbers (template expressions, regex quantifiers and shell defaults included) and named numeric constants in TypeScript, JavaScript and shell. Zero, one, unit factors, list indexes, formatting arguments and names that state a conversion are no candidates; the judge names each number's kind, reads every comment next to a named constant, and lets one settle it only when it gives a cause for the amount rather than naming what the value counts. A comment sentence that ties the value to a document, URL or standard it names, or says what a smaller or larger value fails, settles the constant as a fact, without a model call.
+- New `rows` check for data rows: a test that repeats another test but for its literals is a copy; one test body looped over rows is never one.
+
 ## 0.1.12 (2026-09-28)
 
 A finding from a static check now shows which rule it applies, as a model finding does.

@@ -6,6 +6,9 @@ const CSS_REASON = "Where a CSS selector is unavoidable, a comment next to it gi
 const NAMED_WAIT =
   "Waits longer than the framework defaults live as named values in one timeouts module, which then explains every slow run in one place.";
 
+const NAMED_NUMBER =
+  "Every timeout, delay, retry count, limit or threshold is a named constant declared once, next to the reason it has that value, so one place answers why the code waits or stops where it does.";
+
 /** The guideline sentence each check enforces, per shape it reports; quoted on every finding. */
 export const CHECK_SENTENCES: Readonly<
   Record<CheckName, Readonly<Partial<Record<Shape, string>>>>
@@ -37,6 +40,13 @@ export const CHECK_SENTENCES: Readonly<
     sleep: NAMED_WAIT,
     "inline-timeout": NAMED_WAIT,
   },
+  numbers: {
+    "inline-number": NAMED_NUMBER,
+    "unexplained-constant": NAMED_NUMBER,
+  },
+  rows: {
+    copy: "Sites, products, payment methods and addresses become data rows of one scenario.",
+  },
 };
 
 /** The sentence a check quotes for a shape it reports. */
@@ -45,6 +55,19 @@ export function sentenceOf(check: CheckName, shape: Shape): string {
   if (sentence === undefined)
     throw new Error(`the ${check} check declares no sentence for ${shape}`);
   return sentence;
+}
+
+/** The first check whose every sentence the guideline says word for word; its measurements are facts no open review may contradict. */
+export function impliedCheck(guideline: Guideline): CheckName | undefined {
+  for (const [check, shapes] of Object.entries(CHECK_SENTENCES) as [
+    CheckName,
+    Partial<Record<Shape, string>>,
+  ][]) {
+    const sentences = new Set(Object.values(shapes));
+    if (sentences.size === 0) continue;
+    if ([...sentences].every((sentence) => quotesGuideline(sentence, guideline))) return check;
+  }
+  return undefined;
 }
 
 /** Each bound guideline must say its check's sentences word for word; one problem per missing sentence. */
