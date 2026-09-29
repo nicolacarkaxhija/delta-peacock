@@ -39,6 +39,7 @@ const PROVIDER_QUESTION: Question<WalkthroughAnswers["provider"]> = {
     "  bedrock            traffic stays inside your AWS account; needs AWS credentials",
     "  openrouter         one key across many models; needs OPENROUTER_API_KEY",
     "  openai-compatible  any /v1 endpoint such as Ollama or vLLM; check the baseUrl it writes",
+    "  none               no model and no cost; only what a static check measures is reviewed",
   ],
   prompt: "model provider [anthropic]",
   parse: (input) => {
@@ -46,11 +47,12 @@ const PROVIDER_QUESTION: Question<WalkthroughAnswers["provider"]> = {
     return value === "anthropic" ||
       value === "bedrock" ||
       value === "openrouter" ||
-      value === "openai-compatible"
+      value === "openai-compatible" ||
+      value === "none"
       ? value
       : undefined;
   },
-  hint: "answer anthropic, bedrock, openrouter or openai-compatible",
+  hint: "answer anthropic, bedrock, openrouter, openai-compatible or none",
 };
 
 const GATE_QUESTION: Question<WalkthroughAnswers["failOn"]> = {
@@ -156,8 +158,11 @@ export async function runInitWalkthrough(
     answers.scm = await ask(SCM_QUESTION, DEFAULT_ANSWERS.scm);
     answers.provider = await ask(PROVIDER_QUESTION, DEFAULT_ANSWERS.provider);
     answers.failOn = await ask(GATE_QUESTION, DEFAULT_ANSWERS.failOn);
-    answers.context = await ask(CONTEXT_QUESTION, DEFAULT_ANSWERS.context);
-    answers.maxPerReview = await ask(CAP_QUESTION, DEFAULT_ANSWERS.maxPerReview);
+    // without a model there is no context to feed and nothing to spend
+    if (answers.provider !== "none") {
+      answers.context = await ask(CONTEXT_QUESTION, DEFAULT_ANSWERS.context);
+      answers.maxPerReview = await ask(CAP_QUESTION, DEFAULT_ANSWERS.maxPerReview);
+    }
     answers.guidelinesDir = await ask(GUIDELINES_QUESTION, DEFAULT_ANSWERS.guidelinesDir);
   } catch (error) {
     /* v8 ignore next -- nothing but EndOfInput escapes the question loop */
@@ -167,5 +172,5 @@ export async function runInitWalkthrough(
   }
 
   deps.out("\n");
-  return writeScaffold(deps, planScaffold(answers), options.force);
+  return writeScaffold(deps, planScaffold(answers), options.force, answers.provider === "none");
 }

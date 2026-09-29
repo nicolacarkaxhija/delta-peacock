@@ -214,6 +214,7 @@ export function isSummaryBody(body: string, presentation: Presentation): boolean
     first === NO_ISSUES ||
     first.startsWith(FAILED_LEAD) ||
     first.startsWith(CAPPED_LEAD) ||
+    first.startsWith(FACTS_LEAD) ||
     COUNT_LEAD.test(first) ||
     Object.values(NOT_REVIEWED).some((line) => line === first)
   );
@@ -229,19 +230,50 @@ export interface SummaryInput {
   outcome?: ReviewOutcome;
   /** How many changed files the review covered, for the commit status. */
   changedFiles?: number;
+  /** Set when no model ran: what the facts only review left out. */
+  factsOnly?: FactsScope;
+}
+
+/** What a run with no model left out: candidates for a person, guidelines no check owns. */
+export interface FactsScope {
+  left: number;
+  notReviewed: readonly string[];
+}
+
+const FACTS_LEAD = "This review checked facts only, with no model: ";
+
+/** The one sentence a facts only summary opens with. */
+export function factsLine(findings: number, scope: FactsScope): string {
+  const left =
+    scope.left === 1
+      ? "1 candidate left to a person because it needs a judgement"
+      : `${String(scope.left)} candidates left to a person because they need a judgement`;
+  const skipped =
+    scope.notReviewed.length === 0
+      ? "every applicable guideline checked"
+      : `${plural(scope.notReviewed.length, "guideline")} not reviewed (${scope.notReviewed.join(", ")})`;
+  return `${FACTS_LEAD}${plural(findings, "finding")}, ${left}, and ${skipped}.`;
+}
+
+/** The facts only commit status: no verdict word, since no full review ran. */
+function factsStatus(findings: number, scope: FactsScope): string {
+  return clip(
+    `Facts only, no model. ${plural(findings, "finding")}, ${String(scope.left)} left to a person, ${plural(scope.notReviewed.length, "guideline")} not reviewed.`,
+  );
 }
 
 const sentence = (text: string): string => `${text.replace(/[.\s]+$/, "")}.`;
 
 /** The one line that says how the run ended. */
 export function stateLine(
-  input: Pick<SummaryInput, "findings" | "outcome">,
+  input: Pick<SummaryInput, "findings" | "outcome" | "factsOnly">,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
   if (outcome.kind === "not-reviewed") return outcome.line;
   if (outcome.kind === "failed") return `${FAILED_LEAD}${sentence(outcome.reason)}`;
   if (outcome.kind === "capped") return `${CAPPED_LEAD}${sentence(outcome.reason)}`;
+  if (input.factsOnly !== undefined) return factsLine(input.findings.length, input.factsOnly);
   return countLine(input.findings, presentation);
 }
 
@@ -257,7 +289,7 @@ function clip(text: string): string {
  * "Passed. No findings in 4 changed files." or "3 findings, 1 major. See the comments."
  */
 export function statusLine(
-  input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles">,
+  input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles" | "factsOnly">,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
@@ -273,6 +305,7 @@ export function statusLine(
     }
     return "Passed. No reviewable files in this change.";
   }
+  if (input.factsOnly !== undefined) return factsStatus(input.findings.length, input.factsOnly);
   if (input.findings.length === 0) {
     return input.changedFiles === undefined
       ? "Passed. No findings in this change."

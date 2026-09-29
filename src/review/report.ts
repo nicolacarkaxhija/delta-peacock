@@ -1,4 +1,5 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
+import type { LeftCandidate } from "./checks/judge.js";
 import type { RejectedCandidate } from "./parse.js";
 
 const REJECTED_CAP = 200;
@@ -93,6 +94,8 @@ export interface ReviewReport {
   unparsedBatches?: UnparsedBatch[];
   /** What the static checks found and what became of it; present when a guideline is checked. */
   checks?: CheckTally;
+  /** Present when model.provider is none: the run checked facts only. */
+  factsOnly?: FactsOnly;
 }
 
 /** Candidates the static checks found, and how each ended. */
@@ -101,6 +104,16 @@ export interface CheckTally {
   findings: number;
   dropped: number;
   judgeFailed: number;
+  /** Left to a person because they need a judgement; present on a facts only run. */
+  left?: number;
+}
+
+/** What a run with no model checked and what it left out. */
+export interface FactsOnly {
+  /** Candidates only a judgement settles: no finding, no comment, no gate. */
+  leftToPerson: LeftCandidate[];
+  /** Applicable guidelines no static check owns; nothing reviewed them. */
+  notReviewed: string[];
 }
 
 export function buildReport(input: {
@@ -134,6 +147,7 @@ export function buildReport(input: {
   /** Looks up the flagged line's text; absent entries simply carry none. */
   lineTextOf?: (finding: Finding) => string | undefined;
   checks?: CheckTally;
+  factsOnly?: FactsOnly;
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => {
     const lineText = input.lineTextOf?.(finding);
@@ -180,5 +194,6 @@ export function buildReport(input: {
       ? { unparsedBatches: [...input.unparsedBatches] }
       : {}),
     ...(input.checks !== undefined ? { checks: input.checks } : {}),
+    ...(input.factsOnly !== undefined ? { factsOnly: input.factsOnly } : {}),
   };
 }

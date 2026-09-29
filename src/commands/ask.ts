@@ -7,7 +7,7 @@ import { ToolError } from "../errors.js";
 import { acquireDiff, changedFilesFromDiff, resolveTargetRef } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
-import { buildModelPort } from "../model/build.js";
+import { buildModelPort, refuseWithoutModel } from "../model/build.js";
 import type { ModelRequest } from "../model/port.js";
 import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { buildAskSystem, buildAskUser, type Turn } from "../review/ask.js";
@@ -29,6 +29,7 @@ export async function runAsk(
     throw new ToolError("ask needs a question, or --interactive for a session");
   }
   const config = deps.loadConfig(flags);
+  refuseWithoutModel(config, "ask");
 
   const resolvedTarget = resolveTargetRef(
     deps.cwd,

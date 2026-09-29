@@ -8,7 +8,7 @@ import { resolvePack } from "../guidelines/packs.js";
 /** Everything the guided walkthrough can decide; plain init runs on the defaults. */
 export interface WalkthroughAnswers {
   scm: "local" | "github" | "gitlab" | "bitbucket";
-  provider: "anthropic" | "bedrock" | "openrouter" | "openai-compatible";
+  provider: "anthropic" | "bedrock" | "openrouter" | "openai-compatible" | "none";
   failOn: Severity | "none";
   context: "repo_map" | "repo_map+agentic" | "none";
   /** USD ceiling per review; zero means no cap. */
@@ -36,8 +36,12 @@ export function renderConfigYaml(answers: WalkthroughAnswers): string {
     "# delta-peacock configuration. Secrets never live here; use environment variables.",
     "",
     "model:",
-    `  provider: ${answers.provider}`,
-    "  # id: claude-sonnet-4-5",
+    ...(answers.provider === "none"
+      ? [
+          "  # no model and no credential: a review checks what a static check measures",
+          "  provider: none",
+        ]
+      : [`  provider: ${answers.provider}`, "  # id: claude-sonnet-4-5"]),
     ...(answers.provider === "openai-compatible"
       ? [
           "  # any OpenAI-style /v1 endpoint; this default is a local Ollama",
@@ -199,11 +203,28 @@ function ciSnippet(ci: CiProvider): PlannedFile {
   return CI_SNIPPETS[ci];
 }
 
+/** A CI snippet with the model credentials taken out, for a config with no model. */
+export function withoutModelCredentials(snippet: PlannedFile): PlannedFile {
+  const content = snippet.content
+    .split("\n")
+    .filter(
+      (line) =>
+        !/^\s*ANTHROPIC_API_KEY:/.test(line) &&
+        !/^#\s+(?:ANTHROPIC_API_KEY|DELTA_PEACOCK_MODEL_ID)\s/.test(line) &&
+        line !== "# Required environment:",
+    )
+    .join("\n")
+    .replace(/ANTHROPIC_API_KEY, ([^,]+?) and DELTA_PEACOCK_MODEL_ID/g, "$1")
+    .replace(/#\n#\n/g, "#\n");
+  return { ...snippet, content };
+}
+
 /** Pure planning seam: answers in, the three files init writes out. */
 export function planScaffold(
   answers: WalkthroughAnswers,
-  snippet: PlannedFile = CI_SNIPPETS[answers.scm],
+  given: PlannedFile = CI_SNIPPETS[answers.scm],
 ): PlannedFile[] {
+  const snippet = answers.provider === "none" ? withoutModelCredentials(given) : given;
   return [
     { relPath: "delta-peacock.config.yaml", content: renderConfigYaml(answers) },
     {
@@ -219,6 +240,7 @@ export function writeScaffold(
   deps: RuntimeDeps,
   planned: readonly PlannedFile[],
   force: boolean,
+  noModelCall = false,
 ): number {
   for (const file of planned) {
     const full = path.join(deps.cwd, file.relPath);
@@ -231,6 +253,14 @@ export function writeScaffold(
     deps.out(`created ${file.relPath}\n`);
   }
 
+  if (noModelCall) {
+    deps.out(
+      "\nnext steps:\n" +
+        "  1. bind mechanical guidelines to a check under review.checks\n" +
+        "  2. run: delta-peacock doctor\n",
+    );
+    return 0;
+  }
   deps.out(
     "\nnext steps:\n" +
       "  1. set model.id in delta-peacock.config.yaml (or DELTA_PEACOCK_MODEL_ID)\n" +

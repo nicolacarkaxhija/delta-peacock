@@ -119,10 +119,20 @@ export function agreesWithCatalog(text: string, candidate: Candidate): boolean {
   return !/\s(?:-{1,2}|\u2013|\u2014)\s|[\u2013\u2014]/.test(text);
 }
 
+/** A candidate only a judgement settles, left to a person when no model runs. */
+export interface LeftCandidate {
+  file: string;
+  line: number;
+  guidelineId: string;
+  shape: string;
+  question: string;
+}
+
 export interface JudgedCandidate {
-  outcome: "finding" | "dropped" | "failed";
+  outcome: "finding" | "dropped" | "failed" | "left";
   finding?: Violation;
   rejected?: RejectedCandidate;
+  left?: LeftCandidate;
   notice: string;
   usage?: ModelUsage;
 }
@@ -157,12 +167,7 @@ function findingOf(
 const where = (candidate: Candidate): string =>
   `${candidate.file}:${String(candidate.line)} ${candidate.guidelineId} ${candidate.shape}`;
 
-/**
- * Settles one candidate. A measured fact is a finding without a model call; a
- * candidate that turns on prose asks the judge once, retries an unreadable
- * reply once with the same request, and counts a second one as no finding.
- * A drop stands only on a verbatim guideline sentence and a listed comment.
- */
+/** Settles one candidate: a fact without a call, prose by the judge, or by a person when no model runs. */
 export async function settle(
   port: ModelPort | undefined,
   candidate: Candidate,
@@ -170,11 +175,25 @@ export async function settle(
   excerpt: string,
 ): Promise<JudgedCandidate> {
   const rule = sentenceOf(candidate.check, candidate.shape);
-  if (candidate.judge === undefined || port === undefined) {
+  if (candidate.judge === undefined) {
     return {
       outcome: "finding",
       finding: findingOf(candidate, guideline, rule),
       notice: `check: ${where(candidate)}: finding`,
+    };
+  }
+  if (port === undefined) {
+    const question = candidate.judge.question;
+    return {
+      outcome: "left",
+      left: {
+        file: candidate.file,
+        line: candidate.line,
+        guidelineId: guideline.id,
+        shape: candidate.shape,
+        question,
+      },
+      notice: `check: ${where(candidate)}: left to a person: needs a judgement: ${question}`,
     };
   }
   const request = judgeRequest(candidate, guideline, excerpt);

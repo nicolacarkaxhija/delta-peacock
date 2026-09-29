@@ -13,7 +13,7 @@ import {
   type BoundGuideline,
   type CheckName,
 } from "./detect.js";
-import { excerptOf, settle } from "./judge.js";
+import { excerptOf, settle, type LeftCandidate } from "./judge.js";
 import { impliedCheck } from "./rules.js";
 
 export { CHECKS, type CheckName } from "./detect.js";
@@ -66,8 +66,8 @@ export interface ChecksInput {
   declared?: DeclaredTags;
   /** Where the repository names the attribute getByTestId reads. */
   configFiles: readonly string[];
-  /** Built only when a candidate needs the judge. */
-  port: () => ModelPort;
+  /** Built only when a candidate needs the judge; absent means no model, facts only. */
+  port?: () => ModelPort;
   /** Applied to every excerpt before it leaves the process. */
   redact: (text: string) => string;
 }
@@ -75,6 +75,8 @@ export interface ChecksInput {
 export interface ChecksOutcome {
   findings: Violation[];
   rejected: RejectedCandidate[];
+  /** Candidates only a judgement settles, when no model runs. */
+  left: LeftCandidate[];
   notices: string[];
   tally: CheckTally;
   usage?: ModelUsage;
@@ -104,7 +106,7 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
       candidates
         .filter((candidate) => candidate.guidelineId === guideline.id)
         .map((candidate) => async () => {
-          if (candidate.judge !== undefined) port ??= input.port();
+          if (candidate.judge !== undefined && input.port !== undefined) port ??= input.port();
           const lines = (input.read(candidate.file) ?? "").split("\n");
           return settle(port, candidate, guideline, input.redact(excerptOf(lines, candidate)));
         }),
@@ -113,6 +115,7 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
   );
   const findings: Violation[] = [];
   const rejected: RejectedCandidate[] = [];
+  const left: LeftCandidate[] = [];
   let usage: ModelUsage | undefined;
   const tally: CheckTally = {
     candidates: candidates.length,
@@ -123,15 +126,18 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
   for (const outcome of outcomes) {
     if (outcome.finding !== undefined) findings.push(outcome.finding);
     if (outcome.rejected !== undefined) rejected.push(outcome.rejected);
+    if (outcome.left !== undefined) left.push(outcome.left);
     if (outcome.usage !== undefined)
       usage = usage === undefined ? outcome.usage : addUsage(usage, outcome.usage);
     if (outcome.outcome === "finding") tally.findings += 1;
     else if (outcome.outcome === "dropped") tally.dropped += 1;
+    else if (outcome.outcome === "left") tally.left = (tally.left ?? 0) + 1;
     else tally.judgeFailed += 1;
   }
   return {
     findings,
     rejected,
+    left,
     notices: outcomes.map((outcome) => outcome.notice),
     tally,
     ...(usage !== undefined ? { usage } : {}),

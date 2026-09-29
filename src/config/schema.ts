@@ -6,8 +6,9 @@ import { DEFAULT_MAX_TOOL_ROUNDS } from "../model/port.js";
 export const DEFAULT_DISPLAY_NAME = "Code review";
 
 export const ModelSchema = z.strictObject({
+  /** none: no model is built or called; a review checks facts only. */
   provider: z
-    .enum(["anthropic", "bedrock", "openrouter", "openai-compatible"])
+    .enum(["anthropic", "bedrock", "openrouter", "openai-compatible", "none"])
     .default("anthropic"),
   id: z.string().min(1).optional(),
   baseUrl: z.url().optional(),
@@ -231,6 +232,25 @@ export const ConfigSchema = z
     stats: StatsSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
+    if (config.model.provider === "none") {
+      const calling: [boolean, (string | number)[], string][] = [
+        [config.ensemble.enabled, ["ensemble", "enabled"], "ensemble.enabled"],
+        [config.calibration.enabled, ["calibration", "enabled"], "calibration.enabled"],
+        [
+          config.context.rag.backend === "embeddings",
+          ["context", "rag", "backend"],
+          "context.rag.backend embeddings",
+        ],
+      ];
+      for (const [on, where, what] of calling) {
+        if (!on) continue;
+        ctx.addIssue({
+          code: "custom",
+          path: where,
+          message: `${what} calls a model, and model.provider is none; turn it off or set a provider`,
+        });
+      }
+    }
     if (config.model.provider === "openai-compatible" && config.model.baseUrl === undefined) {
       ctx.addIssue({
         code: "custom",

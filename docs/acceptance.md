@@ -22,6 +22,9 @@ from a clean checkout; a red line blocks it.
   `gitleaks detect --no-banner`.
 - `review config`: the configuration validates and every bound guideline quotes its check's
   sentence. On its own: `pnpm build && node dist/cli.js doctor` ends with `all checks passed`.
+- `facts only`: with `model.provider: none` no model port is ever built or called, a candidate
+  that needs a judgement is left to a person, and every command that needs a model refuses with
+  one line and exit code 1. On its own: `pnpm exec vitest run tests/facts-`.
 
 ## Release
 

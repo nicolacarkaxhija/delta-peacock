@@ -224,6 +224,17 @@ cost:
   maxPerReview: 0.50 # block a review estimated above this, before any model call
 ```
 
+### Facts only, with no model
+
+`model.provider: none` reviews with no model at all: no credential, no call, zero cost. The
+guidelines a static check owns are checked and a measured fact becomes a finding as usual; a
+candidate that needs a judgement is listed in the log and the report as left to a person, never
+posted and never gating; a guideline no check owns is not reviewed. The summary comment and the
+commit status say so in one sentence. `ask`, `describe`, `learn` and `audit` refuse with one line,
+and a config that turns on calibration, an ensemble or embeddings fails validation. What the mode
+decides and what it leaves to a person is in the
+[checks guide](docs/guides/checks.md#facts-only-with-no-model).
+
 ### Context strategies
 
 `context.provider` picks one strategy; `context.providers` layers several in order, and earlier ones win the shared `context.maxTokens` budget (approximate tokens, default 4000).

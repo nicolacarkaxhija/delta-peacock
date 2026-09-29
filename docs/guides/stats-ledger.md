@@ -17,9 +17,9 @@ With `stats.enabled: true` every review appends to `delta-peacock.stats.jsonl` (
 | `title`       | The pull request title, when the SCM provides it                                        |
 | `scope`       | Parsed from a conventional title `type(scope): ...`; empty when the title has none      |
 | `type`        | The conventional type (`feat`, `fix`, ...), lower case; empty when the title is not one |
-| `model`       | The review model id in use, `DELTA_PEACOCK_MODEL_ID` included                           |
+| `model`       | The review model id in use, `DELTA_PEACOCK_MODEL_ID` included; `none` with no model     |
 | `tokens`      | `{ "input", "output", "cacheRead", "cacheWrite" }` summed over every call of the review |
-| `cost`        | USD, priced with the model's rates; absent when the model has none                      |
+| `cost`        | USD, priced with the model's rates; absent when the model has none, 0 with no model     |
 | `durationMs`  | Wall time of the review                                                                 |
 
 ## Finding line
