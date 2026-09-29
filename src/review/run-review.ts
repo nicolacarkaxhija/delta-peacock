@@ -22,7 +22,7 @@ import {
 } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines } from "../guidelines/loader.js";
-import { buildModelPort } from "../model/build.js";
+import { buildModelPort, noModel } from "../model/build.js";
 import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/port.js";
 import { withFetched } from "../model/generate.js";
 import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
@@ -55,14 +55,14 @@ import {
   vetSuggestions,
 } from "./placement.js";
 import { runGit } from "../git/git.js";
-import { NOT_REVIEWED } from "../scm/comment-format.js";
+import { factsLine, NOT_REVIEWED, type FactsScope } from "../scm/comment-format.js";
 import { buildScmPort } from "../scm/build.js";
 import { codeInsightsEnabled, isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
 import { harvestUncited } from "./harvest.js";
 import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
-import { buildReport, type UnparsedBatch, type WaivedFinding } from "./report.js";
+import { buildReport, type FactsOnly, type UnparsedBatch, type WaivedFinding } from "./report.js";
 import { verifyStructural } from "./structural.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import type { PullRequestText } from "../scm/port.js";
@@ -196,11 +196,18 @@ export async function runReview(
   // a checked guideline yields findings only on the lines its static check flags;
   // the open prompt still shows it, so the open review reads the same corpus
   const { bound, free } = splitChecked(guidelines, config.review.checks);
-  const { redacted, request, passes, batchCount, parseOptions, budgetDegraded, linters } =
-    await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
+  const factsOnly = noModel(config);
+  const { redacted, request, passes, batchCount, parseOptions, budgetDegraded, linters } = factsOnly
+    ? assembleFacts(deps, config, diff, guidelines)
+    : await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
+  if (factsOnly) {
+    deps.err(
+      `facts only: model.provider is none; ${String(bound.length)} checked guideline(s) reviewed, ${String(free.length)} not reviewed${free.length > 0 ? `: ${free.map((one) => one.id).join(", ")}` : ""}\n`,
+    );
+  }
 
   const now = deps.clock?.() ?? new Date();
-  if (guardActive(config)) {
+  if (!factsOnly && guardActive(config)) {
     const decision = await checkCostGuard(config, request, now, { batches: batchCount });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
     if (!decision.allowed) {
@@ -237,10 +244,13 @@ export async function runReview(
   // with every applicable guideline checked, an open call could only produce what is dropped
   const allChecked = free.length === 0 && bound.length > 0 && !config.review.generalPass;
   try {
-    if (allChecked) deps.err("every applicable guideline is checked; no open review call\n");
-    executed = allChecked
-      ? idleExecution()
-      : await executeReview(deps, config, request, passes, batchCount, parseOptions);
+    if (allChecked && !factsOnly) {
+      deps.err("every applicable guideline is checked; no open review call\n");
+    }
+    executed =
+      allChecked || factsOnly
+        ? idleExecution()
+        : await executeReview(deps, config, request, passes, batchCount, parseOptions);
   } catch (error) {
     if (error instanceof ToolError) await publishFailure(deps, config, failureReason(error));
     throw error;
@@ -273,7 +283,7 @@ export async function runReview(
           files: fromApi ? () => [] : () => trackedFiles(deps.cwd),
           ...(declared !== undefined ? { declared } : {}),
           configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
-          port: () => reviewPort(deps, config),
+          ...(factsOnly ? {} : { port: () => reviewPort(deps, config) }),
           redact: (text) =>
             redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
               strict: config.redaction.strict,
@@ -357,6 +367,11 @@ export async function runReview(
   if (checks?.usage !== undefined) {
     usage = usage === undefined ? checks.usage : addUsage(usage, checks.usage);
   }
+  // no model ran, so the run records zero tokens rather than nothing
+  if (factsOnly) usage = { inputTokens: 0, outputTokens: 0 };
+  const facts: FactsOnly | undefined = factsOnly
+    ? { leftToPerson: checks?.left ?? [], notReviewed: free.map((one) => one.id) }
+    : undefined;
   const ensembleMembers = executed.ensembleMembers;
   const toolCalls = executed.toolCalls;
   const cachedResponse = executed.cachedResponse;
@@ -411,6 +426,14 @@ export async function runReview(
       gate,
     }),
   );
+  if (facts !== undefined) {
+    for (const left of facts.leftToPerson) {
+      deps.out(
+        `left to a person: needs a judgement: ${left.file}:${String(left.line)} [${left.guidelineId}] ${left.question}\n`,
+      );
+    }
+    deps.out(`${factsLine(kept.length, factsScope(facts))}\n`);
+  }
 
   if (options.bootstrap === true) {
     const drafts = observations
@@ -472,6 +495,7 @@ export async function runReview(
       ...(linters.length > 0 ? { lintersDetected: linters } : {}),
       ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
       ...(checks !== undefined ? { checks: checks.tally } : {}),
+      ...(facts !== undefined ? { factsOnly: facts } : {}),
     });
     if (config.output.report !== undefined) {
       writeFileSync(
@@ -500,6 +524,7 @@ export async function runReview(
     commitStatus: config.scm.commitStatus,
     comments: config.scm.comments,
     dryRun: isDryRun(config),
+    ...(facts !== undefined ? { factsOnly: factsScope(facts) } : {}),
   });
 
   if (usage !== undefined) {
@@ -522,9 +547,13 @@ export async function runReview(
           ? { judgeFailed: checks.tally.judgeFailed }
           : {}),
         attribution: await pullRequestAttribution(deps, config),
-        ...(config.model.id !== undefined ? { model: config.model.id } : {}),
+        ...(factsOnly
+          ? { model: "none", cost: 0 }
+          : config.model.id !== undefined
+            ? { model: config.model.id }
+            : {}),
         ...(usage !== undefined ? { usage } : {}),
-        ...(usage !== undefined && anyRateConfigured(rates)
+        ...(!factsOnly && usage !== undefined && anyRateConfigured(rates)
           ? { cost: computeCost(usage, rates).total }
           : {}),
         durationMs: Math.round(performance.now() - startedAt),
@@ -541,6 +570,7 @@ export async function runReview(
  * prints about it: tokens in and out, the cost, and the month on the counter.
  */
 export async function spendLine(config: Config, usage: ModelUsage, now: Date): Promise<string> {
+  if (noModel(config)) return "cost: 0 tokens in, 0 out on none, 0.0000 USD; no model call";
   // the model id shows which rates priced the run, an env override included
   const tokens = `${String(usage.inputTokens)} tokens in, ${String(usage.outputTokens)} out on ${config.model.id ?? "(unset model)"}`;
   const rates = modelRates(config);
@@ -797,8 +827,46 @@ async function executeReview(
   };
 }
 
+/** A facts only run's assembly: the diff redacted, no context, no prompt, nothing to price. */
+function assembleFacts(
+  deps: ReviewDeps,
+  config: Config,
+  diff: string,
+  guidelines: readonly Guideline[],
+): AssembledReview {
+  const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns), {
+    strict: config.redaction.strict,
+  });
+  const redactionTotal = Object.values(redacted.counts).reduce((sum, n) => sum + n, 0);
+  if (redactionTotal > 0) {
+    deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted\n`);
+  }
+  return {
+    redacted,
+    request: { system: "", user: "" },
+    passes: [],
+    batchCount: 0,
+    parseOptions: {
+      guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),
+      generalPass: false,
+      observationSeverityCap: config.review.observationSeverityCap,
+    },
+    budgetDegraded: false,
+    linters: [],
+  };
+}
+
+/** The summary's view of a facts only run. */
+function factsScope(facts: FactsOnly): FactsScope {
+  return { left: facts.leftToPerson.length, notReviewed: facts.notReviewed };
+}
+
 /** The review's model behind the response cache; the open passes and the judge share it. */
 function reviewPort(deps: ReviewDeps, config: Config): ModelPort {
+  // an injected port must not slip past a config that names no model
+  if (noModel(config)) {
+    throw new ToolError("model.provider is none: no model is built and none is called");
+  }
   return withResponseCache(
     deps.modelPort ?? buildModelPort(config, deps.credentials),
     config,

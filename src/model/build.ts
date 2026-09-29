@@ -26,7 +26,25 @@ export interface ModelRef {
   baseUrl?: string | undefined;
 }
 
+/** True when the config names no model: a review checks facts only. */
+export function noModel(config: Pick<Config, "model">): boolean {
+  return config.model.provider === "none";
+}
+
+/** The one line a command that needs a model prints when there is none. */
+export function refuseWithoutModel(config: Pick<Config, "model">, command: string): void {
+  if (noModel(config)) {
+    throw new ToolError(
+      `${command} needs a model, and model.provider is none; set a provider to use it`,
+    );
+  }
+}
+
 export function buildModelPort(config: Config, credentials: Credentials): ModelPort {
+  const provider = config.model.provider;
+  if (provider === "none") {
+    throw new ToolError("model.provider is none: no model is built and none is called");
+  }
   const modelId = config.model.id;
   if (modelId === undefined) {
     throw new ToolError(
@@ -35,7 +53,7 @@ export function buildModelPort(config: Config, credentials: Credentials): ModelP
   }
   return buildModelPortFor(
     {
-      provider: config.model.provider,
+      provider,
       id: modelId,
       ...(config.model.baseUrl !== undefined ? { baseUrl: config.model.baseUrl } : {}),
     },

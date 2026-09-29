@@ -4,7 +4,7 @@ import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { acquireDiff, resolveTargetRef } from "../git/diff.js";
-import { buildModelPort } from "../model/build.js";
+import { buildModelPort, refuseWithoutModel } from "../model/build.js";
 import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import {
   buildDescribeRequest,
@@ -27,6 +27,7 @@ export async function runDescribe(
   options: { title: boolean },
 ): Promise<number> {
   const config = deps.loadConfig(flags);
+  refuseWithoutModel(config, "describe");
 
   const resolvedTarget = resolveTargetRef(
     deps.cwd,

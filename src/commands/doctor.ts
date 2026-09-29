@@ -77,6 +77,13 @@ function checkGuidelines(deps: RuntimeDeps, config: Config): CheckResult {
 }
 
 function checkModel(config: Config, credentials: Credentials): CheckResult {
+  if (config.model.provider === "none") {
+    return check(
+      "model",
+      "ok",
+      "none: no model is called and no credential is needed; a review checks facts only",
+    );
+  }
   if (config.model.id === undefined) {
     return check("model", "warn", "model.id is not set yet; reviews need it (see the config spec)");
   }

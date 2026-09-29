@@ -4,7 +4,7 @@ import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, recordSpend } from "../cost/counter.js";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
-import { buildModelPort } from "../model/build.js";
+import { buildModelPort, refuseWithoutModel } from "../model/build.js";
 import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { renderDraft } from "../guidelines/draft.js";
 import { buildLearnRequest, evidenceFrom, parseDrafts } from "../guidelines/learn.js";
@@ -22,6 +22,7 @@ export async function runLearn(
   options: LearnOptions,
 ): Promise<number> {
   const config = deps.loadConfig(flags);
+  refuseWithoutModel(config, "learn");
   if (config.scm.provider === "local") {
     throw new ToolError("learn reads reactions from an SCM; local mode has none");
   }

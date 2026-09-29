@@ -9,7 +9,7 @@ import { ToolError } from "../errors.js";
 import { newLineTexts } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { loadGuidelines } from "../guidelines/loader.js";
-import { buildModelPort } from "../model/build.js";
+import { buildModelPort, refuseWithoutModel } from "../model/build.js";
 import { addUsage, anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import type { ModelUsage } from "../model/port.js";
 import { renderCodeQuality, renderSarif } from "../review/artifacts.js";
@@ -33,6 +33,7 @@ export async function runAudit(
   options: AuditOptions = {},
 ): Promise<number> {
   const config = deps.loadConfig(flags);
+  refuseWithoutModel(config, "audit");
   const loaded = loadGuidelines(
     path.join(deps.cwd, config.review.guidelinesDir),
     config.review.frontmatterContract,

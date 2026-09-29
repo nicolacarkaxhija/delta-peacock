@@ -72,6 +72,26 @@ The finding's title, body, quoted guideline sentence and suggestion come from th
 rerun on the same change posts the same words. The report carries a `checks` tally: candidates,
 findings, drops and judge failures.
 
+## Facts only, with no model
+
+With `model.provider: none` no judge runs. A candidate the check measured as a fact is a finding
+exactly as above: its guideline sentence, severity, comment, task and gate. A candidate that
+carries a judge question becomes no finding, no comment and no task and never touches the gate;
+the log and the report's `factsOnly.leftToPerson` list it as `left to a person: needs a
+judgement`, with file, line and the question. A guideline no check owns is not reviewed and is
+named in `factsOnly.notReviewed`. The summary comment opens with one sentence, such as:
+
+> This review checked facts only, with no model: 2 findings, 3 candidates left to a person because
+> they need a judgement, and 1 guideline not reviewed (no-console).
+
+and the commit status reads `Facts only, no model. 2 findings, 3 left to a person, 1 guideline not
+reviewed.` The stats ledger records model `none`, zero tokens and zero cost.
+
+Every candidate that carries a judge question is left to a person: a CSS selector near a comment
+that names no reason, a comment that may narrate, and every number of the `numbers` check. A CSS
+selector with no comment at all carries no question and stays a finding. The mode gives up what
+only a judgement finds; it adds nothing a model review would not report.
+
 ## The sentence each check quotes
 
 Every check declares the guideline sentence it enforces, one per kind of candidate, and every

@@ -14,7 +14,8 @@
             "anthropic",
             "bedrock",
             "openrouter",
-            "openai-compatible"
+            "openai-compatible",
+            "none"
           ]
         },
         "id": {

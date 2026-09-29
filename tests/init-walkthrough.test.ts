@@ -155,7 +155,7 @@ describe("init --walkthrough", () => {
     ]);
     expect(code).toBe(0);
     expect(stdout).toContain("local, github, gitlab or bitbucket");
-    expect(stdout).toContain("anthropic, bedrock, openrouter or openai-compatible");
+    expect(stdout).toContain("anthropic, bedrock, openrouter, openai-compatible or none");
     expect(stdout).toContain("advisory, BLOCKER");
     expect(stdout).toContain("repo_map, repo_map+agentic or none");
     expect(stdout).toContain("none or a dollar amount");

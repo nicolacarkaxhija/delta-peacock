@@ -550,10 +550,14 @@ export async function publishReview(
         await createTasks(taskApi, own, desired, commentIds, lineTextOf, outcome, presentation);
       }
     }
-    // where an Insights card carries a clean result, a clean summary only updates an earlier one
+    // a clean card carries a clean result, but never a facts only one, which must say so
     const cardCarries = input.codeInsights === true && scm.publishInsights !== undefined;
     const quiet =
-      input.findings.length === 0 && !failed && cardCarries && input.summaryWhenClean !== true;
+      input.findings.length === 0 &&
+      !failed &&
+      cardCarries &&
+      input.summaryWhenClean !== true &&
+      input.factsOnly === undefined;
     await upsertSummary(scm, presentation, renderSummaryBody(input, presentation), !quiet);
   }
   if (input.commitStatus) {
