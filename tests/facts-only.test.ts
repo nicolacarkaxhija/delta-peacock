@@ -244,23 +244,27 @@ describe("a facts only review", () => {
     expect(built.count).toBe(0);
     expect(code).toBe(0);
     const report = JSON.parse(readFileSync(path.join(repo, "review.json"), "utf8")) as ReviewReport;
-    expect(report.findings.map((one) => `${one.file}:${String(one.line)}`)).toEqual([
+    expect(report.findings.map((one) => `${one.file}:${String(one.line)}`).sort()).toEqual([
       "pages/list.ts:3",
+      "src/app.ts:1",
     ]);
+    const numbered = report.findings.find((one) => one.file === "src/app.ts");
+    expect(numbered?.kind === "violation" ? numbered.guidelineQuote : "").toContain(
+      "Every timeout, delay, retry count, limit or threshold",
+    );
     expect(report.factsOnly?.notReviewed).toEqual(["no-console"]);
     const left = report.factsOnly?.leftToPerson ?? [];
     expect(left.map((one) => `${one.file}:${String(one.line)} ${one.guidelineId}`).sort()).toEqual([
       "pages/list.ts:7 prefer-test-ids",
-      "src/app.ts:1 no-magic-numbers",
       "src/app.ts:3 no-magic-numbers",
     ]);
     expect(left.find((one) => one.file === "pages/list.ts")?.question).toBe(SELECTOR_QUESTION);
     expect(report.checks).toEqual({
       candidates: 4,
-      findings: 1,
+      findings: 2,
       dropped: 0,
       judgeFailed: 0,
-      left: 3,
+      left: 2,
     });
     expect(report.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
     expect(err).toContain(
@@ -269,13 +273,16 @@ describe("a facts only review", () => {
     expect(err).toContain(
       `check: pages/list.ts:7 prefer-test-ids css: left to a person: needs a judgement: ${SELECTOR_QUESTION}`,
     );
+    expect(err).toContain(
+      "check: src/app.ts:1 no-magic-numbers unexplained-constant: finding, a fact: `RETRY_LIMIT` names a retry count and has no comment next to it",
+    );
     expect(err).not.toContain("budget:");
     expect(err).toContain("cost: 0 tokens in, 0 out on none, 0.0000 USD; no model call");
     expect(out).toContain(
       `left to a person: needs a judgement: pages/list.ts:7 [prefer-test-ids] ${SELECTOR_QUESTION}`,
     );
     expect(out).toContain(
-      "This review checked facts only, with no model: 1 finding, 3 candidates left to a person because they need a judgement, and 1 guideline not reviewed (no-console).",
+      "This review checked facts only, with no model: 2 findings, 2 candidates left to a person because they need a judgement, and 1 guideline not reviewed (no-console).",
     );
   });
 
@@ -309,16 +316,16 @@ describe("a facts only review", () => {
     expect(code).toBe(0);
     expect(calls).toHaveLength(0);
     expect(built.count).toBe(0);
-    expect(posted.inline).toHaveLength(1);
+    expect(posted.inline).toHaveLength(2);
     expect(posted.summary[0]?.split("\n")[0]).toBe(
-      "This review checked facts only, with no model: 1 finding, 3 candidates left to a person because they need a judgement, and 1 guideline not reviewed (no-console).",
+      "This review checked facts only, with no model: 2 findings, 2 candidates left to a person because they need a judgement, and 1 guideline not reviewed (no-console).",
     );
     expect(posted.summary.join("\n")).not.toMatch(/No issues found|Passed/);
     expect(posted.status).toEqual([
       {
         state: "success",
         description:
-          "Facts only, no model. 1 finding, 3 left to a person, 1 guideline not reviewed.",
+          "Facts only, no model. 2 findings, 2 left to a person, 1 guideline not reviewed.",
       },
     ]);
   });
