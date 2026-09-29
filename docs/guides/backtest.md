@@ -6,8 +6,14 @@ it. A release that finds something new that a person judged wrong, drifts betwee
 less than the last passing run fails the backtest.
 
 ```
-delta-peacock backtest --cases <dir> [--repeats 3] [--config <file>] [--only a,b] [--concurrency 3] [--report out.json]
+delta-peacock backtest --cases <dir> [--repeats 3] [--config <file>] [--only a,b] [--concurrency 3] [--report out.json] [--provider none]
 ```
+
+`--provider` runs every case under that model provider. With `none` the run checks facts only and
+makes no model call: every expected finding a fact decides must be found and none may be wrong,
+while the ones that need a judgement are counted in their own column and listed, never failed. The
+baseline is neither read nor written; see
+[facts only](checks.md#facts-only-with-no-model).
 
 Exit 0 means the run passed and the baseline moved to it; 2 means it failed (every reason is
 printed); 1 is a tool error.

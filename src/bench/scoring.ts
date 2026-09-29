@@ -60,6 +60,37 @@ export function scoreFindings(
   return { truePositives, falsePositives, falseNegatives, precision, recall, f1 };
 }
 
+/** What a facts only review could not reach. */
+export interface FactsReach {
+  leftToPerson: readonly { file: string; line: number; guidelineId: string }[];
+  notReviewed: readonly string[];
+}
+
+/** Splits a case's expected findings for a facts only review: what a fact decides, and the rest. */
+export function splitByReach(
+  produced: readonly ProducedFinding[],
+  expected: readonly ExpectedFinding[],
+  reach: FactsReach,
+  lineTolerance = 2,
+): { facts: ExpectedFinding[]; judgement: ExpectedFinding[] } {
+  const facts: ExpectedFinding[] = [];
+  const judgement: ExpectedFinding[] = [];
+  for (const want of expected) {
+    const found = produced.some((have) => matches(have, want, lineTolerance));
+    const unreachable =
+      want.guidelineId === undefined ||
+      reach.notReviewed.includes(want.guidelineId) ||
+      reach.leftToPerson.some(
+        (left) =>
+          left.guidelineId === want.guidelineId &&
+          left.file === want.file &&
+          Math.abs(left.line - want.line) <= lineTolerance,
+      );
+    (!found && unreachable ? judgement : facts).push(want);
+  }
+  return { facts, judgement };
+}
+
 export function findingKey(finding: ProducedFinding): string {
   return `${finding.file}:${finding.guidelineId ?? "-"}:${String(finding.line)}`;
 }
