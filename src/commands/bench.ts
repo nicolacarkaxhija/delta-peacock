@@ -31,7 +31,7 @@ import {
 } from "../review/placement.js";
 import { readDeclaredTags } from "../review/declared.js";
 import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guidelines/loader.js";
-import { buildModelPort } from "../model/build.js";
+import { buildModelPort, noModel } from "../model/build.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { readSourceForStructuralCheck } from "../review/run-review.js";
 import { verifyStructural } from "../review/structural.js";
@@ -88,9 +88,10 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
 
     const filesRoot = path.join(benchCase.dir, "files");
     const changedFiles = changedFilesFromDiff(benchCase.diff);
+    const factsOnly = noModel(config);
     let projectContext = "";
     let contextTools: ToolSet | undefined;
-    if (existsSync(filesRoot)) {
+    if (existsSync(filesRoot) && !factsOnly) {
       // the same resolution path a live review takes: systemContext AND
       // tools, never just the former (that gap once left an agentic bench
       // run with no file access at all while scoring as if it had one)
@@ -127,7 +128,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     // the whole corpus run, so DELTA_PEACOCK_COST_MAX_PER_REVIEW still bites
     // on the command meant to be run repeatedly, without making one capped
     // case take the rest of the corpus down with it
-    if (guardActive(config)) {
+    if (!factsOnly && guardActive(config)) {
       const now = deps.clock?.() ?? new Date();
       const decision = await checkCostGuard(config, request, now);
       for (const notice of decision.notices) deps.err(`${notice}\n`);
@@ -146,7 +147,9 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     };
     const usage: Record<string, ModelUsage> = {};
     let parsed: ParsedReview;
-    if (config.ensemble.enabled) {
+    if (factsOnly) {
+      parsed = { ...NO_FINDINGS, rejected: [] };
+    } else if (config.ensemble.enabled) {
       // the same members, union and judge a live review runs
       const ensemble = await runEnsemble(deps, config, request, parseOptions);
       for (const notice of ensemble.notices) deps.err(`${notice}\n`);
@@ -191,7 +194,9 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
                 : [],
             ...(tags !== undefined ? { declared: tags } : {}),
             configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
-            port: () => deps.modelPort ?? buildModelPort(config, deps.credentials),
+            ...(factsOnly
+              ? {}
+              : { port: () => deps.modelPort ?? buildModelPort(config, deps.credentials) }),
             redact: (text) => text,
           })
         : undefined;
@@ -226,6 +231,14 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       })),
       ...(Object.keys(usage).length > 0 ? { usage } : {}),
       misquoted: parsed.droppedMisquoted,
+      ...(factsOnly
+        ? {
+            facts: {
+              leftToPerson: checks?.left ?? [],
+              notReviewed: free.map((guideline) => guideline.id),
+            },
+          }
+        : {}),
     };
   };
 }

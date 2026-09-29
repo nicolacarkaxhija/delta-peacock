@@ -1,3 +1,4 @@
+import type { FactsReach } from "../bench/scoring.js";
 import type { Severity } from "../domain/severity.js";
 import type { ExpectedFinding, NoFinding } from "./cases.js";
 
@@ -31,7 +32,7 @@ interface Span {
   endLine?: number | undefined;
 }
 
-function covers(entry: Span, finding: ReplayedFinding): boolean {
+function covers(entry: Span, finding: Pick<ReplayedFinding, "file" | "line">): boolean {
   return (
     entry.file === finding.file &&
     finding.line >= entry.line &&
@@ -102,6 +103,36 @@ export function scoreRun(
     });
   }
   return { expected: expected.length, found: produced.length, right, wrong, missed: open };
+}
+
+/** A facts only score: the missed findings a judgement decides are split off from the real misses. */
+export interface FactsScore extends RunScore {
+  /** Expected findings a fact decides. */
+  facts: number;
+  /** Expected findings the run cannot reach because they need a judgement. */
+  judgement: ExpectedFinding[];
+}
+
+/** Scores a facts only run: a miss needs a judgement when nothing could reach it, else it is real. */
+export function scoreFacts(
+  produced: readonly ReplayedFinding[],
+  expected: readonly ExpectedFinding[],
+  noFinding: readonly NoFinding[],
+  reach: FactsReach,
+): FactsScore {
+  const score = scoreRun(produced, expected, noFinding);
+  const judgement: ExpectedFinding[] = [];
+  const missed: ExpectedFinding[] = [];
+  for (const want of score.missed) {
+    const needsJudgement =
+      want.guidelineId === undefined ||
+      reach.notReviewed.includes(want.guidelineId) ||
+      reach.leftToPerson.some(
+        (left) => covers(want, left) && left.guidelineId === want.guidelineId,
+      );
+    (needsJudgement ? judgement : missed).push(want);
+  }
+  return { ...score, missed, judgement, facts: expected.length - judgement.length };
 }
 
 /** The identity a finding keeps across repeats: where it sits and what it cites. */

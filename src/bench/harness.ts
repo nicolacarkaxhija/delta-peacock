@@ -4,7 +4,9 @@ import { ToolError } from "../errors.js";
 import type { ModelUsage } from "../model/port.js";
 import {
   scoreFindings,
+  splitByReach,
   type ExpectedFinding,
+  type FactsReach,
   type MatchResult,
   type ProducedFinding,
 } from "./scoring.js";
@@ -21,6 +23,8 @@ export interface ReviewResult {
   produced: ProducedFinding[];
   usage?: Record<string, ModelUsage>;
   misquoted?: number;
+  /** Present when the review checked facts only. */
+  facts?: FactsReach;
 }
 
 export interface CaseOutcome {
@@ -32,6 +36,8 @@ export interface CaseOutcome {
   /** Findings dropped for quoting a rule the guideline does not have. */
   misquoted?: number;
   score?: MatchResult;
+  /** Facts only: expected findings the review cannot reach because they need a judgement. */
+  judgement?: number;
   /** Set when this case's review threw (unparseable reply, model error, anything); scored as zero findings. */
   error?: string;
 }
@@ -113,10 +119,16 @@ export async function runBench(
       ...(error !== undefined ? { error } : {}),
     };
     if (benchCase.expected !== undefined) {
+      // a facts only review owes only what a fact decides
+      const owed =
+        extra.facts !== undefined
+          ? splitByReach(produced, benchCase.expected, extra.facts, lineTolerance)
+          : { facts: benchCase.expected, judgement: [] };
+      if (extra.facts !== undefined) outcome.judgement = owed.judgement.length;
       // zero findings for a crashed case, scored normally against what it owed
-      outcome.score = scoreFindings(produced, benchCase.expected, lineTolerance);
+      outcome.score = scoreFindings(produced, owed.facts, lineTolerance);
       aggregateProduced = [...aggregateProduced, ...produced];
-      aggregateExpected = [...aggregateExpected, ...benchCase.expected];
+      aggregateExpected = [...aggregateExpected, ...owed.facts];
       scoredAny = true;
     }
     outcomes.push(outcome);
@@ -143,16 +155,19 @@ export async function runBench(
 const percent = (value: number): string => `${(value * 100).toFixed(0)}%`;
 
 export function formatTable(outcome: BenchOutcome): string {
+  const facts = outcome.cases.some((caseOutcome) => caseOutcome.judgement !== undefined);
   const lines = [
-    "| case | findings | precision | recall | f1 | time | error |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    `| case | findings | precision | recall | f1 |${facts ? " judgement |" : ""} time | error |`,
+    `| --- | --- | --- | --- | --- |${facts ? " --- |" : ""} --- | --- |`,
   ];
   for (const caseOutcome of outcome.cases) {
     const score = caseOutcome.score;
     lines.push(
       `| ${caseOutcome.name} | ${String(caseOutcome.produced.length)} | ${
         score ? percent(score.precision) : "-"
-      } | ${score ? percent(score.recall) : "-"} | ${score ? percent(score.f1) : "-"} | ${String(caseOutcome.milliseconds)}ms | ${
+      } | ${score ? percent(score.recall) : "-"} | ${score ? percent(score.f1) : "-"} |${
+        facts ? ` ${String(caseOutcome.judgement ?? 0)} |` : ""
+      } ${String(caseOutcome.milliseconds)}ms | ${
         // a crashed case must read as crashed, never as a genuine clean pass
         caseOutcome.error !== undefined ? `error: ${caseOutcome.error}` : "-"
       } |`,
@@ -162,8 +177,9 @@ export function formatTable(outcome: BenchOutcome): string {
     const erroredCount = outcome.cases.filter(
       (caseOutcome) => caseOutcome.error !== undefined,
     ).length;
+    const judged = outcome.cases.reduce((sum, one) => sum + (one.judgement ?? 0), 0);
     lines.push(
-      `| aggregate | | ${percent(outcome.aggregate.precision)} | ${percent(outcome.aggregate.recall)} | ${percent(outcome.aggregate.f1)} | | ${
+      `| aggregate | | ${percent(outcome.aggregate.precision)} | ${percent(outcome.aggregate.recall)} | ${percent(outcome.aggregate.f1)} |${facts ? ` ${String(judged)} |` : ""} | ${
         erroredCount > 0
           ? `${String(erroredCount)}/${String(outcome.cases.length)} case(s) errored`
           : "-"

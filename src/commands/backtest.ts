@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadBacktestCases, type BacktestCase, type ExpectedFinding } from "../backtest/cases.js";
 import { replayCase, type Replay } from "../backtest/replay.js";
-import { drift, scoreRun, type RunScore } from "../backtest/score.js";
+import { drift, scoreFacts, scoreRun, type FactsScore, type RunScore } from "../backtest/score.js";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { inPool } from "../util/pool.js";
@@ -21,10 +21,12 @@ export interface BacktestOptions {
   report?: string;
   /** The reviewer version the baseline records. */
   version: string;
+  /** A model provider every case runs under; none scores the facts only mode. */
+  provider?: string;
 }
 
 interface Run {
-  score: RunScore;
+  score: RunScore & Partial<Pick<FactsScore, "facts" | "judgement">>;
   replay: Replay;
 }
 
@@ -155,6 +157,83 @@ function regressions(
   return lines;
 }
 
+const sum = (runs: readonly Run[], pick: (run: Run) => number): number =>
+  runs.reduce((total, run) => total + pick(run), 0);
+
+/** A facts only backtest: every fact finding found, none wrong, the rest counted, baseline untouched. */
+function factsOutcome(
+  deps: RuntimeDeps,
+  options: BacktestOptions,
+  results: readonly CaseResult[],
+  runsDir: string,
+  now: Date,
+): number {
+  const lines = [
+    "| case | expected | fact | found | right | wrong | missed | judgement | drift |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ];
+  for (const result of results) {
+    const runs = result.runs;
+    lines.push(
+      `| ${result.name} | ${String(result.expected)} | ${perRepeat(runs, (run) => run.score.facts ?? 0)} | ${perRepeat(runs, (run) => run.score.found)} | ${perRepeat(runs, (run) => run.score.right)} | ${perRepeat(runs, (run) => run.score.wrong.length)} | ${perRepeat(runs, (run) => run.score.missed.length)} | ${perRepeat(runs, (run) => run.score.judgement?.length ?? 0)} | ${String(result.drift)} |`,
+    );
+  }
+  const all = results.flatMap((result) => result.runs);
+  const totals = {
+    expected: sum(all, (run) => run.score.expected),
+    facts: sum(all, (run) => run.score.facts ?? 0),
+    right: sum(all, (run) => run.score.right),
+    wrong: sum(all, (run) => run.score.wrong.length),
+    missed: sum(all, (run) => run.score.missed.length),
+    judgement: sum(all, (run) => run.score.judgement?.length ?? 0),
+    drift: results.reduce((total, result) => total + result.drift, 0),
+  };
+  deps.out(`${lines.join("\n")}\n`);
+  deps.out(
+    `facts only over ${String(options.repeats)} repeat(s): ${String(totals.right)} of ${String(totals.facts)} fact findings found, ${String(totals.wrong)} wrong, ${String(totals.judgement)} of ${String(totals.expected)} expected findings need a judgement, drift ${String(totals.drift)}\n`,
+  );
+  const failed = failures(results);
+  for (const line of failed) deps.out(`${line}\n`);
+  for (const result of results) {
+    for (const want of result.runs[0]?.score.judgement ?? []) {
+      deps.out(`${result.name} needs a judgement: ${describeExpected(want)}\n`);
+    }
+  }
+  const summary = {
+    version: options.version,
+    at: now.toISOString(),
+    provider: "none",
+    repeats: options.repeats,
+    ...totals,
+    passed: failed.length === 0,
+    failures: failed,
+    cases: results.map((result) => ({
+      name: result.name,
+      expected: result.expected,
+      drift: result.drift,
+      runs: result.runs.map((run) => ({
+        facts: run.score.facts,
+        right: run.score.right,
+        wrong: run.score.wrong,
+        missed: run.score.missed,
+        judgement: run.score.judgement,
+        problems: run.replay.problems,
+        ...(run.replay.error !== undefined ? { error: run.replay.error } : {}),
+      })),
+    })),
+  };
+  const summaryText = `${JSON.stringify(summary, null, 2)}\n`;
+  writeFileSync(path.join(runsDir, "summary.json"), summaryText);
+  if (options.report !== undefined)
+    writeFileSync(path.resolve(deps.cwd, options.report), summaryText);
+  if (failed.length > 0) {
+    deps.out(`backtest failed: ${String(failed.length)} problem(s); logs in ${runsDir}\n`);
+    return 2;
+  }
+  deps.out("backtest passed on facts only; the baseline stays as it was\n");
+  return 0;
+}
+
 function stamp(now: Date): string {
   return now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
 }
@@ -188,8 +267,17 @@ export async function runBacktestCommand(
   const jobs = cases.flatMap((benchCase: BacktestCase) =>
     Array.from({ length: options.repeats }, (_, index) => async (): Promise<Run> => {
       const label = `${benchCase.name}.r${String(index + 1)}`;
-      const replay = await replayCase(deps, benchCase, path.join(workRoot, label), configText);
-      const score = scoreRun(replay.findings, benchCase.expected, benchCase.noFinding);
+      const replay = await replayCase(
+        deps,
+        benchCase,
+        path.join(workRoot, label),
+        configText,
+        options.provider,
+      );
+      const score =
+        replay.facts !== undefined
+          ? scoreFacts(replay.findings, benchCase.expected, benchCase.noFinding, replay.facts)
+          : scoreRun(replay.findings, benchCase.expected, benchCase.noFinding);
       writeFileSync(path.join(runsDir, `${label}.log`), replay.log);
       if (replay.report !== undefined) {
         writeFileSync(path.join(runsDir, `${label}.report.json`), replay.report);
@@ -214,9 +302,14 @@ export async function runBacktestCommand(
       expected: benchCase.expected.length,
       runs: own,
       drift: drift(own.map((run) => run.replay.findings)),
-      recall: Math.min(...own.map((run) => ratio(run.score.right, run.score.expected))),
+      recall: Math.min(
+        ...own.map((run) => ratio(run.score.right, run.score.facts ?? run.score.expected)),
+      ),
     };
   });
+  if (runs.some((run) => run.score.facts !== undefined)) {
+    return factsOutcome(deps, options, results, runsDir, now);
+  }
   const recall = worstRecall(results, options.repeats);
   const right = runs.reduce((sum, run) => sum + run.score.right, 0);
   const found = runs.reduce((sum, run) => sum + run.score.found, 0);

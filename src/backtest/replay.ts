@@ -5,11 +5,13 @@ import type { Config } from "../config/schema.js";
 import { activeStrategies } from "../context/build.js";
 import type { RuntimeDeps } from "../deps.js";
 import { runGit } from "../git/git.js";
+import { noModel } from "../model/build.js";
 import { anyRateConfigured, modelRates } from "../model/usage.js";
 import type { ReviewReport } from "../review/report.js";
 import { runReview } from "../review/run-review.js";
 import type { BacktestCase } from "./cases.js";
 import { rerunProblems } from "./rerun.js";
+import type { FactsReach } from "../bench/scoring.js";
 import type { ReplayedFinding } from "./score.js";
 
 const IDENTITY = ["-c", "user.name=backtest", "-c", "user.email=backtest@localhost"];
@@ -27,6 +29,8 @@ export interface Replay {
   error?: string;
   /** Lines the run must print and did not. */
   problems: string[];
+  /** Present when the run checked facts only: what it left to a person and did not review. */
+  facts?: FactsReach;
 }
 
 /**
@@ -53,8 +57,9 @@ export function materialize(benchCase: BacktestCase, repo: string, configText?: 
 }
 
 /** Settings a replay always runs under: local, dry, uncached, config and spend kept in the sandbox. */
-function forcedFlags(work: string): Record<string, string> {
+function forcedFlags(work: string, provider?: string): Record<string, string> {
   return {
+    ...(provider !== undefined ? { "model.provider": provider } : {}),
     "scm.provider": "local",
     "scm.dryRun": "true",
     "review.target": "main",
@@ -74,10 +79,19 @@ export function missingLines(
 ): string[] {
   if (!calledModel) return [];
   const problems: string[] = [];
-  if (activeStrategies(config).includes("full_files") && !/^full_files context: /m.test(log)) {
+  // a facts only run reads no context, yet still says it cost nothing
+  const facts = noModel(config);
+  if (
+    !facts &&
+    activeStrategies(config).includes("full_files") &&
+    !/^full_files context: /m.test(log)
+  ) {
     problems.push("no full_files context line in the log");
   }
-  if (anyRateConfigured(modelRates(config)) && !/^cost: .+ tokens in, .+ USD; /m.test(log)) {
+  if (
+    (facts || anyRateConfigured(modelRates(config))) &&
+    !/^cost: .+ tokens in, .+ USD; /m.test(log)
+  ) {
     problems.push("no cost line in the log");
   }
   if (config.stats.enabled) {
@@ -98,6 +112,7 @@ export async function replayCase(
   benchCase: BacktestCase,
   work: string,
   configText?: string,
+  provider?: string,
 ): Promise<Replay> {
   const repo = path.join(work, "repo");
   materialize(benchCase, repo, configText);
@@ -105,7 +120,7 @@ export async function replayCase(
   const capture = (text: string): void => {
     chunks.push(text);
   };
-  const forced = forcedFlags(work);
+  const forced = forcedFlags(work, provider);
   const replayDeps: RuntimeDeps = {
     ...deps,
     cwd: repo,
@@ -161,5 +176,6 @@ export async function replayCase(
     ...(report?.cost !== undefined ? { cost: report.cost.total } : {}),
     ...(error !== undefined ? { error } : {}),
     problems,
+    ...(report?.factsOnly !== undefined ? { facts: report.factsOnly } : {}),
   };
 }

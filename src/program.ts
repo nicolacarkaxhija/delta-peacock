@@ -303,6 +303,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
     )
     .option("--contexts <list>", "comma-separated strategies to compare with an overlap matrix")
     .option("--min-f1 <score>", "fail (exit 1) when aggregate f1 falls below this 0..1 threshold")
+    .option("--provider <name>", "benchmark under this model provider; none scores facts only")
     .action(
       async (options: {
         cases: string;
@@ -310,9 +311,11 @@ export function buildProgram(deps: RuntimeDeps): Command {
         context?: string;
         contexts?: string;
         minF1?: string;
+        provider?: string;
       }) => {
         const { runBenchCommand, contextFlag } = await import("./commands/bench.js");
         const flags: Record<string, string> = {};
+        if (options.provider !== undefined) flags["model.provider"] = options.provider;
         if (options.context !== undefined) Object.assign(flags, contextFlag(options.context));
         const code = await runBenchCommand(
           deps,
@@ -339,6 +342,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
     .option("--only <names>", "comma-separated case names; the baseline is left as it was")
     .option("--concurrency <n>", "reviews in flight at once", "3")
     .option("--report <path>", "write the outcome as JSON")
+    .option("--provider <name>", "run every case under this model provider; none scores facts only")
     .action(
       async (options: {
         cases: string;
@@ -347,6 +351,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
         only?: string;
         concurrency: string;
         report?: string;
+        provider?: string;
       }) => {
         const { runBacktestCommand } = await import("./commands/backtest.js");
         const code = await runBacktestCommand(deps, {
@@ -359,6 +364,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
             ? { only: options.only.split(",").map((name) => name.trim()) }
             : {}),
           ...(options.report !== undefined ? { report: options.report } : {}),
+          ...(options.provider !== undefined ? { provider: options.provider } : {}),
         });
         if (code !== 0) throw new ExitCodeError(code);
       },
