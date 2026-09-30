@@ -1,4 +1,5 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
+import type { ModelUnavailability } from "../model/unavailable.js";
 import type { LeftCandidate } from "./checks/judge.js";
 import type { RejectedCandidate } from "./parse.js";
 
@@ -114,6 +115,12 @@ export interface FactsOnly {
   leftToPerson: LeftCandidate[];
   /** Applicable guidelines no static check owns; nothing reviewed them. */
   notReviewed: string[];
+  /** Set when a configured model could not run and the review fell back to facts only. */
+  fallback?: ModelUnavailability;
+  /** What the model reviewed before it could not run: part of the change, or all of it and only the judge failed. */
+  modelReviewed?: "part" | "all";
+  /** The files no model reviewed when only part of the change was. */
+  unjudgedFiles?: string[];
 }
 
 export function buildReport(input: {

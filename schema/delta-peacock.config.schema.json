@@ -25,6 +25,11 @@
         "baseUrl": {
           "type": "string",
           "format": "uri"
+        },
+        "timeoutSeconds": {
+          "default": 60,
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       },
       "additionalProperties": false
@@ -207,6 +212,37 @@
             "MAJOR",
             "MINOR",
             "INFO"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "fallback": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "gate": {
+          "default": "facts",
+          "type": "string",
+          "enum": [
+            "facts",
+            "pass"
+          ]
+        },
+        "status": {
+          "default": "success",
+          "type": "string",
+          "enum": [
+            "success",
+            "pending"
+          ]
+        },
+        "credentialRefused": {
+          "default": "fallback",
+          "type": "string",
+          "enum": [
+            "fallback",
+            "fail"
           ]
         }
       },

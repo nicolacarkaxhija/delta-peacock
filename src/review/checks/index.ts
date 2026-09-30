@@ -1,7 +1,9 @@
+import type { Config } from "../../config/schema.js";
 import type { Finding, Violation } from "../../domain/finding.js";
 import type { Guideline } from "../../domain/guideline.js";
 import { newLineTexts } from "../../git/diff.js";
 import type { ModelPort, ModelUsage } from "../../model/port.js";
+import { ModelUnavailableError } from "../../model/unavailable.js";
 import { addUsage } from "../../model/usage.js";
 import { inPool } from "../../util/pool.js";
 import type { DeclaredTags } from "../declared.js";
@@ -13,7 +15,13 @@ import {
   type BoundGuideline,
   type CheckName,
 } from "./detect.js";
-import { excerptOf, settle, type LeftCandidate } from "./judge.js";
+import {
+  excerptOf,
+  settle,
+  type JudgedCandidate,
+  type LeftCandidate,
+  type ModelOutage,
+} from "./judge.js";
 import { impliedCheck } from "./rules.js";
 
 export { CHECKS, type CheckName } from "./detect.js";
@@ -70,16 +78,22 @@ export interface ChecksInput {
   port?: () => ModelPort;
   /** Applied to every excerpt before it leaves the process. */
   redact: (text: string) => string;
+  /** Whether a refused credential leaves the judged candidates to a person; fallback when unset. */
+  credentialRefused?: Config["fallback"]["credentialRefused"];
 }
 
 export interface ChecksOutcome {
   findings: Violation[];
+  /** The findings no model judged; `fallback.gate: pass` keeps them from gating. */
+  facts: Violation[];
   rejected: RejectedCandidate[];
   /** Candidates only a judgement settles, when no model runs. */
   left: LeftCandidate[];
   notices: string[];
   tally: CheckTally;
   usage?: ModelUsage;
+  /** Set when the judge could not reach the model: its candidates were left to a person. */
+  unavailable?: ModelOutage;
 }
 
 /** Judge calls in flight at once. */
@@ -101,19 +115,51 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
     testIdAttribute: testIdAttributeOf(input.configFiles.map((file) => input.read(file))),
   });
   let port: ModelPort | undefined;
-  const outcomes = await inPool(
-    input.bound.flatMap(({ guideline }) =>
-      candidates
-        .filter((candidate) => candidate.guidelineId === guideline.id)
-        .map((candidate) => async () => {
-          if (candidate.judge !== undefined && input.port !== undefined) port ??= input.port();
+  let outage: ModelOutage | undefined;
+  // a model that cannot be built leaves every judged candidate to a person
+  const judge = (): ModelPort | undefined => {
+    if (port !== undefined || outage !== undefined || input.port === undefined) return port;
+    try {
+      port = input.port();
+    } catch (error) {
+      if (!(error instanceof ModelUnavailableError)) throw error;
+      outage = { why: error.why, detail: error.message };
+    }
+    return port;
+  };
+  const tasks = input.bound.flatMap(({ guideline }) =>
+    candidates
+      .filter((candidate) => candidate.guidelineId === guideline.id)
+      .map((candidate) => ({
+        judged: candidate.judge !== undefined,
+        run: async (): Promise<JudgedCandidate> => {
+          // after the first outage the judge is not asked again in this run
+          const judgePort =
+            candidate.judge !== undefined && outage === undefined ? judge() : undefined;
           const lines = (input.read(candidate.file) ?? "").split("\n");
-          return settle(port, candidate, guideline, input.redact(excerptOf(lines, candidate)));
-        }),
-    ),
+          const settled = await settle(
+            judgePort,
+            candidate,
+            guideline,
+            input.redact(excerptOf(lines, candidate)),
+            input.credentialRefused,
+          );
+          outage ??= settled.unavailable;
+          return settled;
+        },
+      })),
+  );
+  // the first judged candidate goes alone, so an outage costs one call's retries, not one per call in flight
+  const probe = tasks.findIndex((task) => task.judged);
+  const probed = probe >= 0 ? await tasks[probe]?.run() : undefined;
+  const rest = await inPool(
+    tasks.filter((_, index) => index !== probe).map((task) => task.run),
     JUDGE_CONCURRENCY,
   );
+  const outcomes =
+    probed === undefined ? rest : [...rest.slice(0, probe), probed, ...rest.slice(probe)];
   const findings: Violation[] = [];
+  const facts: Violation[] = [];
   const rejected: RejectedCandidate[] = [];
   const left: LeftCandidate[] = [];
   let usage: ModelUsage | undefined;
@@ -125,6 +171,7 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
   };
   for (const outcome of outcomes) {
     if (outcome.finding !== undefined) findings.push(outcome.finding);
+    if (outcome.finding !== undefined && outcome.fact === true) facts.push(outcome.finding);
     if (outcome.rejected !== undefined) rejected.push(outcome.rejected);
     if (outcome.left !== undefined) left.push(outcome.left);
     if (outcome.usage !== undefined)
@@ -136,10 +183,12 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
   }
   return {
     findings,
+    facts,
     rejected,
     left,
     notices: outcomes.map((outcome) => outcome.notice),
     tally,
     ...(usage !== undefined ? { usage } : {}),
+    ...(outage !== undefined ? { unavailable: outage } : {}),
   };
 }

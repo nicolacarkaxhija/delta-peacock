@@ -235,6 +235,15 @@ and a config that turns on calibration, an ensemble or embeddings fails validati
 decides and what it leaves to a person is in the
 [checks guide](docs/guides/checks.md#facts-only-with-no-model).
 
+A configured model that cannot run (not configured, unreachable, a rate or quota limit, a
+timeout, a refused credential) makes the review fall back to the same facts only mode on its own.
+The step still passes, unless a fact finding fails the gate; the summary says that merging needs a
+person's approval, and so does a `success` status. `fallback.gate`, `fallback.status` and
+`fallback.credentialRefused` change that. Findings the model gave before it stopped stand, and
+comments an earlier run posted stay as they are. One request may take `model.timeoutSeconds`
+(default 60) before it counts as timed out; see
+[when the model cannot run](docs/guides/checks.md#when-the-model-cannot-run).
+
 ### Context strategies
 
 `context.provider` picks one strategy; `context.providers` layers several in order, and earlier ones win the shared `context.maxTokens` budget (approximate tokens, default 4000).

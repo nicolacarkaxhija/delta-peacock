@@ -103,6 +103,81 @@ mode never decides them; a literal in a test may only describe the case, as the 
 code compared or set (`res.status === 429`) are no candidates at all. What only a judgement finds,
 the mode gives up.
 
+## When the model cannot run
+
+A review with a model configured falls back to facts only, with no change to the pipeline, when
+the model cannot run:
+
+| Cause                    | What counts                                                                                                    | The summary says                                       | The status says       |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------- |
+| no model is configured   | `model.id` or the provider's credential is not set                                                             | no model is configured                                 | `not configured`      |
+| the provider unreachable | a refused, reset or unresolved connection, or an answer of 500 or above                                        | the model provider could not be reached                | `unreachable`         |
+| a rate or quota limit    | an answer of 429, or one that names a rate limit, a quota, throttling or the credit balance, after the retries | the model provider answered with a rate or quota limit | `rate or quota limit` |
+| a timeout                | a request past `model.timeoutSeconds` (default 60), `ETIMEDOUT`, or a connect, header or body timeout          | the model call timed out                               | `timed out`           |
+| a refused credential     | an answer of 401 or 403, or one that says the key or the security token is invalid                             | the credential was refused                             | `credential refused`  |
+
+Any other failure, an unreadable reply among them, fails the run as before, and so do the
+ensemble and calibration calls, which keep their own handling. The log says
+`model unavailable (<cause>): <what the call said>; falling back to facts only`, and the review
+goes on as above: facts are findings, the rest is left to a person, and the report's
+`factsOnly.fallback` names the cause. The summary opens with:
+
+> The model could not run (the model provider could not be reached), so this review checked facts
+> only: 1 finding, 1 candidate left to a person because it needs a judgement, and 1 guideline not
+> reviewed (no-console). Merging needs a person's approval.
+
+Each request to the provider may take `model.timeoutSeconds` (default 60, env
+`DELTA_PEACOCK_MODEL_TIMEOUT_SECONDS`), long enough for a reply of the default 4000 output tokens;
+a provider that takes the request and never answers counts as a timeout after that time.
+
+When the diff is reviewed in batches and only some answer, the findings of the answered batches
+stand and the summary names the files no model reviewed:
+
+> The model reviewed part of the change, then could not run (the model provider could not be
+> reached): no model reviewed src/other.ts, where this review checked facts only. ...
+
+When the open review answered and the judge then cannot reach the model, the judge is asked once
+in the run: that candidate and every later one settle as they would with no model, and the summary
+says so:
+
+> The model reviewed the change, but the judge could not run (the model provider answered with a
+> rate or quota limit): 2 findings, and 5 candidates left to a person because they need a
+> judgement. Merging needs a person's approval.
+
+An outage on the second request for a readable answer counts like any other outage. A fallback
+run never resolves or rewrites a comment an earlier run posted: it cannot judge the finding
+again, so the comment stays as it is, the summary lists it (`Not judged again on this run, so
+their comments stay as they are: src/app.ts:5.`), and the next run with the model settles it.
+
+Three settings under `fallback` decide what the step and the status do; each default is the
+recommended one.
+
+| Setting                      | Default    | The other value                                                                        |
+| ---------------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| `fallback.gate`              | `facts`    | `pass`: no fact fails the step; the findings stay in the summary, a model's still gate |
+| `fallback.status`            | `success`  | `pending`: the status never reads as a pass (Bitbucket `INPROGRESS`, a card `PENDING`) |
+| `fallback.credentialRefused` | `fallback` | `fail`: a refused credential fails the run with exit code 1, as any other error        |
+
+With `fallback.gate: facts` a fact finding that reaches `gate.failOn` fails the step with exit
+code 2 and a `failure` status that reads `No model (unreachable), facts only: 1 finding, 1 left to
+a person. Needs a person's approval.`; otherwise the step exits 0. A finding the model gave before
+it stopped gates as in any review, with either value. When the facts pass, the status
+is `success` with the text `Facts only, no model: needs a person's approval` (`Model reviewed in
+part: ...` or `Judge could not run: ...` when the model reviewed some or all of the change), or with
+`fallback.status: pending` a `pending` status with the text above. The summary asks for a person's
+approval in every case. Where the status is a required check, `pending` makes the merge wait for a
+person, who merges past it or runs the review again once the model is back; `success` lets the
+merge through and leaves the approval to the reviewers who read the summary. The environment
+variables are `DELTA_PEACOCK_FALLBACK_GATE`, `DELTA_PEACOCK_FALLBACK_STATUS` and
+`DELTA_PEACOCK_FALLBACK_CREDENTIAL_REFUSED`.
+
+```yaml
+fallback:
+  gate: facts
+  status: success
+  credentialRefused: fallback
+```
+
 ## The sentence each check quotes
 
 Every check declares the guideline sentence it enforces, one per kind of candidate, and every

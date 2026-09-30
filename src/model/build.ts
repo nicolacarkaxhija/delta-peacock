@@ -5,6 +5,7 @@ import { createAnthropicPort } from "./anthropic.js";
 import { createBedrockPort } from "./bedrock.js";
 import { createOpenAiishPort } from "./openaiish.js";
 import type { ModelPort } from "./port.js";
+import { ModelUnavailableError } from "./unavailable.js";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -15,9 +16,21 @@ function requiredCredential(
 ): string {
   const value = credentials[name];
   if (value === undefined || value === "") {
-    throw new ToolError(`${name} is not set; the ${provider} provider needs it`);
+    throw new ModelUnavailableError(
+      "not-configured",
+      `${name} is not set; the ${provider} provider needs it`,
+    );
   }
   return value;
+}
+
+/** Global fetch that gives up on one request after the given seconds. */
+function timedFetch(seconds: number): typeof globalThis.fetch {
+  return (input, init) => {
+    const limit = AbortSignal.timeout(seconds * 1000);
+    const signal = init?.signal ? AbortSignal.any([init.signal, limit]) : limit;
+    return globalThis.fetch(input, { ...init, signal });
+  };
 }
 
 export interface ModelRef {
@@ -47,7 +60,8 @@ export function buildModelPort(config: Config, credentials: Credentials): ModelP
   }
   const modelId = config.model.id;
   if (modelId === undefined) {
-    throw new ToolError(
+    throw new ModelUnavailableError(
+      "not-configured",
       "model.id is required to review; set it in config or DELTA_PEACOCK_MODEL_ID",
     );
   }
@@ -58,23 +72,31 @@ export function buildModelPort(config: Config, credentials: Credentials): ModelP
       ...(config.model.baseUrl !== undefined ? { baseUrl: config.model.baseUrl } : {}),
     },
     credentials,
+    config.model.timeoutSeconds,
   );
 }
 
 /** The same wiring for ensemble members and judges: always provider plus model. */
-export function buildModelPortFor(ref: ModelRef, credentials: Credentials): ModelPort {
+export function buildModelPortFor(
+  ref: ModelRef,
+  credentials: Credentials,
+  timeoutSeconds?: number,
+): ModelPort {
   const modelId = ref.id;
+  const timed = timeoutSeconds !== undefined ? { fetch: timedFetch(timeoutSeconds) } : {};
   switch (ref.provider) {
     case "anthropic":
       return createAnthropicPort({
         apiKey: requiredCredential(credentials, "ANTHROPIC_API_KEY", "anthropic"),
         modelId,
+        ...timed,
       });
     case "openrouter":
       return createOpenAiishPort({
         apiKey: requiredCredential(credentials, "OPENROUTER_API_KEY", "openrouter"),
         modelId,
         baseUrl: ref.baseUrl ?? OPENROUTER_BASE_URL,
+        ...timed,
       });
     case "openai-compatible": {
       // the schema's cross-field rules guarantee the base url is present for
@@ -86,6 +108,7 @@ export function buildModelPortFor(ref: ModelRef, credentials: Credentials): Mode
         apiKey: credentials.OPENAI_API_KEY ?? "unused",
         modelId,
         baseUrl,
+        ...timed,
       });
     }
     case "bedrock":
@@ -98,6 +121,7 @@ export function buildModelPortFor(ref: ModelRef, credentials: Credentials): Mode
           : {}),
         modelId,
         ...(ref.baseUrl !== undefined ? { baseUrl: ref.baseUrl } : {}),
+        ...timed,
       });
   }
 }

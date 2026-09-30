@@ -12,6 +12,8 @@ export const ModelSchema = z.strictObject({
     .default("anthropic"),
   id: z.string().min(1).optional(),
   baseUrl: z.url().optional(),
+  /** One request's time before it counts as timed out: long enough for 4000 output tokens at 67 a second. */
+  timeoutSeconds: z.number().positive().default(60),
 });
 
 export const ReviewSchema = z.strictObject({
@@ -78,6 +80,16 @@ export const ReviewSchema = z.strictObject({
 
 export const GateSchema = z.strictObject({
   failOn: z.enum(["none", ...SEVERITIES]).default("none"),
+});
+
+/** What a review does when its model cannot run and it checks facts only. */
+const FallbackSchema = z.strictObject({
+  /** facts: a fact finding may still fail the gate; pass: the step passes, the findings stay in the summary. */
+  gate: z.enum(["facts", "pass"]).default("facts"),
+  /** The commit status when the facts pass; the summary asks for a person's approval either way. */
+  status: z.enum(["success", "pending"]).default("success"),
+  /** fallback: a refused credential (401, 403, a rejected key) falls back like an outage; fail: the run fails. */
+  credentialRefused: z.enum(["fallback", "fail"]).default("fallback"),
 });
 
 export const OutputSchema = z.strictObject({
@@ -221,6 +233,7 @@ export const ConfigSchema = z
     model: ModelSchema.prefault({}),
     review: ReviewSchema.prefault({}),
     gate: GateSchema.prefault({}),
+    fallback: FallbackSchema.prefault({}),
     output: OutputSchema.prefault({}),
     redaction: RedactionSchema.prefault({}),
     scm: ScmSchema.prefault({}),

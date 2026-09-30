@@ -1,7 +1,8 @@
-import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
+import { DEFAULT_DISPLAY_NAME, type Config } from "../config/schema.js";
 import { fingerprintFrom, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
 import { meetsThreshold, SEVERITIES, type Severity } from "../domain/severity.js";
+import type { ModelUnavailability } from "../model/unavailable.js";
 
 export const SUMMARY_MARKER = "<!-- delta-peacock:summary -->";
 const FINDING_MARKER = /^<!-- delta-peacock:finding:([0-9a-f]+(?:-\d+)?) -->$/;
@@ -215,6 +216,8 @@ export function isSummaryBody(body: string, presentation: Presentation): boolean
     first.startsWith(FAILED_LEAD) ||
     first.startsWith(CAPPED_LEAD) ||
     first.startsWith(FACTS_LEAD) ||
+    first.startsWith(FALLBACK_LEAD) ||
+    first.startsWith(PARTIAL_LEAD) ||
     COUNT_LEAD.test(first) ||
     Object.values(NOT_REVIEWED).some((line) => line === first)
   );
@@ -238,9 +241,45 @@ export interface SummaryInput {
 export interface FactsScope {
   left: number;
   notReviewed: readonly string[];
+  /** Set when a configured model could not run: the merge then needs a person's approval. */
+  fallback?: ModelUnavailability;
+  /** The status a fallback posts when the facts pass; success when unset. */
+  fallbackStatus?: Config["fallback"]["status"];
+  /** What a model reviewed before it could not run: part of the change, or all of it and only the judge failed. */
+  modelReviewed?: "part" | "all";
+  /** The files no model reviewed when only part of the change was. */
+  unjudgedFiles?: readonly string[];
+  /** Earlier findings on the pull request this run could not judge again; their comments stay as they are. */
+  notRejudged?: readonly string[];
 }
 
 const FACTS_LEAD = "This review checked facts only, with no model: ";
+const FALLBACK_LEAD = "The model could not run (";
+const PARTIAL_LEAD = "The model reviewed ";
+
+/** Why the model could not run, in the summary's words and the status's short ones. */
+const FALLBACK_REASONS: Readonly<Record<ModelUnavailability, { long: string; short: string }>> = {
+  "not-configured": { long: "no model is configured", short: "not configured" },
+  unreachable: { long: "the model provider could not be reached", short: "unreachable" },
+  limit: {
+    long: "the model provider answered with a rate or quota limit",
+    short: "rate or quota limit",
+  },
+  timeout: { long: "the model call timed out", short: "timed out" },
+  "credential-refused": { long: "the credential was refused", short: "credential refused" },
+};
+
+/** The success status text of a fallback, by what the model reviewed. */
+const FALLBACK_APPROVAL = {
+  none: "Facts only, no model: needs a person's approval",
+  part: "Model reviewed in part: needs a person's approval",
+  all: "Judge could not run: needs a person's approval",
+} as const;
+
+/** The short reason a log line and a status give for a model that could not run. */
+export function fallbackReason(why: ModelUnavailability): string {
+  return FALLBACK_REASONS[why].short;
+}
 
 /** The one sentence a facts only summary opens with. */
 export function factsLine(findings: number, scope: FactsScope): string {
@@ -252,11 +291,40 @@ export function factsLine(findings: number, scope: FactsScope): string {
     scope.notReviewed.length === 0
       ? "every applicable guideline checked"
       : `${plural(scope.notReviewed.length, "guideline")} not reviewed (${scope.notReviewed.join(", ")})`;
-  return `${FACTS_LEAD}${plural(findings, "finding")}, ${left}, and ${skipped}.`;
+  const counts = `${plural(findings, "finding")}, ${left}, and ${skipped}.`;
+  if (scope.fallback === undefined) return `${FACTS_LEAD}${counts}`;
+  const reason = FALLBACK_REASONS[scope.fallback].long;
+  const approval = "Merging needs a person's approval.";
+  if (scope.modelReviewed === "all") {
+    return `${PARTIAL_LEAD}the change, but the judge could not run (${reason}): ${plural(findings, "finding")}, and ${left}. ${approval}`;
+  }
+  if (scope.modelReviewed === "part") {
+    const files = (scope.unjudgedFiles ?? []).join(", ");
+    const unchecked =
+      scope.notReviewed.length === 0
+        ? "every applicable guideline checked"
+        : `${plural(scope.notReviewed.length, "guideline")} not reviewed on those files (${scope.notReviewed.join(", ")})`;
+    return `${PARTIAL_LEAD}part of the change, then could not run (${reason}): no model reviewed ${files}, where this review checked facts only. ${plural(findings, "finding")}, ${left}, and ${unchecked}. ${approval}`;
+  }
+  return `${FALLBACK_LEAD}${reason}), so this review checked facts only: ${counts} ${approval}`;
 }
 
 /** The facts only commit status: no verdict word, since no full review ran. */
-function factsStatus(findings: number, scope: FactsScope): string {
+function factsStatus(findings: number, scope: FactsScope, gate: GateDecision | undefined): string {
+  if (scope.fallback !== undefined) {
+    const reviewed = scope.modelReviewed ?? "none";
+    if (gate?.failed !== true && scope.fallbackStatus !== "pending") {
+      return FALLBACK_APPROVAL[reviewed];
+    }
+    const lead = {
+      none: "No model",
+      part: "Model in part",
+      all: "No judge",
+    }[reviewed];
+    return clip(
+      `${lead} (${fallbackReason(scope.fallback)})${reviewed === "none" ? ", facts only" : ""}: ${plural(findings, "finding")}, ${String(scope.left)} left to a person. Needs a person's approval.`,
+    );
+  }
   return clip(
     `Facts only, no model. ${plural(findings, "finding")}, ${String(scope.left)} left to a person, ${plural(scope.notReviewed.length, "guideline")} not reviewed.`,
   );
@@ -289,7 +357,8 @@ function clip(text: string): string {
  * "Passed. No findings in 4 changed files." or "3 findings, 1 major. See the comments."
  */
 export function statusLine(
-  input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles" | "factsOnly">,
+  input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles" | "factsOnly"> &
+    Partial<Pick<SummaryInput, "gate">>,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
@@ -305,7 +374,9 @@ export function statusLine(
     }
     return "Passed. No reviewable files in this change.";
   }
-  if (input.factsOnly !== undefined) return factsStatus(input.findings.length, input.factsOnly);
+  if (input.factsOnly !== undefined) {
+    return factsStatus(input.findings.length, input.factsOnly, input.gate);
+  }
   if (input.findings.length === 0) {
     return input.changedFiles === undefined
       ? "Passed. No findings in this change."
@@ -394,6 +465,13 @@ export function renderSummaryBody(
   }
   if (input.findings.length > 0) {
     lines.push("", ...input.findings.map((finding) => listItem(finding, presentation)));
+  }
+  const kept = input.factsOnly?.notRejudged ?? [];
+  if (kept.length > 0) {
+    lines.push(
+      "",
+      `Not judged again on this run, so their comments stay as they are: ${kept.join(", ")}.`,
+    );
   }
   const blocked = blockedLine(input, presentation);
   if (blocked !== undefined) {
