@@ -1,6 +1,6 @@
 {
   "name": "node-pnpm-dev",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:5.2.1-24",
   "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile",
   "customizations": {
     "vscode": {
