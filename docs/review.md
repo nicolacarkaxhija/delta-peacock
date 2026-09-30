@@ -23,12 +23,12 @@ repository root and expect the defaults.
 GitHub Actions are off on the owner's account for now, so the review is dormant until they are
 switched back on and the secret below exists.
 
-| Secret              | For                                         |
-| ------------------- | ------------------------------------------- |
-| `ANTHROPIC_API_KEY` | the model calls of `dogfood.yml`            |
-| `GITHUB_TOKEN`      | the workflow's own token posts the comments |
+| Secret                                                     | For                                                 |
+| ---------------------------------------------------------- | --------------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | the model calls of `dogfood.yml`, on Amazon Bedrock |
+| `GITHUB_TOKEN`                                             | the workflow's own token posts the comments         |
 
-To review on Amazon Bedrock as the project baseline does, set `DELTA_PEACOCK_MODEL_PROVIDER` to
+To review on Amazon Bedrock as the reference configuration does, set `DELTA_PEACOCK_MODEL_PROVIDER` to
 `bedrock` and `DELTA_PEACOCK_MODEL_ID` to `eu.anthropic.claude-haiku-4-5-20251001-v1:0` in
 `dogfood.yml`, and pass `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`
 (`eu-central-1`) as secrets.
