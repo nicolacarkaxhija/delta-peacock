@@ -31,10 +31,12 @@ jobs:
       - name: review this pull request with delta-peacock itself
         run: node dist/cli.js review --report dogfood-report.json
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DELTA_PEACOCK_MODEL_PROVIDER: anthropic
-          DELTA_PEACOCK_MODEL_ID: claude-haiku-4-5-20251001
+          DELTA_PEACOCK_MODEL_PROVIDER: bedrock
+          DELTA_PEACOCK_MODEL_ID: eu.anthropic.claude-haiku-4-5-20251001-v1:0
           DELTA_PEACOCK_SCM_PROVIDER: github
           DELTA_PEACOCK_SCM_REPOSITORY: ${{ github.repository }}
           DELTA_PEACOCK_SCM_PULL_REQUEST: ${{ github.event.pull_request.number }}
