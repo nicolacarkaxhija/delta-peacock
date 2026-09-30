@@ -4,7 +4,7 @@ import type { ToolSet } from "ai";
 import type { Config } from "../config/schema.js";
 import { attachContextTools, resolveContext } from "../context/build.js";
 import type { RuntimeDeps } from "../deps.js";
-import type { Finding } from "../domain/finding.js";
+import { fingerprintOf, type Finding } from "../domain/finding.js";
 import type { Guideline } from "../domain/guideline.js";
 import { evaluateGate } from "../domain/gate.js";
 import { ToolError } from "../errors.js";
@@ -30,6 +30,11 @@ import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
+import {
+  ModelUnavailableError,
+  unavailability,
+  type ModelUnavailability,
+} from "../model/unavailable.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { planBatches, planBudget } from "./budget.js";
@@ -55,7 +60,7 @@ import {
   vetSuggestions,
 } from "./placement.js";
 import { runGit } from "../git/git.js";
-import { factsLine, NOT_REVIEWED, type FactsScope } from "../scm/comment-format.js";
+import { factsLine, fallbackReason, NOT_REVIEWED, type FactsScope } from "../scm/comment-format.js";
 import { buildScmPort } from "../scm/build.js";
 import { codeInsightsEnabled, isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
@@ -68,6 +73,7 @@ import { writeDrafts } from "../guidelines/draft.js";
 import type { PullRequestText } from "../scm/port.js";
 import { appendRecord, attributionOf, ledgerRecords, type Attribution } from "../stats/record.js";
 import { checkSentenceProblems, dropChecked, runChecks, splitChecked } from "./checks/index.js";
+import type { ModelOutage } from "./checks/judge.js";
 import { ConfigError } from "../config/loader.js";
 
 export type ReviewDeps = RuntimeDeps;
@@ -243,6 +249,13 @@ export async function runReview(
   let executed: ExecuteResult;
   // with every applicable guideline checked, an open call could only produce what is dropped
   const allChecked = free.length === 0 && bound.length > 0 && !config.review.generalPass;
+  // set when a configured model cannot run: the review falls back to facts only
+  let fallback: ModelOutage | undefined;
+  // what a model reviewed before it could not run; unset when it reviewed nothing
+  let modelReviewed: "part" | "all" | undefined;
+  // fallback.credentialRefused fail: a refused credential fails the run as before
+  const fallsBack = (why: ModelUnavailability): boolean =>
+    why !== "credential-refused" || config.fallback.credentialRefused === "fallback";
   try {
     if (allChecked && !factsOnly) {
       deps.err("every applicable guideline is checked; no open review call\n");
@@ -251,10 +264,24 @@ export async function runReview(
       allChecked || factsOnly
         ? idleExecution()
         : await executeReview(deps, config, request, passes, batchCount, parseOptions);
+    if (executed.outage !== undefined) {
+      const { why, detail } = executed.outage;
+      if (!fallsBack(why)) throw new ModelUnavailableError(why, detail);
+      fallback = executed.outage;
+      modelReviewed = "part";
+      logFallback(deps, fallback);
+    }
   } catch (error) {
-    if (error instanceof ToolError) await publishFailure(deps, config, failureReason(error));
-    throw error;
+    if (!(error instanceof ModelUnavailableError) || !fallsBack(error.why)) {
+      if (error instanceof ToolError) await publishFailure(deps, config, failureReason(error));
+      throw error;
+    }
+    fallback = { why: error.why, detail: error.message };
+    logFallback(deps, fallback);
+    executed = idleExecution();
   }
+  // no model answered all of the open review: the guidelines no check owns got no full review
+  const noOpenReview = factsOnly || fallback !== undefined;
   // the model counts line numbers by hand and drifts; each finding moves to
   // the line it quotes, or to no line at all, before anything keys on line
   const diffLines = newLineTexts(redacted.text);
@@ -283,14 +310,21 @@ export async function runReview(
           files: fromApi ? () => [] : () => trackedFiles(deps.cwd),
           ...(declared !== undefined ? { declared } : {}),
           configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
-          ...(factsOnly ? {} : { port: () => reviewPort(deps, config) }),
+          ...(noOpenReview ? {} : { port: () => reviewPort(deps, config) }),
           redact: (text) =>
             redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
               strict: config.redaction.strict,
             }).text,
+          credentialRefused: config.fallback.credentialRefused,
         })
       : undefined;
   for (const notice of checks?.notices ?? []) deps.err(`${notice}\n`);
+  if (fallback === undefined && checks?.unavailable !== undefined) {
+    fallback = checks.unavailable;
+    // the open review answered; only the judge could not run
+    if (!allChecked) modelReviewed = "all";
+    logFallback(deps, fallback);
+  }
   // a fix that only repeats a reason already written just above is no fix
   const reviewedLines = (file: string): readonly string[] | undefined =>
     fromApi
@@ -369,9 +403,18 @@ export async function runReview(
   }
   // no model ran, so the run records zero tokens rather than nothing
   if (factsOnly) usage = { inputTokens: 0, outputTokens: 0 };
-  const facts: FactsOnly | undefined = factsOnly
-    ? { leftToPerson: checks?.left ?? [], notReviewed: free.map((one) => one.id) }
-    : undefined;
+  const facts: FactsOnly | undefined =
+    factsOnly || fallback !== undefined
+      ? {
+          leftToPerson: checks?.left ?? [],
+          notReviewed: noOpenReview ? free.map((one) => one.id) : [],
+          ...(fallback !== undefined ? { fallback: fallback.why } : {}),
+          ...(modelReviewed !== undefined ? { modelReviewed } : {}),
+          ...(executed.unjudgedFiles !== undefined
+            ? { unjudgedFiles: executed.unjudgedFiles }
+            : {}),
+        }
+      : undefined;
   const ensembleMembers = executed.ensembleMembers;
   const toolCalls = executed.toolCalls;
   const cachedResponse = executed.cachedResponse;
@@ -408,7 +451,14 @@ export async function runReview(
   }));
   const { violations, observations, proposals } = lanesOf(kept, config);
   // the gate judges what calibration let through and no waiver excused
-  const gate = evaluateGate(kept, config.gate.failOn);
+  const unjudged = new Set(placeFindings(checks?.facts ?? [], linesOfFile).map(fingerprintOf));
+  // fallback.gate pass: in an outage no fact fails the step, a model's finding still does
+  const gate = evaluateGate(
+    fallback !== undefined && config.fallback.gate === "pass"
+      ? kept.filter((finding) => !unjudged.has(fingerprintOf(finding)))
+      : kept,
+    config.gate.failOn,
+  );
 
   deps.out(
     renderReview({
@@ -432,7 +482,7 @@ export async function runReview(
         `left to a person: needs a judgement: ${left.file}:${String(left.line)} [${left.guidelineId}] ${left.question}\n`,
       );
     }
-    deps.out(`${factsLine(kept.length, factsScope(facts))}\n`);
+    deps.out(`${factsLine(kept.length, factsScope(facts, config))}\n`);
   }
 
   if (options.bootstrap === true) {
@@ -524,7 +574,7 @@ export async function runReview(
     commitStatus: config.scm.commitStatus,
     comments: config.scm.comments,
     dryRun: isDryRun(config),
-    ...(facts !== undefined ? { factsOnly: factsScope(facts) } : {}),
+    ...(facts !== undefined ? { factsOnly: factsScope(facts, config) } : {}),
   });
 
   if (usage !== undefined) {
@@ -646,6 +696,8 @@ export function readSourceForStructuralCheck(cwd: string, file: string): string 
 export interface PlannedPass {
   label: string;
   request: ModelRequest;
+  /** The files of the batch, named when no model could review them. */
+  files: string[];
 }
 
 export type PromptOf = (diffText: string, context: string) => ModelRequest;
@@ -668,6 +720,7 @@ export function planPasses(
       contextTools,
       config.context.maxToolRounds,
     ),
+    files: changedFilesFromDiff(batchDiff),
   }));
 }
 
@@ -787,6 +840,10 @@ interface ExecuteResult {
   cachedResponse: boolean;
   /** Batches whose reply could not be parsed; every other batch's findings still stand. */
   unparsedBatches: UnparsedBatch[];
+  /** Set when some batches answered and the model could not run for the others. */
+  outage?: ModelOutage;
+  /** The files of the batches the model could not run for. */
+  unjudgedFiles?: string[];
 }
 
 /**
@@ -856,9 +913,24 @@ function assembleFacts(
   };
 }
 
+/** The one log line a review prints when its model could not run. */
+function logFallback(deps: ReviewDeps, outage: ModelOutage): void {
+  deps.err(
+    `model unavailable (${fallbackReason(outage.why)}): ${String(outage.detail.split("\n")[0])}; falling back to facts only\n`,
+  );
+}
+
 /** The summary's view of a facts only run. */
-function factsScope(facts: FactsOnly): FactsScope {
-  return { left: facts.leftToPerson.length, notReviewed: facts.notReviewed };
+function factsScope(facts: FactsOnly, config: Config): FactsScope {
+  return {
+    left: facts.leftToPerson.length,
+    notReviewed: facts.notReviewed,
+    ...(facts.fallback !== undefined
+      ? { fallback: facts.fallback, fallbackStatus: config.fallback.status }
+      : {}),
+    ...(facts.modelReviewed !== undefined ? { modelReviewed: facts.modelReviewed } : {}),
+    ...(facts.unjudgedFiles !== undefined ? { unjudgedFiles: facts.unjudgedFiles } : {}),
+  };
 }
 
 /** The review's model behind the response cache; the open passes and the judge share it. */
@@ -882,7 +954,8 @@ function reviewPort(deps: ReviewDeps, config: Config): ModelPort {
 const PASS_CONCURRENCY = 4;
 
 type PassOutcome =
-  { ok: true; parsed: ParsedReview; reply: ModelReply } | { ok: false; reason: string };
+  | { ok: true; parsed: ParsedReview; reply: ModelReply }
+  | { ok: false; reason: string; outage?: ModelOutage };
 
 /**
  * Runs every planned pass and folds the replies into one parsed result. A
@@ -897,7 +970,17 @@ export async function runPasses(
 ): Promise<Omit<ExecuteResult, "ensembleMembers">> {
   const outcomes = await inPool(
     passes.map((pass) => async (): Promise<PassOutcome> => {
-      let reply = await completeOrFail(modelPort, pass.request);
+      let reply: ModelReply;
+      try {
+        reply = await completeOrFail(modelPort, pass.request);
+      } catch (error) {
+        if (!(error instanceof ModelUnavailableError)) throw error;
+        return {
+          ok: false,
+          reason: error.message,
+          outage: { why: error.why, detail: error.message },
+        };
+      }
       try {
         try {
           return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
@@ -919,12 +1002,24 @@ export async function runPasses(
         }
       } catch (error) {
         const reason = (error as Error).message;
+        // an outage on the second answering step is an outage, not an unreadable reply
+        if (error instanceof ModelUnavailableError) {
+          return { ok: false, reason, outage: { why: error.why, detail: reason } };
+        }
         deps.err(`${pass.label}: ${reason}; skipping this batch's findings\n`);
         return { ok: false, reason };
       }
     }),
     PASS_CONCURRENCY,
   );
+  const outages = outcomes.flatMap((outcome, index) =>
+    !outcome.ok && outcome.outage !== undefined ? [{ outage: outcome.outage, index }] : [],
+  );
+  const firstOutage = outages[0]?.outage;
+  // no batch answered: the whole review falls back
+  if (firstOutage !== undefined && !outcomes.some((outcome) => outcome.ok)) {
+    throw new ModelUnavailableError(firstOutage.why, firstOutage.detail);
+  }
   const merged: Finding[] = [];
   let usage: ModelUsage | undefined;
   let toolCalls: number | undefined;
@@ -933,6 +1028,7 @@ export async function runPasses(
   const rejected: RejectedCandidate[] = [];
   const unparsedBatches: UnparsedBatch[] = [];
   for (const [index, outcome] of outcomes.entries()) {
+    if (!outcome.ok && outcome.outage !== undefined) continue;
     if (!outcome.ok) {
       unparsedBatches.push({ batch: index + 1, of: passes.length, reason: outcome.reason });
       continue;
@@ -983,6 +1079,12 @@ export async function runPasses(
     toolCalls,
     cachedResponse,
     unparsedBatches,
+    ...(firstOutage !== undefined
+      ? {
+          outage: firstOutage,
+          unjudgedFiles: outages.flatMap(({ index }) => passes[index]?.files ?? []),
+        }
+      : {}),
   };
 }
 
@@ -991,7 +1093,10 @@ async function completeOrFail(port: ModelPort, request: ModelRequest): Promise<M
     return await port.complete(request);
   } catch (error) {
     if (error instanceof ToolError) throw error;
-    throw new ToolError(`model call failed: ${(error as Error).message}`);
+    const message = `model call failed: ${(error as Error).message}`;
+    // the review applies fallback.credentialRefused
+    const why = unavailability(error, "fallback");
+    throw why !== undefined ? new ModelUnavailableError(why, message) : new ToolError(message);
   }
 }
 
@@ -1048,7 +1153,8 @@ async function finalizeFindings(
   if (config.calibration.enabled) {
     const ref = config.calibration.model;
     const calibrationPort = ref
-      ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.credentials))
+      ? (deps.modelPortFor?.(ref) ??
+        buildModelPortFor(ref, deps.credentials, config.model.timeoutSeconds))
       : (deps.modelPort ?? buildModelPort(config, deps.credentials));
     const outcome = await calibrate(calibrationPort, kept, diffText);
     for (const notice of outcome.notices) deps.err(`${notice}\n`);

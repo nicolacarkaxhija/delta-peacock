@@ -13,6 +13,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_MODEL_PROVIDER: "model.provider",
   DELTA_PEACOCK_MODEL_ID: "model.id",
   DELTA_PEACOCK_MODEL_BASE_URL: "model.baseUrl",
+  DELTA_PEACOCK_MODEL_TIMEOUT_SECONDS: "model.timeoutSeconds",
   DELTA_PEACOCK_REVIEW_TARGET: "review.target",
   DELTA_PEACOCK_REVIEW_GUIDELINES_DIR: "review.guidelinesDir",
   DELTA_PEACOCK_REVIEW_GUIDELINES_REF: "review.guidelinesRef",
@@ -39,6 +40,9 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_REVIEW_SUMMARY_WHEN_CLEAN: "review.summaryWhenClean",
   DELTA_PEACOCK_REVIEW_CHECKS: "review.checks",
   DELTA_PEACOCK_GATE_FAIL_ON: "gate.failOn",
+  DELTA_PEACOCK_FALLBACK_GATE: "fallback.gate",
+  DELTA_PEACOCK_FALLBACK_STATUS: "fallback.status",
+  DELTA_PEACOCK_FALLBACK_CREDENTIAL_REFUSED: "fallback.credentialRefused",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",
   DELTA_PEACOCK_OUTPUT_CODE_QUALITY_PATH: "output.codeQualityPath",
@@ -92,6 +96,7 @@ const ARRAY_PATHS = new Set([
   "context.providers",
 ]);
 const NUMBER_PATHS = new Set([
+  "model.timeoutSeconds",
   "review.maxDiffBytes",
   "review.confidenceFloor",
   "review.maxProposedGuidelines",

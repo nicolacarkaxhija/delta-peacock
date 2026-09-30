@@ -91,6 +91,12 @@ function annotationSummary(finding: Finding): string {
   return `${reason.slice(0, room)} ${rule}`;
 }
 
+const INSIGHT_RESULTS: Readonly<Record<StatusState, InsightReport["result"]>> = {
+  success: "PASSED",
+  failure: "FAILED",
+  pending: "PENDING",
+};
+
 export function buildInsightReport(
   input: SummaryInput,
   presentation: Presentation = DEFAULT_PRESENTATION,
@@ -99,7 +105,7 @@ export function buildInsightReport(
   const state = stateLine(input, presentation);
   return {
     title: presentation.displayName,
-    result: statusState(input) === "failure" ? "FAILED" : "PASSED",
+    result: INSIGHT_RESULTS[statusState(input)],
     details: blocked === undefined ? state : `${state}. ${blocked}.`,
     counts: [
       { label: "Findings", value: input.findings.length },
@@ -278,6 +284,7 @@ async function reconcileInlineComments(
   outcome: PublishOutcome,
   settled: ReadonlySet<string> = new Set(),
   resolvedIn?: string,
+  notRejudged?: string[],
 ): Promise<Map<string, string>> {
   const commentIds = new Map<string, string>();
   const existing = await ownComments(
@@ -299,13 +306,22 @@ async function reconcileInlineComments(
       continue;
     }
     if (fingerprint === undefined || finding === undefined) {
-      await retireComment(scm, comment, resolvedIn, outcome);
+      if (notRejudged !== undefined) {
+        // a fallback run cannot tell whether a model's finding still holds
+        const where = comment.line !== undefined ? `:${String(comment.line)}` : "";
+        notRejudged.push(
+          comment.path !== undefined ? `${comment.path}${where}` : `comment ${comment.id}`,
+        );
+        outcome.unchanged += 1;
+      } else {
+        await retireComment(scm, comment, resolvedIn, outcome);
+      }
       continue;
     }
     seen.add(fingerprint);
     commentIds.set(fingerprint, comment.id);
     const body = renderCommentBody(finding, fingerprint, presentation);
-    if (body === comment.body) {
+    if (body === comment.body || notRejudged !== undefined) {
       outcome.unchanged += 1;
     } else {
       await scm.updateComment(comment.id, body);
@@ -468,7 +484,11 @@ function statusState(input: SummaryInput): StatusState {
   const kind = input.outcome?.kind;
   if (kind === "failed") return "failure";
   if (kind === "capped") return input.gate.threshold === "none" ? "success" : "failure";
-  return input.gate.failed ? "failure" : "success";
+  if (input.gate.failed) return "failure";
+  // fallback.status pending keeps a fallback from reading as a pass
+  return input.factsOnly?.fallback !== undefined && input.factsOnly.fallbackStatus === "pending"
+    ? "pending"
+    : "success";
 }
 
 /** The one place every command asks whether a write is suppressed; nothing else reads config.scm.dryRun directly. */
@@ -512,6 +532,10 @@ export async function publishReview(
   }
   const presentation = presentationFor(scm, input.presentation);
   const failed = input.outcome?.kind === "failed" || input.outcome?.kind === "capped";
+  // a fallback leaves what an earlier model run posted as it is, and lists it in the summary
+  const notRejudged: string[] | undefined =
+    input.factsOnly?.fallback !== undefined ? [] : undefined;
+  let summaryInput: SummaryInput = input;
   if (input.comments !== false) {
     // a broken run knows nothing about the code, so earlier inline comments stay as they are
     if (!failed) {
@@ -536,7 +560,9 @@ export async function publishReview(
         for (const entry of own) {
           if (entry.task.resolved && entry.task.resolvedBy !== me) settled.add(entry.fingerprint);
         }
-        await resolveStaleTasks(taskApi, own, desired, lineTextOf, outcome);
+        if (notRejudged === undefined) {
+          await resolveStaleTasks(taskApi, own, desired, lineTextOf, outcome);
+        }
       }
       const commentIds = await reconcileInlineComments(
         scm,
@@ -545,9 +571,14 @@ export async function publishReview(
         outcome,
         settled,
         input.resolvedIn,
+        notRejudged,
       );
       if (taskApi !== undefined) {
         await createTasks(taskApi, own, desired, commentIds, lineTextOf, outcome, presentation);
+      }
+      if (input.factsOnly !== undefined && notRejudged !== undefined && notRejudged.length > 0) {
+        notRejudged.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        summaryInput = { ...input, factsOnly: { ...input.factsOnly, notRejudged } };
       }
     }
     // a clean card carries a clean result, but never a facts only one, which must say so
@@ -558,7 +589,7 @@ export async function publishReview(
       cardCarries &&
       input.summaryWhenClean !== true &&
       input.factsOnly === undefined;
-    await upsertSummary(scm, presentation, renderSummaryBody(input, presentation), !quiet);
+    await upsertSummary(scm, presentation, renderSummaryBody(summaryInput, presentation), !quiet);
   }
   if (input.commitStatus) {
     await scm.postStatus(

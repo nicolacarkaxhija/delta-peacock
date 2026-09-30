@@ -9,6 +9,7 @@ import {
   type ReviewResult,
 } from "../bench/harness.js";
 import type { Finding } from "../domain/finding.js";
+import { ToolError } from "../errors.js";
 import { buildModelPortFor } from "../model/build.js";
 import type { ModelUsage } from "../model/port.js";
 import { addUsage } from "../model/usage.js";
@@ -159,6 +160,8 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       const port = deps.modelPort ?? buildModelPort(config, deps.credentials);
       // the passes, retry and merge a live review runs
       const executed = await runPasses(deps, port, passes, parseOptions);
+      // a score over the batches that answered would read as a weak model
+      if (executed.outage !== undefined) throw new ToolError(executed.outage.detail);
       addTo(usage, config.model.id ?? config.model.provider, executed.usage);
       parsed = executed.parsed;
     } else {
@@ -198,6 +201,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
               ? {}
               : { port: () => deps.modelPort ?? buildModelPort(config, deps.credentials) }),
             redact: (text) => text,
+            credentialRefused: config.fallback.credentialRefused,
           })
         : undefined;
     for (const notice of checks?.notices ?? []) deps.err(`${notice}\n`);
@@ -215,7 +219,8 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       // advisory as in a live review: a drop note is recorded, the finding stays
       const ref = config.calibration.model;
       const calibrationPort = ref
-        ? (deps.modelPortFor?.(ref) ?? buildModelPortFor(ref, deps.credentials))
+        ? (deps.modelPortFor?.(ref) ??
+          buildModelPortFor(ref, deps.credentials, config.model.timeoutSeconds))
         : (deps.modelPort ?? buildModelPort(config, deps.credentials));
       const outcome = await calibrate(calibrationPort, findings, benchCase.diff);
       findings = outcome.findings;

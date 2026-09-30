@@ -1,8 +1,10 @@
 import { z } from "zod";
+import type { Config } from "../../config/schema.js";
 import type { Violation } from "../../domain/finding.js";
 import type { Guideline } from "../../domain/guideline.js";
 import { addUsage } from "../../model/usage.js";
 import type { ModelPort, ModelRequest, ModelUsage } from "../../model/port.js";
+import { unavailability, type ModelUnavailability } from "../../model/unavailable.js";
 import { parseJson, quotesGuideline, type RejectedCandidate } from "../parse.js";
 import { plainBody } from "../prose.js";
 import type { Candidate } from "./detect.js";
@@ -128,13 +130,33 @@ export interface LeftCandidate {
   question: string;
 }
 
+/** Why the model could not answer, and the first line of what the call said. */
+export interface ModelOutage {
+  why: ModelUnavailability;
+  detail: string;
+}
+
 export interface JudgedCandidate {
   outcome: "finding" | "dropped" | "failed" | "left";
   finding?: Violation;
   rejected?: RejectedCandidate;
   left?: LeftCandidate;
+  /** Set when the judge could not reach the model and left the candidate to a person. */
+  unavailable?: ModelOutage;
+  /** Set on a finding no model judged: a measured fact, or one the code states itself. */
+  fact?: true;
   notice: string;
   usage?: ModelUsage;
+}
+
+function leftOf(candidate: Candidate, guideline: Guideline): LeftCandidate {
+  return {
+    file: candidate.file,
+    line: candidate.line,
+    guidelineId: guideline.id,
+    shape: candidate.shape,
+    question: candidate.judge?.question ?? "",
+  };
 }
 
 function findingOf(
@@ -173,6 +195,7 @@ export async function settle(
   candidate: Candidate,
   guideline: Guideline,
   excerpt: string,
+  credentialRefused: Config["fallback"]["credentialRefused"] = "fallback",
 ): Promise<JudgedCandidate> {
   const rule = sentenceOf(candidate.check, candidate.shape);
   if (
@@ -183,27 +206,22 @@ export async function settle(
     return {
       outcome: "finding",
       finding: findingOf(candidate, guideline, rule),
+      fact: true,
       notice: `check: ${where(candidate)}: finding${decided !== undefined ? `, a fact: ${decided}` : ""}`,
     };
   }
   if (port === undefined) {
-    const question = candidate.judge.question;
     return {
       outcome: "left",
-      left: {
-        file: candidate.file,
-        line: candidate.line,
-        guidelineId: guideline.id,
-        shape: candidate.shape,
-        question,
-      },
-      notice: `check: ${where(candidate)}: left to a person: needs a judgement: ${question}`,
+      left: leftOf(candidate, guideline),
+      notice: `check: ${where(candidate)}: left to a person: needs a judgement: ${candidate.judge.question}`,
     };
   }
   const request = judgeRequest(candidate, guideline, excerpt);
   let usage: ModelUsage | undefined;
   let verdict: Verdict | undefined;
   let failure = "";
+  let unavailable: ModelUnavailability | undefined;
   for (let attempt = 0; attempt < 2 && verdict === undefined; attempt += 1) {
     try {
       const reply = await port.complete(request);
@@ -211,11 +229,34 @@ export async function settle(
         usage = usage === undefined ? reply.usage : addUsage(usage, reply.usage);
       verdict = readVerdict(reply.text);
       if (verdict === undefined) failure = "no readable verdict";
+      unavailable = undefined;
     } catch (error) {
       failure = (error as Error).message.replace(/\n[\s\S]*/, "");
+      unavailable = unavailability(error, credentialRefused);
+      // the SDK already retried; a second attempt would only pay its retries again
+      if (unavailable !== undefined) break;
     }
   }
   const spent = usage !== undefined ? { usage } : {};
+  if (verdict === undefined && unavailable !== undefined) {
+    // the judge could not answer, so the candidate settles as it would with no model
+    const outage = { unavailable: { why: unavailable, detail: failure }, ...spent };
+    const decided = candidate.judge.decided;
+    return decided !== undefined
+      ? {
+          outcome: "finding",
+          finding: findingOf(candidate, guideline, rule),
+          fact: true,
+          notice: `check: ${where(candidate)}: finding, a fact: ${decided}; the judge could not reach the model`,
+          ...outage,
+        }
+      : {
+          outcome: "left",
+          left: leftOf(candidate, guideline),
+          notice: `check: ${where(candidate)}: left to a person: the judge could not reach the model (${failure})`,
+          ...outage,
+        };
+  }
   if (verdict === undefined) {
     return {
       outcome: "failed",

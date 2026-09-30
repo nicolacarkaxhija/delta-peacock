@@ -171,8 +171,13 @@ describe("settling a candidate", () => {
     expect(failed.outcome).toBe("failed");
     expect(failed.rejected?.reason).toBe("judge-failed");
     expect(failed.notice).toContain("no readable verdict");
-    const down = await settle(scripted(new Error("throttled\nstack")).port, JUDGED, PREFER, "");
-    expect(down.notice).toContain("judge failed twice (throttled)");
+    const down = await settle(
+      scripted(new Error("unexpected reply\nstack")).port,
+      JUDGED,
+      PREFER,
+      "",
+    );
+    expect(down.notice).toContain("judge failed twice (unexpected reply)");
     expect(down.usage).toBeUndefined();
   });
 

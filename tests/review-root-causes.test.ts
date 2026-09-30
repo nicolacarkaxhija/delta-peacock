@@ -302,11 +302,13 @@ describe("a model call that fails", () => {
   it("posts the reason instead of dying in silence", async () => {
     const fake = await startFakeBitbucket();
     try {
-      const failing: ModelPort = { complete: () => Promise.reject(new Error("throttled\nretry")) };
+      const failing: ModelPort = {
+        complete: () => Promise.reject(new Error("unexpected reply\nretry")),
+      };
       const { code } = await reviewOnBitbucket(fake, consumerRepo(), failing);
       expect(code).toBe(1);
       expect(summaryOf(fake)).toContain(
-        "The review could not complete: model call failed: throttled.",
+        "The review could not complete: model call failed: unexpected reply.",
       );
       expect(fake.statuses.at(-1)?.state).toBe("FAILED");
     } finally {
@@ -329,7 +331,7 @@ describe("a model call that fails", () => {
       err: (text) => {
         stderr += text;
       },
-      modelPort: { complete: () => Promise.reject(new Error("throttled")) },
+      modelPort: { complete: () => Promise.reject(new Error("unexpected reply")) },
       scmPort: {
         listInlineComments: refuse,
         createInlineComment: refuse,
@@ -343,7 +345,7 @@ describe("a model call that fails", () => {
     });
     expect(code).toBe(1);
     expect(stderr).toContain("could not post the failure summary: host down\n");
-    expect(stderr).toContain("model call failed: throttled");
+    expect(stderr).toContain("model call failed: unexpected reply");
   });
 });
 

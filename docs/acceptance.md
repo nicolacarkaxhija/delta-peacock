@@ -25,6 +25,14 @@ from a clean checkout; a red line blocks it.
 - `facts only`: with `model.provider: none` no model port is ever built or called, a candidate
   that needs a judgement is left to a person, and every command that needs a model refuses with
   one line and exit code 1. On its own: `pnpm exec vitest run tests/facts-`.
+- `model fallback`: a review whose model is not configured, unreachable, rate or quota limited,
+  timed out or refused its credential checks facts only, exits 0 unless a fact finding fails the
+  gate, and posts a status and a summary that ask for a person's approval; `fallback.gate`,
+  `fallback.status` and `fallback.credentialRefused` each behave as documented in both values; a
+  fallback leaves earlier comments as they are, keeps the answered batches, asks the judge once
+  per run and times a silent provider out after `model.timeoutSeconds`; a review with a working
+  model posts and exits as before. On its own:
+  `pnpm exec vitest run tests/model-fallback`.
 
 ## Release
 

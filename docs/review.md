@@ -23,6 +23,12 @@ repository root and expect the defaults.
 GitHub Actions are off on the owner's account for now, so the review is dormant until they are
 switched back on and the secret below exists.
 
+When the model cannot run (no credential, an outage, a rate limit, a timeout, a refused key), the
+review checks facts only with the default `fallback` settings. The only checked guideline here,
+`natural-comments`, is `MINOR`, so no fact reaches `gate.failOn: MAJOR`: the step passes with the
+status `Facts only, no model: needs a person's approval`, and the summary asks for that approval. See
+[when the model cannot run](guides/checks.md#when-the-model-cannot-run).
+
 | Secret                                                     | For                                                 |
 | ---------------------------------------------------------- | --------------------------------------------------- |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | the model calls of `dogfood.yml`, on Amazon Bedrock |

@@ -55,7 +55,7 @@ export interface InsightAnnotation {
 /** A native report card plus inline annotations (Bitbucket Code Insights). */
 export interface InsightReport {
   title: string;
-  result: "PASSED" | "FAILED";
+  result: "PASSED" | "FAILED" | "PENDING";
   details: string;
   counts: { label: string; value: number }[];
   annotations: InsightAnnotation[];

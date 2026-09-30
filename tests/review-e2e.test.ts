@@ -582,14 +582,16 @@ describe("review end to end (local mode)", () => {
     expect(stdout).toContain("nothing to review");
   });
 
-  it("requires a model id before it will call anything", async () => {
+  it("without a model id calls nothing and falls back to facts only", async () => {
     const repo = makeScenario();
     const { code, stderr } = await review(repo, undefined);
-    expect(code).toBe(1);
-    expect(stderr).toContain("model.id");
+    expect(code).toBe(0);
+    expect(stderr).toContain(
+      "model unavailable (not configured): model.id is required to review; set it in config or DELTA_PEACOCK_MODEL_ID; falling back to facts only",
+    );
   });
 
-  it("requires the provider credential from the environment", async () => {
+  it("without the provider credential falls back and names it", async () => {
     const repo = makeScenario();
     let stderr = "";
     const code = await runCli(["review"], {
@@ -600,8 +602,8 @@ describe("review end to end (local mode)", () => {
         stderr += text;
       },
     });
-    expect(code).toBe(1);
-    expect(stderr).toContain("ANTHROPIC_API_KEY");
+    expect(code).toBe(0);
+    expect(stderr).toContain("model unavailable (not configured): ANTHROPIC_API_KEY is not set");
   });
 
   it("names the missing credential for a provider without one", async () => {
@@ -615,8 +617,8 @@ describe("review end to end (local mode)", () => {
         stderr += text;
       },
     });
-    expect(code).toBe(1);
-    expect(stderr).toContain("AWS_REGION");
+    expect(code).toBe(0);
+    expect(stderr).toContain("model unavailable (not configured): AWS_REGION is not set");
   });
 });
 
