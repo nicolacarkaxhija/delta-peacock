@@ -13,8 +13,22 @@ permissions:
   contents: read
 
 jobs:
+  commitlint:
+    name: conventional commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: commitlint.config.mjs
+
   quality:
     name: quality (node ${{ matrix.node }})
+    needs: commitlint
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -38,6 +52,8 @@ jobs:
 
   docs:
     name: docs integrity
+    needs: commitlint
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,20 +62,10 @@ jobs:
           node-version: 24
       - run: node scripts/check-docs.mjs
 
-  commitlint:
-    name: conventional commits
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@v6
-        with:
-          configFile: commitlint.config.mjs
-
   gitleaks:
     name: secret scan
+    needs: commitlint
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
