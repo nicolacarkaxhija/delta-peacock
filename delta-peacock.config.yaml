@@ -17,6 +17,8 @@ review:
   # The general pass cost precision on the consumer bench; uncited findings are harvested instead.
   generalPass: false
   harvestUncited: true
+  # Empty means every path; exclude always wins.
+  include: []
   exclude:
     - "**/pnpm-lock.yaml"
     - "dist/**"

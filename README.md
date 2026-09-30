@@ -217,6 +217,8 @@ model:
   provider: anthropic
 review:
   target: main
+  include: [] # empty reviews every path
+  exclude: [] # always wins over include
   guidelinesDir: guidelines
 gate:
   failOn: MAJOR
