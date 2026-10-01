@@ -1,0 +1,11 @@
+diff --git a/tests/sharing.spec.ts b/tests/sharing.spec.ts
+new file mode 100644
+--- /dev/null
++++ b/tests/sharing.spec.ts
+@@ -0,0 +1,6 @@
++import { expect, test } from "./fixtures";
++
++test.fixme("a note shared by link opens for a guest", async ({ notes }) => {
++  await notes.share("Buy milk");
++  await expect(notes.sharedBanner()).toBeVisible();
++});

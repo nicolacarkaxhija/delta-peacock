@@ -1,6 +1,7 @@
 ---
 id: validate-external-input
 severity: MAJOR
+tags: [judged]
 ---
 
 # Validate and bound external input

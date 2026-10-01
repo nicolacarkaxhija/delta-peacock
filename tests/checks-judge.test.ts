@@ -81,7 +81,7 @@ describe("the rule sentence a checked finding quotes", () => {
     expect(sentenceOf("selectors", "css")).toBe(RULE);
     expect(sentenceOf("comments", "dash")).toBe(COMMENTS.body);
     expect(sentenceOf("comments", "multi-line")).toContain(
-      "a comment never runs past a single line.",
+      "a comment never runs past a single line unless it is a doc comment.",
     );
   });
 });

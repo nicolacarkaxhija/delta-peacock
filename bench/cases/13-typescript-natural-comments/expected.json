@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "src/calendar.ts",
+      "line": 1,
+      "guidelineId": "natural-comments"
+    }
+  ]
+}

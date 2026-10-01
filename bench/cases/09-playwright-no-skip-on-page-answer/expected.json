@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/search.spec.ts",
+      "line": 5,
+      "guidelineId": "no-skip-on-page-answer"
+    }
+  ]
+}

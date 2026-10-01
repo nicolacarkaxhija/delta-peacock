@@ -37,19 +37,19 @@ const GUIDELINES: Readonly<Record<GuidelineCheck, Guideline>> = {
   comments: guideline(
     "natural-comments",
     "One plain single-line comment",
-    "A comment adds what the code does not show. It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.\nAny punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line.",
+    "A comment adds what the code does not show. It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.\nAny punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line unless it is a doc comment.",
     [],
   ),
   assertions: guideline(
     "web-first-assertions",
     "Assert with retrying matchers, not with read-once values",
-    "A value read once with isVisible() is a snapshot that flakes on a slow render. What counts is the read itself: expect wrapped around an awaited getter.",
+    "A value read once with isVisible() is a snapshot that flakes on a slow render. An assertion hands expect the locator itself and lets a web first matcher wait, never the awaited value of a getter.",
     ["tests/**"],
   ),
   tags: guideline(
     "axis-tags",
     "Axis tags limit where a test runs",
-    "Tags belong in the tag option, never in the test title.\n\nEach test also names one feature tag listed under `tags.features`. Only axis tags and tags the config declares are accepted, so a suggestion never proposes `@smoke` or another unlisted word; the test's folder states its intent already.",
+    "Tags belong in the tag option, never in the test title.\n\nEach test also names one feature tag listed under `tags.features`. A test carries only axis tags and the feature tags the config declares, never `@smoke` or another tag the config does not list.",
     ["tests/**"],
   ),
   timeouts: guideline(

@@ -541,10 +541,8 @@ function folded(scan: SourceScan, comment: CommentBlock): string {
   const first = item(scan.lines, comment.start - 1, "");
   const indent = first.slice(0, first.length - first.trimStart().length);
   const words = wordsOf(comment);
-  const doc = item(scan.lines, comment.start - 1, "")
-    .trim()
-    .startsWith("/**");
-  return comment.block ? `${indent}${doc ? "/**" : "/*"} ${words} */` : `${indent}// ${words}`;
+  // a doc comment may span lines, so only a plain block is ever folded
+  return comment.block ? `${indent}/* ${words} */` : `${indent}// ${words}`;
 }
 
 function withoutDash(line: string): string {
@@ -556,6 +554,71 @@ function withoutDash(line: string): string {
     .replace(/(\w)-{2}(\w)/g, "$1, $2")
     .replace(/\s*[\u2013\u2014]\s*/g, ", ");
   return head + tail;
+}
+
+type CommentBase = Pick<Candidate, "guidelineId" | "check" | "file">;
+
+/** Comment words that use a dash as punctuation; a leading list bullet is no dash. */
+const hasDash = (words: string): boolean =>
+  DASH.test(` ${words.replace(/`[^`]*`/g, "")} `.replace(/^\s-\s/, " "));
+
+function dashCandidate(base: CommentBase, scan: SourceScan, line: number): Candidate {
+  const quote = item(scan.lines, line - 1, "");
+  const suggestion = withoutDash(quote);
+  return {
+    ...base,
+    shape: "dash",
+    line,
+    quote,
+    title: "Dash in a comment",
+    body: "The comment uses a dash as punctuation; the guideline asks for commas or colons instead.",
+    ...(suggestion !== quote ? { suggestion } : {}),
+  };
+}
+
+function narrationCandidate(
+  base: CommentBase,
+  scan: SourceScan,
+  comment: CommentBlock,
+  line: number,
+): Candidate {
+  return {
+    ...base,
+    shape: "narration",
+    line,
+    quote: item(scan.lines, line - 1, ""),
+    title: "Comment narrates the change",
+    body: "The comment tells the story of the change rather than what the code cannot say. Keep only the present reason, or drop the comment.",
+    judge: {
+      question:
+        "Does this comment narrate the change, the session or the author, rather than state a present reason or fact about the code?",
+      comments: [{ line: comment.start, text: wordsOf(comment) }],
+      fact: "The comment tells the story of the change.",
+      fix: "Keep only the present reason, or drop the comment.",
+    },
+  };
+}
+
+/** A doc comment may span lines; each changed line of it is still read for a dash. */
+function docCommentCandidates(
+  base: CommentBase,
+  scan: SourceScan,
+  comment: CommentBlock,
+  changed: ReadonlySet<number>,
+  anchor: number,
+): Candidate[] {
+  const dashes: Candidate[] = [];
+  for (let line = comment.start; line <= comment.end; line += 1) {
+    if (!changed.has(line)) continue;
+    const words = item(scan.lines, line - 1, "")
+      .trim()
+      .replace(/^\/\*\*|\*\/$/g, "")
+      .replace(/^\*\s?/, "");
+    if (hasDash(words)) dashes.push(dashCandidate(base, scan, line));
+  }
+  if (dashes.length > 0) return dashes;
+  const text = wordsOf(comment).replace(/`[^`]*`/g, "");
+  return NARRATION.test(text) ? [narrationCandidate(base, scan, comment, anchor)] : [];
 }
 
 function commentCandidates(
@@ -570,6 +633,15 @@ function commentCandidates(
     const anchor = firstChanged(changed, comment.start, comment.end);
     if (anchor === undefined) continue;
     const base = { guidelineId: guideline.id, check: "comments" as const, file };
+    const doc =
+      comment.block &&
+      item(scan.lines, comment.start - 1, "")
+        .trim()
+        .startsWith("/**");
+    if (doc && comment.end > comment.start) {
+      found.push(...docCommentCandidates(base, scan, comment, changed, anchor));
+      continue;
+    }
     if (comment.end > comment.start) {
       const lines = comment.end - comment.start + 1;
       found.push({
@@ -582,42 +654,16 @@ function commentCandidates(
       });
       continue;
     }
-    const text = wordsOf(comment).replace(/`[^`]*`/g, "");
-    if (DASH.test(` ${text} `.replace(/^\s-\s/, " "))) {
-      const quote = item(scan.lines, anchor - 1, "");
-      const suggestion = withoutDash(quote);
-      found.push({
-        ...base,
-        shape: "dash",
-        line: anchor,
-        quote,
-        title: "Dash in a comment",
-        body: "The comment uses a dash as punctuation; the guideline asks for commas or colons instead.",
-        ...(suggestion !== quote ? { suggestion } : {}),
-      });
+    if (hasDash(wordsOf(comment))) {
+      found.push(dashCandidate(base, scan, anchor));
       continue;
     }
-    if (NARRATION.test(text)) {
-      found.push({
-        ...base,
-        shape: "narration",
-        line: anchor,
-        quote: item(scan.lines, anchor - 1, ""),
-        title: "Comment narrates the change",
-        body: "The comment tells the story of the change rather than what the code cannot say. Keep only the present reason, or drop the comment.",
-        judge: {
-          question:
-            "Does this comment narrate the change, the session or the author, rather than state a present reason or fact about the code?",
-          comments: [{ line: comment.start, text: wordsOf(comment) }],
-          fact: "The comment tells the story of the change.",
-          fix: "Keep only the present reason, or drop the comment.",
-        },
-      });
+    if (NARRATION.test(wordsOf(comment).replace(/`[^`]*`/g, ""))) {
+      found.push(narrationCandidate(base, scan, comment, anchor));
     }
   }
   return found;
 }
-
 // assertions
 
 type ReadKind =

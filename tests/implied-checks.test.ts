@@ -10,7 +10,7 @@ import type { ReviewReport } from "../src/review/report.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 const MULTI =
-  "Any punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line.";
+  "Any punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line unless it is a doc comment.";
 const DASH =
   "It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.";
 
@@ -71,7 +71,7 @@ const SOURCE = [
   "  return file;",
   "}",
   "",
-  "/**",
+  "/*",
   " * The first reply is garbage, twice (a parse failure is retried once);",
   " * the second answers cleanly.",
   " */",

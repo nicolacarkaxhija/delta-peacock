@@ -31,7 +31,13 @@ import {
   placeFindings,
 } from "../review/placement.js";
 import { readDeclaredTags } from "../review/declared.js";
-import { loadGuidelinesFromFiles, readWorkingTreeGuidelines } from "../guidelines/loader.js";
+import type { Guideline } from "../domain/guideline.js";
+import {
+  loadGuidelinesFromFiles,
+  readWorkingTreeGuidelines,
+  resolveGuidelines,
+  type FrontmatterContract,
+} from "../guidelines/loader.js";
 import { buildModelPort, noModel } from "../model/build.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { readSourceForStructuralCheck } from "../review/run-review.js";
@@ -65,6 +71,18 @@ export function guidelinesDirFor(caseDir: string): string {
   return existsSync(own) ? own : path.join(caseDir, "..", "..", "guidelines");
 }
 
+/** A case's guidelines: its packs under its own guidelines/ with the precedence a review applies, else its guidelines folder. */
+function caseGuidelines(benchCase: BenchCase, contract: FrontmatterContract): Guideline[] {
+  if (benchCase.packs === undefined) {
+    return loadGuidelinesFromFiles(
+      readWorkingTreeGuidelines(guidelinesDirFor(benchCase.dir)),
+      contract,
+    ).guidelines;
+  }
+  return resolveGuidelines(benchCase.dir, "local", "guidelines", "", benchCase.packs, contract)
+    .guidelines;
+}
+
 function addTo(
   usage: Record<string, ModelUsage>,
   model: string,
@@ -78,10 +96,7 @@ function addTo(
 function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>): ReviewFn {
   return async (benchCase: BenchCase): Promise<ReviewResult> => {
     const config = deps.loadConfig(flags);
-    const guidelines = loadGuidelinesFromFiles(
-      readWorkingTreeGuidelines(guidelinesDirFor(benchCase.dir)),
-      config.review.frontmatterContract,
-    ).guidelines;
+    const guidelines = caseGuidelines(benchCase, config.review.frontmatterContract);
     // the same split a live review makes: a checked guideline counts only on its check's lines
     const { bound, free } = splitChecked(guidelines, config.review.checks);
     const unquotable = checkSentenceProblems(guidelines, config.review.checks);

@@ -2,6 +2,7 @@
 id: no-floating-promises
 severity: MAJOR
 languages: [typescript, javascript]
+tags: [judged]
 ---
 
 # No floating promises

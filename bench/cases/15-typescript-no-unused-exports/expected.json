@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "src/label.ts",
+      "line": 5,
+      "guidelineId": "no-unused-exports"
+    }
+  ]
+}

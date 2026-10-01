@@ -22,17 +22,18 @@ export const CHECK_SENTENCES: Readonly<
   },
   comments: {
     "multi-line":
-      "Any punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line.",
+      "Any punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line unless it is a doc comment.",
     dash: "It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.",
     narration:
       "It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.",
   },
   assertions: {
-    snapshot: "What counts is the read itself: expect wrapped around an awaited getter.",
+    snapshot:
+      "An assertion hands expect the locator itself and lets a web first matcher wait, never the awaited value of a getter.",
   },
   tags: {
     "undeclared-tag":
-      "Only axis tags and tags the config declares are accepted, so a suggestion never proposes `@smoke` or another unlisted word; the test's folder states its intent already.",
+      "A test carries only axis tags and the feature tags the config declares, never `@smoke` or another tag the config does not list.",
     "title-tag": "Tags belong in the tag option, never in the test title.",
   },
   timeouts: {

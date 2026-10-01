@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "CHANGELOG.md",
+      "line": 5,
+      "guidelineId": "text-matches-diff"
+    }
+  ]
+}

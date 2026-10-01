@@ -16,6 +16,8 @@ export interface BenchCase {
   dir: string;
   diff: string;
   expected?: ExpectedFinding[];
+  /** Packs the case is reviewed with, as specs resolved against the case directory. */
+  packs?: string[];
 }
 
 /** What a case's review hands back beyond its findings: tokens per model, invented rules caught. */
@@ -47,7 +49,16 @@ export interface BenchOutcome {
   aggregate?: MatchResult;
 }
 
-/** A case is a directory holding diff.patch, guidelines/, optional files/ and expected.json. */
+function readPacks(file: string): string[] | undefined {
+  if (!existsSync(file)) return undefined;
+  const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+  if (!Array.isArray(parsed) || !parsed.every((spec) => typeof spec === "string" && spec !== "")) {
+    throw new ToolError(`${file} must hold a list of pack paths`);
+  }
+  return parsed as string[];
+}
+
+/** A case is a directory holding diff.patch, guidelines/ or packs.json, optional files/ and expected.json. */
 export function loadCases(casesDir: string): BenchCase[] {
   if (!existsSync(casesDir)) {
     throw new ToolError(`bench cases directory not found: ${casesDir}`);
@@ -62,11 +73,13 @@ export function loadCases(casesDir: string): BenchCase[] {
     const expected = existsSync(expectedPath)
       ? (JSON.parse(readFileSync(expectedPath, "utf8")) as { findings: ExpectedFinding[] }).findings
       : undefined;
+    const packs = readPacks(path.join(dir, "packs.json"));
     cases.push({
       name: entry.name,
       dir,
       diff: readFileSync(diffPath, "utf8"),
       ...(expected !== undefined ? { expected } : {}),
+      ...(packs !== undefined ? { packs } : {}),
     });
   }
   if (cases.length === 0) {
