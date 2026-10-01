@@ -399,19 +399,39 @@ describe("the comment check", () => {
       changed: { "pages/page.ts": [2, 4, 5, 7, 9, 11, 13, 15, 16] },
       checks: ["comments"],
     });
+    // the doc comment on lines 1 and 2 may span lines
     expect(brief(found)).toEqual([
-      "pages/page.ts:2 multi-line",
       "pages/page.ts:4 multi-line",
       "pages/page.ts:7 dash",
       "pages/page.ts:11 narration judged",
       "pages/page.ts:13 dash",
     ]);
-    expect(found[1]?.body).toContain(
+    expect(found[0]?.body).toContain(
       "`` // The size guide panel has no test id, and its class is the same in every language. ``",
     );
-    expect(found[0]?.body).toContain("`` /** What every page class extends:");
-    expect(found[2]?.suggestion).toBe("  // The drawer opens late, so it waits.");
-    expect(found[4]?.suggestion).toBe("  /** A doc with an em dash, here. */");
+    expect(found[1]?.suggestion).toBe("  // The drawer opens late, so it waits.");
+    expect(found[3]?.suggestion).toBe("  /** A doc with an em dash, here. */");
+  });
+
+  it("lets a doc comment span lines and still reads each changed line of it", () => {
+    const text = [
+      "/**",
+      " * Opens the drawer - it renders late.",
+      " * - a bullet is no dash",
+      " */",
+      "export const drawer = 1;",
+      "/**",
+      " * Fixed it once the debugging was done.",
+      " */",
+      "export const story = 1;",
+    ].join("\n");
+    const found = run({
+      files: { "pages/d.ts": text },
+      changed: { "pages/d.ts": "all" },
+      checks: ["comments"],
+    });
+    expect(brief(found)).toEqual(["pages/d.ts:2 dash", "pages/d.ts:6 narration judged"]);
+    expect(found[0]?.suggestion).toBe(" * Opens the drawer, it renders late.");
   });
 });
 

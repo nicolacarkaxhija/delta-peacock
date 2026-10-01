@@ -37,7 +37,7 @@ const GUIDELINES: Readonly<Record<GuidelineCheck, Guideline>> = {
   comments: guideline(
     "natural-comments",
     "One plain single-line comment",
-    "A comment adds what the code does not show. It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.\nAny punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line.",
+    "A comment adds what the code does not show. It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.\nAny punctuation may appear, semicolons as well, except dashes and doubled hyphens, and a comment never runs past a single line unless it is a doc comment.",
     [],
   ),
   assertions: guideline(
