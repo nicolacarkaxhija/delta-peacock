@@ -111,9 +111,12 @@ describe("guidelines pack lint", () => {
 
 describe("the shipped seed packs", () => {
   const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-  it.each(["security", "typescript", "playwright"])("pack %s lints clean", async (name) => {
-    const { code, out } = await lint(repoRoot, path.join("packs", name));
-    expect(code).toBe(0);
-    expect(out).toContain(`pack ok: ${name}`);
-  });
+  it.each(["security", "typescript", "playwright", "commits"])(
+    "pack %s lints clean",
+    async (name) => {
+      const { code, out } = await lint(repoRoot, path.join("packs", name));
+      expect(code).toBe(0);
+      expect(out).toContain(`pack ok: ${name}`);
+    },
+  );
 });
