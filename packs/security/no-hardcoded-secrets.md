@@ -1,6 +1,7 @@
 ---
 id: no-hardcoded-secrets
 severity: BLOCKER
+tags: [judged]
 ---
 
 # No hard-coded secrets

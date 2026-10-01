@@ -2,6 +2,7 @@
 id: exhaustive-switch
 severity: MAJOR
 languages: [typescript]
+tags: [judged]
 ---
 
 # Switches over unions must be exhaustive

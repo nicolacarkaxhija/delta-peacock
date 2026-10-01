@@ -2,6 +2,7 @@
 id: no-eval
 severity: CRITICAL
 languages: [javascript, typescript, python, php, ruby]
+tags: [judged]
 ---
 
 # No dynamic code execution on untrusted input
