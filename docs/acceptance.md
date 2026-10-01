@@ -22,6 +22,14 @@ from a clean checkout; a red line blocks it.
   `gitleaks detect --no-banner`.
 - `review config`: the configuration validates and every bound guideline quotes its check's
   sentence. On its own: `pnpm build && node dist/cli.js doctor` ends with `all checks passed`.
+- `packs agree with the checks`: every sentence a static check quotes is said by a shipped pack
+  rule, every check owns one, every other pack rule is marked `judged`, and every shipped pack
+  lints clean. On its own: `pnpm exec vitest run tests/pack-rules.test.ts tests/pack-lint.test.ts`.
+- `pack facts on the bench`: with no model the bench finds every planted breach of a pack rule a
+  check owns and exits 0, its aggregate at 100 % precision and recall. The aggregate counts only the
+  breaches a check owns; the breaches of judged rules are not found and count under
+  `judgement`. On its own:
+  `pnpm build && node dist/cli.js bench --cases bench/cases --provider none`.
 - `facts only`: with `model.provider: none` no model port is ever built or called, a candidate
   that needs a judgement is left to a person, and every command that needs a model refuses with
   one line and exit code 1. On its own: `pnpm exec vitest run tests/facts-`.
