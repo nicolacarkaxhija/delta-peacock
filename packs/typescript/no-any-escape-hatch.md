@@ -2,6 +2,7 @@
 id: no-any-escape-hatch
 severity: MAJOR
 languages: [typescript]
+tags: [judged]
 ---
 
 # Do not escape the type system with any

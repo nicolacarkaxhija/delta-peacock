@@ -1,6 +1,7 @@
 ---
 id: parameterized-queries
 severity: BLOCKER
+tags: [judged]
 ---
 
 # Parameterize every query
