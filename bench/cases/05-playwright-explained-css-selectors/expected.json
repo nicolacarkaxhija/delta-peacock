@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "pages/notes-page.ts",
+      "line": 7,
+      "guidelineId": "explained-css-selectors"
+    }
+  ]
+}

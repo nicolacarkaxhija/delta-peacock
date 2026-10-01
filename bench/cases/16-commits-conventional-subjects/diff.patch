@@ -1,0 +1,9 @@
+diff --git a/scripts/release.sh b/scripts/release.sh
+new file mode 100644
+--- /dev/null
++++ b/scripts/release.sh
+@@ -0,0 +1,4 @@
++#!/usr/bin/env bash
++set -euo pipefail
++git add CHANGELOG.md
++git commit -m "Updated the changelog."

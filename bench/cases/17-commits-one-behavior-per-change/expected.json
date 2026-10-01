@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "src/cart.ts",
+      "line": 11,
+      "guidelineId": "one-behavior-per-change"
+    }
+  ]
+}

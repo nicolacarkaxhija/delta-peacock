@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "scripts/release.sh",
+      "line": 4,
+      "guidelineId": "conventional-subjects"
+    }
+  ]
+}

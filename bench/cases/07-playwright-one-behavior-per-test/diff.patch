@@ -1,0 +1,13 @@
+diff --git a/tests/notes.spec.ts b/tests/notes.spec.ts
+new file mode 100644
+--- /dev/null
++++ b/tests/notes.spec.ts
+@@ -0,0 +1,8 @@
++import { expect, test } from "./fixtures";
++
++test("notes work", async ({ notes, settings }) => {
++  await notes.add("Buy milk");
++  await expect(notes.items()).toHaveText(["Buy milk"]);
++  await settings.switchTheme("dark");
++  await expect(settings.theme()).toHaveText("Dark");
++});

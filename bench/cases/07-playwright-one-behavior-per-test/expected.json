@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 3,
+      "guidelineId": "one-behavior-per-test"
+    }
+  ]
+}

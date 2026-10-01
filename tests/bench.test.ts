@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -267,9 +267,14 @@ describe("bench command discriminates context strategies", () => {
 
   it("fails the min-f1 gate when the corpus regresses", async () => {
     const silent: ModelPort = { complete: () => Promise.resolve({ text: '{"findings": []}' }) };
+    // the pack cases score on static checks alone; only the seed cases need the model
+    const seedCases = mkdtempSync(path.join(tmpdir(), "peacock-bench-seed-"));
+    for (const name of ["01-single-file", "02-cross-file-signature"]) {
+      cpSync(path.join(CASES_DIR, name), path.join(seedCases, name), { recursive: true });
+    }
     let err = "";
     const code = await runCli(
-      ["bench", "--cases", CASES_DIR, "--context", "none", "--min-f1", "0.5"],
+      ["bench", "--cases", seedCases, "--context", "none", "--min-f1", "0.5"],
       {
         cwd: makeRepo(),
         env: {},
@@ -730,5 +735,28 @@ describe("bench reviews a case with the packs it names", () => {
     const root = mkdtempSync(path.join(tmpdir(), "peacock-bench-packs-"));
     writeCase(path.join(root, "broken"), { "packs.json": '{"pack": 1}', "diff.patch": spec });
     expect(() => loadCases(root)).toThrow("must hold a list of pack paths");
+  });
+});
+
+describe("the shipped corpus with no model", () => {
+  it("finds every planted breach a static check owns and leaves the rest to a judgement", async () => {
+    let stdout = "";
+    const code = await runCli(["bench", "--cases", CASES_DIR, "--provider", "none"], {
+      cwd: makeRepo(),
+      env: {},
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: { complete: () => Promise.reject(new Error("no call expected")) },
+    });
+    expect(code).toBe(0);
+    const rows = stdout.split("\n");
+    const facts = rows.filter((line) => /^\| \d+-\S+ \| 1 \|/.test(line));
+    expect(facts).toHaveLength(7);
+    expect(facts.every((line) => line.includes("| 1 | 100% | 100% | 100% | 0 |"))).toBe(true);
+    expect(rows.find((line) => line.startsWith("| aggregate |"))).toMatch(
+      /^\| aggregate \| \| 100% \| 100% \| 100% \| 11 \|/,
+    );
   });
 });

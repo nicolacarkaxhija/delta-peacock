@@ -1,0 +1,12 @@
+diff --git a/tests/search.spec.ts b/tests/search.spec.ts
+new file mode 100644
+--- /dev/null
++++ b/tests/search.spec.ts
+@@ -0,0 +1,7 @@
++import { expect, test } from "./fixtures";
++
++test("a search lists matching lamps", async ({ search }) => {
++  await search.query("lamp");
++  test.skip((await search.results().count()) === 0, "no results today");
++  await expect(search.results()).toHaveText(["Desk lamp", "Floor lamp"]);
++});

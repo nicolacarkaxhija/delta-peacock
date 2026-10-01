@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "src/import.ts",
+      "line": 2,
+      "guidelineId": "no-magic-numbers"
+    }
+  ]
+}

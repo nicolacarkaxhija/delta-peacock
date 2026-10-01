@@ -1,0 +1,14 @@
+diff --git a/pages/notes-page.ts b/pages/notes-page.ts
+new file mode 100644
+--- /dev/null
++++ b/pages/notes-page.ts
+@@ -0,0 +1,9 @@
++import type { Locator, Page } from "@playwright/test";
++
++export class NotesPage {
++  constructor(private readonly page: Page) {}
++
++  items(): Locator {
++    return this.page.locator(".note-list > li");
++  }
++}

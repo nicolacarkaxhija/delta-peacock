@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/pricing.spec.ts",
+      "line": 7,
+      "guidelineId": "data-rows-not-copies"
+    }
+  ]
+}
