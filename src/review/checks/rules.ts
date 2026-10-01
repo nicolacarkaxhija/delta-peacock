@@ -28,7 +28,8 @@ export const CHECK_SENTENCES: Readonly<
       "It says nothing about how the change was made, the work session or who wrote it, and it separates clauses with commas or colons instead of dashes.",
   },
   assertions: {
-    snapshot: "What counts is the read itself: expect wrapped around an awaited getter.",
+    snapshot:
+      "An assertion hands expect the locator itself and lets a web first matcher wait, never the awaited value of a getter.",
   },
   tags: {
     "undeclared-tag":
