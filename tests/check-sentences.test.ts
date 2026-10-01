@@ -43,7 +43,7 @@ const GUIDELINES: Readonly<Record<GuidelineCheck, Guideline>> = {
   assertions: guideline(
     "web-first-assertions",
     "Assert with retrying matchers, not with read-once values",
-    "A value read once with isVisible() is a snapshot that flakes on a slow render. What counts is the read itself: expect wrapped around an awaited getter.",
+    "A value read once with isVisible() is a snapshot that flakes on a slow render. An assertion hands expect the locator itself and lets a web first matcher wait, never the awaited value of a getter.",
     ["tests/**"],
   ),
   tags: guideline(
