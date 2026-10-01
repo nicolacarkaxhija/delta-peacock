@@ -1,0 +1,14 @@
+diff --git a/src/settings.ts b/src/settings.ts
+new file mode 100644
+--- /dev/null
++++ b/src/settings.ts
+@@ -0,0 +1,9 @@
++import { readFile } from "node:fs/promises";
++
++export async function readSettings(file: string): Promise<Record<string, string>> {
++  try {
++    return JSON.parse(await readFile(file, "utf8")) as Record<string, string>;
++  } catch {
++    return {};
++  }
++}

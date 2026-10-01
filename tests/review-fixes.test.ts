@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -172,7 +172,12 @@ describe("cost guard concurrency", () => {
 describe("bench variant comparison", () => {
   it("prints per-variant tables and the overlap matrix", async () => {
     const { fileURLToPath } = await import("node:url");
-    const casesDir = fileURLToPath(new URL("../bench/cases", import.meta.url));
+    const corpus = fileURLToPath(new URL("../bench/cases", import.meta.url));
+    // the seed cases alone: the pack cases add the same static check findings to every variant
+    const casesDir = mkdtempSync(path.join(tmpdir(), "peacock-bench-seed-"));
+    for (const name of ["01-single-file", "02-cross-file-signature"]) {
+      cpSync(path.join(corpus, name), path.join(casesDir, name), { recursive: true });
+    }
     const contextSensitive: ModelPort = {
       complete(request) {
         const findings = [];

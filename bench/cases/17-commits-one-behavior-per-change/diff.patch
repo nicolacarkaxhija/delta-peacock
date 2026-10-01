@@ -1,0 +1,15 @@
+diff --git a/src/cart.ts b/src/cart.ts
+index 1111111..2222222 100644
+--- a/src/cart.ts
++++ b/src/cart.ts
+@@ -5,5 +5,9 @@
+ }
+ 
+ export function total(items: Item[]): number {
+-  return items.reduce((sum, item) => sum + item.price, 0);
++  return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
++}
++
++export function exportCsv(items: Item[]): string {
++  return items.map((item) => `${item.name},${String(item.price)}`).join("\n");
+ }

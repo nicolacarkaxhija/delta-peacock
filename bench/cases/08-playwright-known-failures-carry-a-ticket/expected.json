@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "tests/sharing.spec.ts",
+      "line": 3,
+      "guidelineId": "known-failures-carry-a-ticket"
+    }
+  ]
+}

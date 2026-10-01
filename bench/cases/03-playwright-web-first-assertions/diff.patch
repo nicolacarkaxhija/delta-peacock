@@ -1,0 +1,11 @@
+diff --git a/tests/notes.spec.ts b/tests/notes.spec.ts
+new file mode 100644
+--- /dev/null
++++ b/tests/notes.spec.ts
+@@ -0,0 +1,6 @@
++import { expect, test } from "./fixtures";
++
++test("a saved note shows a confirmation", async ({ notes }) => {
++  await notes.add("Buy milk");
++  expect(await notes.status().isVisible()).toBe(true);
++});

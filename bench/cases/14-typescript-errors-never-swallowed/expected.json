@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {
+      "file": "src/settings.ts",
+      "line": 6,
+      "guidelineId": "errors-never-swallowed"
+    }
+  ]
+}
