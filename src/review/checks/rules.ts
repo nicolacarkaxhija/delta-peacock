@@ -33,7 +33,7 @@ export const CHECK_SENTENCES: Readonly<
   },
   tags: {
     "undeclared-tag":
-      "Only axis tags and tags the config declares are accepted, so a suggestion never proposes `@smoke` or another unlisted word; the test's folder states its intent already.",
+      "A test carries only axis tags and the feature tags the config declares, never `@smoke` or another tag the config does not list.",
     "title-tag": "Tags belong in the tag option, never in the test title.",
   },
   timeouts: {
