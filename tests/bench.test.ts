@@ -657,3 +657,78 @@ describe("bench runs the static checks a live review runs", () => {
     expect(stderr).toContain("review.checks: prefer-test-ids is bound to the selectors check");
   });
 });
+
+describe("bench reviews a case with the packs it names", () => {
+  const WAITS =
+    "waitForTimeout has no valid use. Waits longer than the framework defaults live as named values in one timeouts module, which then explains every slow run in one place.";
+
+  function writeCase(dir: string, files: Record<string, string>): void {
+    for (const [name, content] of Object.entries(files)) {
+      mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+      writeFileSync(path.join(dir, name), content);
+    }
+  }
+
+  const spec = [
+    "diff --git a/tests/report.spec.ts b/tests/report.spec.ts",
+    "new file mode 100644",
+    "--- /dev/null",
+    "+++ b/tests/report.spec.ts",
+    "@@ -0,0 +1,3 @@",
+    "+test('the report opens', async ({ page }) => {",
+    "+  await page.waitForTimeout(500);",
+    "+});",
+    "",
+  ].join("\n");
+  const expected = JSON.stringify({
+    findings: [{ file: "tests/report.spec.ts", line: 2, guidelineId: "no-inline-timeouts" }],
+  });
+
+  it("scores the pack's checked rule with no model, and lets the case's own guideline win", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "peacock-bench-packs-"));
+    writeCase(path.join(root, "packs", "waits"), {
+      "pack.yaml": "name: waits\n",
+      "no-inline-timeouts.md": `---\nid: no-inline-timeouts\nseverity: MAJOR\n---\n# No inline waits\n\n${WAITS}\n`,
+    });
+    writeCase(path.join(root, "cases", "from-pack"), {
+      "packs.json": '["../../packs/waits"]',
+      "diff.patch": spec,
+      "expected.json": expected,
+    });
+    writeCase(path.join(root, "cases", "own-wins"), {
+      "packs.json": '["../../packs/waits"]',
+      "guidelines/no-inline-timeouts.md":
+        "---\nid: no-inline-timeouts\nseverity: MAJOR\n---\n# Waits\n\nA test waits for a state.\n",
+      "diff.patch": spec,
+      "expected.json": expected,
+    });
+    let stdout = "";
+    const code = await runCli(
+      ["bench", "--cases", path.join(root, "cases"), "--provider", "none"],
+      {
+        cwd: makeRepo(),
+        env: {},
+        out: (text) => {
+          stdout += text;
+        },
+        err: () => undefined,
+        modelPort: { complete: () => Promise.reject(new Error("no call expected")) },
+      },
+    );
+    expect(code).toBe(0);
+    const rows = stdout.split("\n");
+    expect(rows.find((line) => line.startsWith("| from-pack |"))).toMatch(
+      /^\| from-pack \| 1 \| 100% \| 100% \| 100% \| 0 \|/,
+    );
+    // the case's own guideline names no check sentence, so it is left to the model
+    expect(rows.find((line) => line.startsWith("| own-wins |"))).toMatch(
+      /^\| own-wins \| 0 \| 0% \| 0% \| 0% \| 1 \|/,
+    );
+  });
+
+  it("refuses a packs.json that is not a list of paths", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "peacock-bench-packs-"));
+    writeCase(path.join(root, "broken"), { "packs.json": '{"pack": 1}', "diff.patch": spec });
+    expect(() => loadCases(root)).toThrow("must hold a list of pack paths");
+  });
+});
