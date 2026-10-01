@@ -49,7 +49,7 @@ const GUIDELINES: Readonly<Record<GuidelineCheck, Guideline>> = {
   tags: guideline(
     "axis-tags",
     "Axis tags limit where a test runs",
-    "Tags belong in the tag option, never in the test title.\n\nEach test also names one feature tag listed under `tags.features`. Only axis tags and tags the config declares are accepted, so a suggestion never proposes `@smoke` or another unlisted word; the test's folder states its intent already.",
+    "Tags belong in the tag option, never in the test title.\n\nEach test also names one feature tag listed under `tags.features`. A test carries only axis tags and the feature tags the config declares, never `@smoke` or another tag the config does not list.",
     ["tests/**"],
   ),
   timeouts: guideline(
