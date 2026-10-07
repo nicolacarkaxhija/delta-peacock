@@ -100,14 +100,15 @@ describe("per-review cap", () => {
     expect(report.findings).toEqual([]);
   });
 
-  it("fails loudly when a gate is configured", async () => {
+  it("checks facts only under a gate, which no fact fails here", async () => {
     const repo = makeScenario();
-    const { code, requests } = await reviewWith(repo, {
+    const { code, requests, stdout } = await reviewWith(repo, {
       DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001",
       DELTA_PEACOCK_GATE_FAIL_ON: "MAJOR",
     });
-    expect(code).toBe(1);
+    expect(code).toBe(0);
     expect(requests).toBe(0);
+    expect(stdout).toContain("the review reached its cost cap");
   });
 
   it("multiplies the estimate by the ensemble call count", async () => {

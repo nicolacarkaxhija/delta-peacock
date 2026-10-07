@@ -69,7 +69,13 @@ import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.j
 import { renderReview } from "./render.js";
 import { harvestUncited } from "./harvest.js";
 import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
-import { buildReport, type FactsOnly, type UnparsedBatch, type WaivedFinding } from "./report.js";
+import {
+  buildReport,
+  type FactsOnly,
+  type ReviewReport,
+  type UnparsedBatch,
+  type WaivedFinding,
+} from "./report.js";
 import { verifyStructural } from "./structural.js";
 import { writeDrafts } from "../guidelines/draft.js";
 import type { PullRequestText } from "../scm/port.js";
@@ -216,36 +222,20 @@ export async function runReview(
   }
 
   const now = deps.clock?.() ?? new Date();
+  // set when the cost guard stops the model part; the facts still run and post
+  let blocked: ReviewReport["budget"];
   if (!factsOnly && guardActive(config)) {
     const decision = await checkCostGuard(config, request, now, { batches: batchCount });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
-      deps.out("review blocked by the cost guard before any model call\n");
-      await publishSkipped(deps, config, capReason(decision.reasons));
-      if (config.output.report !== undefined) {
-        const blockedReport = buildReport({
-          findings: [],
-          filtered: [],
-          proposals: [],
-          droppedUncited: 0,
-          adjustedLines: 0,
-          redactions: redacted.counts,
-          gate: evaluateGate([], config.gate.failOn),
-          budget: {
-            blocked: true,
-            estimated: decision.estimated,
-            ...(decision.monthToDate !== undefined ? { monthToDate: decision.monthToDate } : {}),
-            reasons: decision.reasons,
-          },
-        });
-        writeFileSync(
-          path.resolve(deps.cwd, config.output.report),
-          `${JSON.stringify(blockedReport, null, 2)}\n`,
-        );
-      }
-      // advisory posture absorbs the block; a gating posture must fail loudly
-      return config.gate.failOn === "none" ? 0 : 1;
+      deps.out("review blocked by the cost guard before any model call; checking facts only\n");
+      blocked = {
+        blocked: true,
+        estimated: decision.estimated,
+        ...(decision.monthToDate !== undefined ? { monthToDate: decision.monthToDate } : {}),
+        reasons: decision.reasons,
+      };
     }
   }
 
@@ -259,12 +249,13 @@ export async function runReview(
   // fallback.credentialRefused fail: a refused credential fails the run as before
   const fallsBack = (why: ModelUnavailability): boolean =>
     why !== "credential-refused" || config.fallback.credentialRefused === "fallback";
+  if (blocked !== undefined) fallback = { why: "cost-cap", detail: blocked.reasons.join("; ") };
   try {
-    if (allChecked && !factsOnly) {
+    if (allChecked && !factsOnly && blocked === undefined) {
       deps.err("every applicable guideline is checked; no open review call\n");
     }
     executed =
-      allChecked || factsOnly
+      allChecked || factsOnly || blocked !== undefined
         ? idleExecution()
         : await executeReview(deps, config, request, passes, batchCount, parseOptions);
     if (executed.outage !== undefined) {
@@ -570,6 +561,7 @@ export async function runReview(
       ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
       ...(checks !== undefined ? { checks: checks.tally } : {}),
       ...(facts !== undefined ? { factsOnly: facts } : {}),
+      ...(blocked !== undefined ? { budget: blocked } : {}),
     });
     if (config.output.report !== undefined) {
       writeFileSync(
@@ -1330,28 +1322,6 @@ async function publishFailure(deps: ReviewDeps, config: Config, reason: string):
       `could not post the failure summary: ${String((error as Error).message.split("\n")[0])}\n`,
     );
   }
-}
-
-/** A run the cost guard stopped says so on the pull request instead of staying silent. */
-async function publishSkipped(deps: ReviewDeps, config: Config, reason: string): Promise<void> {
-  await publishIfConfigured(deps, config, {
-    findings: [],
-    proposals: [],
-    droppedUncited: 0,
-    filtered: 0,
-    gate: evaluateGate([], config.gate.failOn),
-    outcome: { kind: "capped", reason },
-    commitStatus: config.scm.commitStatus,
-    comments: config.scm.comments,
-    dryRun: isDryRun(config),
-  });
-}
-
-/** Which cap stopped the run, in words a pull request reader follows. */
-export function capReason(reasons: readonly string[]): string {
-  return reasons.some((reason) => reason.includes("monthlyCap"))
-    ? "the monthly cost cap is reached"
-    : "this change would cost more than the per review cap";
 }
 
 /** The first line of a failure, readable on a pull request. */

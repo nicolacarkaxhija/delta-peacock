@@ -290,6 +290,7 @@ const FALLBACK_REASONS: Readonly<Record<ModelUnavailability, { long: string; sho
   },
   timeout: { long: "the model call timed out", short: "timed out" },
   "credential-refused": { long: "the credential was refused", short: "credential refused" },
+  "cost-cap": { long: "the review reached its cost cap", short: "cost cap" },
 };
 
 /** The success status text of a fallback, by what the model reviewed. */
