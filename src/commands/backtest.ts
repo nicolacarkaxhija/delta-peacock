@@ -23,6 +23,8 @@ export interface BacktestOptions {
   version: string;
   /** A model provider every case runs under; none scores the facts only mode. */
   provider?: string;
+  /** Lines either side of an expected span a finding may sit on and still count; 0 by default. */
+  anchorWindow?: number;
 }
 
 interface Run {
@@ -253,6 +255,10 @@ export async function runBacktestCommand(
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1) {
     throw new ToolError("--concurrency takes a whole number of at least 1");
   }
+  const window = options.anchorWindow ?? 0;
+  if (!Number.isInteger(window) || window < 0) {
+    throw new ToolError("--anchor-window takes a whole number of lines, 0 or more");
+  }
   const casesDir = path.resolve(deps.cwd, options.cases);
   const cases = loadBacktestCases(casesDir, options.only);
   const configText =
@@ -276,8 +282,14 @@ export async function runBacktestCommand(
       );
       const score =
         replay.facts !== undefined
-          ? scoreFacts(replay.findings, benchCase.expected, benchCase.noFinding, replay.facts)
-          : scoreRun(replay.findings, benchCase.expected, benchCase.noFinding);
+          ? scoreFacts(
+              replay.findings,
+              benchCase.expected,
+              benchCase.noFinding,
+              replay.facts,
+              window,
+            )
+          : scoreRun(replay.findings, benchCase.expected, benchCase.noFinding, window);
       writeFileSync(path.join(runsDir, `${label}.log`), replay.log);
       if (replay.report !== undefined) {
         writeFileSync(path.join(runsDir, `${label}.report.json`), replay.report);
@@ -330,6 +342,7 @@ export async function runBacktestCommand(
     version: options.version,
     at: now.toISOString(),
     repeats: options.repeats,
+    anchorWindow: window,
     precision,
     recall,
     drift: totalDrift,
