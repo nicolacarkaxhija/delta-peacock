@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.4.0...delta-peacock-v0.5.0) (2026-10-07)
+
+
+### Features
+
+* **checks:** decide a guideline by a pattern over added lines ([9f136ea](https://github.com/nicolacarkaxhija/delta-peacock/commit/9f136eaf70e5d4c580c569fb80517a2d6e335b11))
+
 ## [0.4.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.3.0...delta-peacock-v0.4.0) (2026-10-07)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "delta-peacock",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Guideline-anchored, provider-agnostic PR reviewer. Your rules, any SCM, any LLM.",
   "keywords": [
     "code-review",
