@@ -85,16 +85,23 @@ describe("bitbucket presentation", () => {
   it("posts no visible markers and re-runs idempotently by author plus heading", async () => {
     const fake = await startFakeBitbucket();
     try {
-      await review(fake);
+      const repo = reviewedRepo();
+      await review(fake, TWO, repo);
       expect(fake.drafts).toBe(0); // nothing to recognise yet, so no identity lookup
       expect(fake.comments.every((c) => !c.content.raw.includes("<!--"))).toBe(true);
       // no heading: the bot's name, the status and the card already say who reviewed
       expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("2 findings: 1 critical, 1 high");
+      // the guideline's real file, at the target commit its text was read from
+      const rules = git(repo, "rev-parse", "main").trim();
       expect(inline(fake)[0]?.content.raw).toBe(
-        "**Critical** · [no-console](https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md)\n\nUse the logger.\n\nGuideline: Use the logger.",
+        `**Critical** · [no-console](https://bitbucket.org/acme/widgets/src/${rules}/guidelines/g0.md)\n\nUse the logger.\n\nGuideline: Use the logger.`,
+      );
+      // each finding in the summary opens its own comment
+      expect(summaries(fake)[0]?.content.raw).toContain(
+        `in [src/app.js line 1](https://bitbucket.org/acme/widgets/pull-requests/7#comment-${String(inline(fake)[0]?.id)}): Console`,
       );
 
-      const again = await review(fake);
+      const again = await review(fake, TWO, repo);
       expect(again.stderr).toContain("0 created, 0 updated, 0 resolved, 2 unchanged");
       expect(fake.comments).toHaveLength(3);
       expect(fake.drafts).toBe(1); // one identity lookup per run, draft deleted
@@ -274,7 +281,9 @@ describe("bitbucket presentation", () => {
 
       // the resolved one is kept as a trace; a finding that comes back gets a comment of its own
       const trace = fake.comments.find((c) => c.id === todoComment?.id)?.content.raw ?? "";
-      expect(trace).toMatch(/Resolved in `[0-9a-f]{12}`/);
+      expect(trace).toMatch(
+        /\nResolved in \[[0-9a-f]{12}\]\(https:\/\/bitbucket\.org\/acme\/widgets\/commits\/[0-9a-f]{40}\): /,
+      );
       const third = await review(fake, TWO, repo);
       expect(third.stderr).toContain("1 created, 1 updated, 0 resolved, 0 unchanged");
       expect(inline(fake).filter((c) => c.parent === undefined)).toHaveLength(3);

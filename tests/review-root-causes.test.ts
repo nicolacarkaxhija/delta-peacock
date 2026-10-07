@@ -186,7 +186,9 @@ describe("PR 1 root causes, replayed", () => {
       expect(body).not.toContain("```");
       expect(body).toContain("`@homepage` is not a tag test-runner.config.ts declares");
       expect(body).not.toMatch(/According to|—|–/);
-      expect(summaryOf(fake)).toContain("line 4: Missing feature tag");
+      expect(summaryOf(fake)).toMatch(
+        /in \[tests\/smoke\/homepage\.spec\.ts line 4\]\(https:\/\/bitbucket\.org\/[^)]+\/pull-requests\/\d+#comment-\d+\): Missing feature tag/,
+      );
       expect(summaryOf(fake)).not.toMatch(/—|–|failOn/);
     } finally {
       await fake.close();

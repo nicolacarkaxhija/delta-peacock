@@ -17,9 +17,19 @@ export interface Presentation {
   suggestionFence: string;
   /** Web link to a repository file on the target branch; absent renders plain ids. */
   fileLink?: (path: string) => string;
+  /** Web link to a guideline's file; undefined where the host has none or the file is unknown. */
+  guidelineLink?: (guidelineId: string) => string | undefined;
+  /** Web link to where a finding sits: its comment, or its file and line; undefined where the host has none. */
+  placeLink?: (finding: Finding) => string | undefined;
+  /** Web link to a repository file at the reviewed commit. */
+  reviewedFileLink?: (path: string) => string;
+  /** Web link to a commit. */
+  commitLink?: (sha: string) => string;
   guidelinesDir: string;
-  /** Repository doc on how reviews work, linked from a blocked summary. */
+  /** Repository doc on how reviews work, named by a blocked summary. */
   guidePath?: string;
+  /** False when the doc is not on the target branch yet, so it is named without a link. */
+  guideLinked?: boolean;
   /** The host's own severity words; absent means the reviewer's scale. */
   severityScale?: SeverityScale;
 }
@@ -64,7 +74,11 @@ export function anyMarkerFingerprint(body: string): string | undefined {
   return ANY_FINDING_MARKER.exec(body)?.[1];
 }
 
-export function guidelineUrl(guidelineId: string, presentation: Presentation): string | undefined {
+/** What linking a guideline needs from a presentation. */
+export type LinkSource = Pick<Presentation, "fileLink" | "guidelineLink" | "guidelinesDir">;
+
+export function guidelineUrl(guidelineId: string, presentation: LinkSource): string | undefined {
+  if (presentation.guidelineLink !== undefined) return presentation.guidelineLink(guidelineId);
   return presentation.fileLink?.(`${presentation.guidelinesDir}/${guidelineId}.md`);
 }
 
@@ -74,6 +88,15 @@ function citation(finding: Finding, presentation: Presentation): string {
   const url =
     finding.pack === undefined ? guidelineUrl(finding.guidelineId, presentation) : undefined;
   return url === undefined ? `\`${finding.guidelineId}\`` : `[${finding.guidelineId}](${url})`;
+}
+
+/** A heading citing a guideline gets the guideline's current link, where there is one. */
+export function linkedHeading(heading: string, presentation: LinkSource): string {
+  const match = HEADING.exec(heading);
+  const id = match?.[2] ?? match?.[3];
+  if (match === null || id === undefined) return heading;
+  const url = guidelineUrl(id, presentation);
+  return url === undefined ? heading : `**${String(match[1])}** · [${id}](${url})`;
 }
 
 /** The first two sentences; a sentence ends at . ! or ? followed by space and a capital. */
@@ -281,8 +304,21 @@ export function fallbackReason(why: ModelUnavailability): string {
   return FALLBACK_REASONS[why].short;
 }
 
+/** How a facts only line names a guideline and a file; plain by default. */
+interface FactsNames {
+  guideline: (guidelineId: string) => string;
+  file: (path: string) => string;
+}
+
+const PLAIN_NAMES: FactsNames = { guideline: (id) => id, file: (path) => path };
+
 /** The one sentence a facts only summary opens with. */
-export function factsLine(findings: number, scope: FactsScope): string {
+export function factsLine(
+  findings: number,
+  scope: FactsScope,
+  names: FactsNames = PLAIN_NAMES,
+): string {
+  const name = names.guideline;
   const left =
     scope.left === 1
       ? "1 candidate left to a person because it needs a judgement"
@@ -290,7 +326,7 @@ export function factsLine(findings: number, scope: FactsScope): string {
   const skipped =
     scope.notReviewed.length === 0
       ? "every applicable guideline checked"
-      : `${plural(scope.notReviewed.length, "guideline")} not reviewed (${scope.notReviewed.join(", ")})`;
+      : `${plural(scope.notReviewed.length, "guideline")} not reviewed (${scope.notReviewed.map(name).join(", ")})`;
   const counts = `${plural(findings, "finding")}, ${left}, and ${skipped}.`;
   if (scope.fallback === undefined) return `${FACTS_LEAD}${counts}`;
   const reason = FALLBACK_REASONS[scope.fallback].long;
@@ -299,11 +335,11 @@ export function factsLine(findings: number, scope: FactsScope): string {
     return `${PARTIAL_LEAD}the change, but the judge could not run (${reason}): ${plural(findings, "finding")}, and ${left}. ${approval}`;
   }
   if (scope.modelReviewed === "part") {
-    const files = (scope.unjudgedFiles ?? []).join(", ");
+    const files = (scope.unjudgedFiles ?? []).map(names.file).join(", ");
     const unchecked =
       scope.notReviewed.length === 0
         ? "every applicable guideline checked"
-        : `${plural(scope.notReviewed.length, "guideline")} not reviewed on those files (${scope.notReviewed.join(", ")})`;
+        : `${plural(scope.notReviewed.length, "guideline")} not reviewed on those files (${scope.notReviewed.map(name).join(", ")})`;
     return `${PARTIAL_LEAD}part of the change, then could not run (${reason}): no model reviewed ${files}, where this review checked facts only. ${plural(findings, "finding")}, ${left}, and ${unchecked}. ${approval}`;
   }
   return `${FALLBACK_LEAD}${reason}), so this review checked facts only: ${counts} ${approval}`;
@@ -443,12 +479,33 @@ export function blockedLine(
   return `Blocked: ${plural(gate.failing, "finding")}${detail} must be resolved`;
 }
 
+/** "[file line 3](...)", or "[file](...)" for a finding on no line; code where nothing links. */
+function placeText(finding: Finding, presentation: Presentation): string {
+  const line = finding.unplaced === true ? undefined : finding.line;
+  const url = presentation.placeLink?.(finding);
+  const where = line === undefined ? finding.file : `${finding.file} line ${String(line)}`;
+  if (url !== undefined) return `[${where}](${url})`;
+  return line === undefined ? `\`${finding.file}\`` : `\`${finding.file}\` line ${String(line)}`;
+}
+
 function listItem(finding: Finding, presentation: Presentation): string {
-  const head = `- **${severityWord(finding.severity, presentation)}** ${citation(finding, presentation)} in \`${finding.file}\``;
+  const head = `- **${severityWord(finding.severity, presentation)}** ${citation(finding, presentation)} in ${placeText(finding, presentation)}`;
   if (finding.unplaced === true) {
     return `${head}: ${finding.title.replace(/[.\s]+$/, "")}. ${String(finding.note)}`;
   }
-  return `${head} line ${String(finding.line)}: ${finding.title}`;
+  return `${head}: ${finding.title}`;
+}
+
+/** The summary's first line; guideline ids in it link where they can. */
+function summaryStateLine(input: SummaryInput, presentation: Presentation): string {
+  const reviewed = (input.outcome?.kind ?? "reviewed") === "reviewed";
+  if (!reviewed || input.factsOnly === undefined) return stateLine(input, presentation);
+  const linked = (text: string, url: string | undefined) =>
+    url === undefined ? text : `[${text}](${url})`;
+  return factsLine(input.findings.length, input.factsOnly, {
+    guideline: (guidelineId) => linked(guidelineId, guidelineUrl(guidelineId, presentation)),
+    file: (path) => linked(path, presentation.reviewedFileLink?.(path)),
+  });
 }
 
 export function renderSummaryBody(
@@ -456,7 +513,7 @@ export function renderSummaryBody(
   presentation: Presentation = DEFAULT_PRESENTATION,
 ): string {
   // no heading: the author, the status and the card already name the reviewer
-  const lines = [stateLine(input, presentation)];
+  const lines = [summaryStateLine(input, presentation)];
   if (input.outcome?.kind === "failed") {
     lines.push("", "Nothing was reviewed on this run. Run the pipeline again to retry.");
   }
@@ -476,15 +533,12 @@ export function renderSummaryBody(
   const blocked = blockedLine(input, presentation);
   if (blocked !== undefined) {
     lines.push("", `**${blocked}.**`);
-    const guide =
-      presentation.guidePath === undefined
-        ? undefined
-        : presentation.fileLink?.(presentation.guidePath);
-    if (guide !== undefined) {
-      lines.push(
-        "",
-        `How reviews work and how to respond: [${String(presentation.guidePath)}](${guide})`,
-      );
+    const { guidePath } = presentation;
+    if (guidePath !== undefined) {
+      const guide =
+        presentation.guideLinked === false ? undefined : presentation.fileLink?.(guidePath);
+      const named = guide === undefined ? guidePath : `[${guidePath}](${guide})`;
+      lines.push("", `How reviews work and how to respond: ${named}`);
     }
   }
   if (input.proposals.length > 0) {

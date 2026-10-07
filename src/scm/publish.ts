@@ -7,6 +7,7 @@ import {
   guidelineLine,
   guidelineUrl,
   headingAnchor,
+  linkedHeading,
   markerFingerprint,
   renderCommentBody,
   isSummaryBody,
@@ -24,33 +25,73 @@ import type { InsightReport, ScmComment, ScmPort, ScmTask, StatusState } from ".
 
 export { renderCommentBody, renderSummaryBody, type SummaryInput } from "./comment-format.js";
 
+/** A guideline's file in the repository and the commit it was read from. */
+export interface GuidelineSource {
+  path: string;
+  commit: string;
+}
+
 /** What the configuration contributes to a presentation; the host adds the rest. */
 export interface PresentationSettings {
   displayName: string;
   guidelinesDir: string;
-  /** Branch guideline and docs links point at. */
+  /** Branch the docs link, and guideline links when their files are unknown, point at. */
   targetBranch: string;
   /** Repository doc on how reviews work; absent when the file does not exist. */
   guidePath?: string;
+  /** False when the doc exists only on the reviewed branch, so it is named without a link. */
+  guideLinked?: boolean;
+  /** Each local guideline's file; an id missing here gets no link. */
+  guidelineFiles?: ReadonlyMap<string, GuidelineSource>;
 }
 
-/** Combines the settings with what the host can render. */
-export function presentationFor(scm: ScmPort, settings?: PresentationSettings): Presentation {
+/** Combines the settings with what the host can render; commentOf names a finding's comment. */
+export function presentationFor(
+  scm: ScmPort,
+  settings: PresentationSettings | undefined,
+  reviewedCommit: string | undefined,
+  commentOf: (finding: Finding) => string | undefined,
+): Presentation {
   const base = settings ?? {
     displayName: DEFAULT_PRESENTATION.displayName,
     guidelinesDir: DEFAULT_PRESENTATION.guidelinesDir,
     targetBranch: "main",
   };
   const fileUrl = scm.fileUrl?.bind(scm);
+  const commitUrl = scm.commitUrl?.bind(scm);
+  const commentUrl = scm.commentUrl?.bind(scm);
+  const files = base.guidelineFiles;
+  const atReviewed =
+    fileUrl === undefined || reviewedCommit === undefined
+      ? undefined
+      : (file: string, line?: number) => fileUrl(file, reviewedCommit, line);
   return {
     displayName: base.displayName,
     markers: scm.hidesHtmlComments !== false,
     suggestionFence: scm.suggestionFence ?? "suggestion",
     guidelinesDir: base.guidelinesDir,
     ...(fileUrl !== undefined
-      ? { fileLink: (file: string) => fileUrl(file, base.targetBranch) }
+      ? {
+          fileLink: (file: string) => fileUrl(file, base.targetBranch),
+          ...(files !== undefined
+            ? {
+                guidelineLink: (id: string) => {
+                  const source = files.get(id);
+                  return source === undefined ? undefined : fileUrl(source.path, source.commit);
+                },
+              }
+            : {}),
+        }
       : {}),
+    placeLink: (finding: Finding) => {
+      const commentId = commentOf(finding);
+      if (commentId !== undefined && commentUrl !== undefined) return commentUrl(commentId);
+      return atReviewed?.(finding.file, finding.unplaced === true ? undefined : finding.line);
+    },
+    ...(atReviewed !== undefined ? { reviewedFileLink: (file: string) => atReviewed(file) } : {}),
+    ...(commitUrl !== undefined ? { commitLink: commitUrl } : {}),
     ...(base.guidePath !== undefined ? { guidePath: base.guidePath } : {}),
+    ...(base.guideLinked !== undefined ? { guideLinked: base.guideLinked } : {}),
     ...(scm.severityScale !== undefined ? { severityScale: scm.severityScale } : {}),
   };
 }
@@ -177,9 +218,8 @@ function claimFingerprint(
     if (finding === undefined) break;
     if (!taken.has(fingerprint)) free.push({ fingerprint, finding });
   }
-  const same = free.find(
-    ({ fingerprint, finding }) =>
-      renderCommentBody(finding, fingerprint, presentation) === comment.body,
+  const same = free.find(({ fingerprint, finding }) =>
+    sameComment(renderCommentBody(finding, fingerprint, presentation), comment.body),
   );
   return (same ?? (exactOnly ? undefined : free[0]))?.fingerprint;
 }
@@ -212,11 +252,45 @@ export function isResolvedTrace(body: string): boolean {
   return body.split("\n").some((line) => line.startsWith(RESOLVED_PREFIX));
 }
 
-/** The finding's heading kept, the rest replaced by where it was resolved. */
-export function resolvedBody(body: string, resolvedIn: string | undefined): string {
-  const heading = body.split("\n")[0] ?? "";
-  const where = resolvedIn !== undefined ? `\`${resolvedIn.slice(0, 12)}\`` : "a later commit";
+/** A commit as readers see it: the short hash, linked where the host can. */
+function commitText(sha: string, presentation: Pick<Presentation, "commitLink">): string {
+  const short = sha.slice(0, 12);
+  const url = presentation.commitLink?.(sha);
+  return url === undefined ? `\`${short}\`` : `[${short}](${url})`;
+}
+
+/** The finding's heading kept and linked, the rest replaced by where it was resolved. */
+export function resolvedBody(
+  body: string,
+  reviewedCommit: string | undefined,
+  presentation: Presentation = DEFAULT_PRESENTATION,
+): string {
+  const heading = linkedHeading(String(body.split("\n")[0]), presentation);
+  const where =
+    reviewedCommit !== undefined ? commitText(reviewedCommit, presentation) : "a later commit";
   return `${heading}\n\n${RESOLVED_PREFIX}${where}: the flagged line changed or the finding no longer holds.`;
+}
+
+const TRACE_HASH = /^Resolved in `([0-9a-f]{7,40})`:/;
+
+/** A trace an earlier version wrote, with its heading and commit linked; unchanged when nothing links. */
+export function linkedTrace(body: string, presentation: Presentation): string {
+  const [heading = "", ...rest] = body.split("\n");
+  const lines = rest.map((line) => {
+    const sha = TRACE_HASH.exec(line)?.[1];
+    if (sha === undefined || presentation.commitLink === undefined) return line;
+    return `${RESOLVED_PREFIX}${commitText(sha, presentation)}:${line.slice(line.indexOf("`:") + 2)}`;
+  });
+  return [linkedHeading(heading, presentation), ...lines].join("\n");
+}
+
+const LINK_TARGET = /\]\([^)\s]*\)/g;
+
+/** Equal up to the commits their links point at, so a new commit alone rewrites nothing. */
+export function sameComment(rendered: string, posted: string): boolean {
+  const withoutCommits = (body: string) =>
+    body.replace(LINK_TARGET, (target) => target.replace(/\b[0-9a-f]{40}\b/g, "{commit}"));
+  return rendered === posted || withoutCommits(rendered) === withoutCommits(posted);
 }
 
 /** An error that says the thing is already gone, which is what cleanup wanted. */
@@ -253,11 +327,12 @@ async function cleanup(
 async function retireComment(
   scm: ScmPort,
   comment: ScmComment,
-  resolvedIn: string | undefined,
+  reviewedCommit: string | undefined,
+  presentation: Presentation,
   outcome: PublishOutcome,
 ): Promise<void> {
   const edited = await cleanup(outcome, `mark comment ${comment.id} resolved`, () =>
-    scm.updateComment(comment.id, resolvedBody(comment.body, resolvedIn)),
+    scm.updateComment(comment.id, resolvedBody(comment.body, reviewedCommit, presentation)),
   );
   if (edited) outcome.deleted += 1;
   if (edited && scm.resolveComment !== undefined) {
@@ -268,6 +343,12 @@ async function retireComment(
   }
 }
 
+/** An earlier comment a fallback run left as it is, named in the summary. */
+interface KeptComment {
+  label: string;
+  commentId: string;
+}
+
 function looksLikeFinding(comment: ScmComment, presentation: Presentation): boolean {
   if (isResolvedTrace(comment.body)) return false;
   return (
@@ -276,22 +357,40 @@ function looksLikeFinding(comment: ScmComment, presentation: Presentation): bool
   );
 }
 
-/** Returns the comment id each posted finding lives in, where the host names one. */
+/**
+ * Returns the comment id each open finding lives in, for its task, and each
+ * finding's comment even on a resolved thread, for the summary's links.
+ */
 async function reconcileInlineComments(
   scm: ScmPort,
   presentation: Presentation,
   desired: ReadonlyMap<string, Finding>,
   outcome: PublishOutcome,
   settled: ReadonlySet<string> = new Set(),
-  resolvedIn?: string,
-  notRejudged?: string[],
-): Promise<Map<string, string>> {
+  reviewedCommit?: string,
+  notRejudged?: KeptComment[],
+): Promise<{ commentIds: Map<string, string>; anchors: Map<string, string> }> {
   const commentIds = new Map<string, string>();
-  const existing = await ownComments(
-    scm,
-    presentation,
-    (await scm.listInlineComments()).filter((comment) => looksLikeFinding(comment, presentation)),
+  const anchors = new Map<string, string>();
+  const listed = await scm.listInlineComments();
+  // a trace an earlier version wrote gains its links once
+  const oldTraces = listed.filter(
+    (comment) =>
+      isResolvedTrace(comment.body) &&
+      headingAnchor(comment.body) !== undefined &&
+      !sameComment(linkedTrace(comment.body, presentation), comment.body),
   );
+  const own = await ownComments(scm, presentation, [
+    ...listed.filter((comment) => looksLikeFinding(comment, presentation)),
+    ...oldTraces,
+  ]);
+  for (const trace of own.filter((comment) => oldTraces.includes(comment))) {
+    const edited = await cleanup(outcome, `link the trace in comment ${trace.id}`, () =>
+      scm.updateComment(trace.id, linkedTrace(trace.body, presentation)),
+    );
+    if (edited) outcome.updated += 1;
+  }
+  const existing = own.filter((comment) => !oldTraces.includes(comment));
   const claims = assignFingerprints(existing, presentation, desired);
   const seen = new Set<string>();
   for (const comment of existing) {
@@ -301,6 +400,7 @@ async function reconcileInlineComments(
       // a resolved thread or task is the team's call: left as is, and its finding is not reposted
       if (fingerprint !== undefined && finding !== undefined) {
         seen.add(fingerprint);
+        anchors.set(fingerprint, comment.id);
         outcome.unchanged += 1;
       }
       continue;
@@ -309,19 +409,21 @@ async function reconcileInlineComments(
       if (notRejudged !== undefined) {
         // a fallback run cannot tell whether a model's finding still holds
         const where = comment.line !== undefined ? `:${String(comment.line)}` : "";
-        notRejudged.push(
-          comment.path !== undefined ? `${comment.path}${where}` : `comment ${comment.id}`,
-        );
+        notRejudged.push({
+          label: comment.path !== undefined ? `${comment.path}${where}` : `comment ${comment.id}`,
+          commentId: comment.id,
+        });
         outcome.unchanged += 1;
       } else {
-        await retireComment(scm, comment, resolvedIn, outcome);
+        await retireComment(scm, comment, reviewedCommit, presentation, outcome);
       }
       continue;
     }
     seen.add(fingerprint);
     commentIds.set(fingerprint, comment.id);
+    anchors.set(fingerprint, comment.id);
     const body = renderCommentBody(finding, fingerprint, presentation);
-    if (body === comment.body || notRejudged !== undefined) {
+    if (sameComment(body, comment.body) || notRejudged !== undefined) {
       outcome.unchanged += 1;
     } else {
       await scm.updateComment(comment.id, body);
@@ -335,10 +437,13 @@ async function reconcileInlineComments(
       path: finding.file,
       line: finding.line,
     });
-    if (typeof id === "string") commentIds.set(fingerprint, id);
+    if (typeof id === "string") {
+      commentIds.set(fingerprint, id);
+      anchors.set(fingerprint, id);
+    }
     outcome.created += 1;
   }
-  return commentIds;
+  return { commentIds, anchors };
 }
 
 /** Short stable digest of a line's text, so a later run can tell whether it changed. */
@@ -358,6 +463,7 @@ export function taskContent(
   digest: string,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
+  // plain on purpose: no recorded host answer shows a task rendering Markdown
   const cite = finding.kind === "violation" ? finding.guidelineId : "observation";
   return `${severityWord(finding.severity, presentation)}: ${cite} in ${finding.file} line ${String(finding.line)}, ref ${fingerprint}.${digest}`;
 }
@@ -519,8 +625,8 @@ export async function publishReview(
     tasks?: boolean;
     /** A file's line at the reviewed commit; tasks resolve once it changed. */
     lineTextOf?: (file: string, line: number) => string | undefined;
-    /** The reviewed commit, named on the comment of a finding it resolved. */
-    resolvedIn?: string;
+    /** The reviewed commit, full hash: named on the comment of a finding it resolved, and where file links point. */
+    reviewedCommit?: string;
     /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
     dryRun: boolean;
   },
@@ -530,10 +636,14 @@ export async function publishReview(
     outcome.notices.push("dry run: no comments, summary or status will be posted");
     return outcome;
   }
-  const presentation = presentationFor(scm, input.presentation);
+  // filled as comments are reconciled, read when the summary renders
+  const commentOf = new Map<Finding, string>();
+  const presentation = presentationFor(scm, input.presentation, input.reviewedCommit, (finding) =>
+    commentOf.get(finding),
+  );
   const failed = input.outcome?.kind === "failed" || input.outcome?.kind === "capped";
   // a fallback leaves what an earlier model run posted as it is, and lists it in the summary
-  const notRejudged: string[] | undefined =
+  const notRejudged: KeptComment[] | undefined =
     input.factsOnly?.fallback !== undefined ? [] : undefined;
   let summaryInput: SummaryInput = input;
   if (input.comments !== false) {
@@ -564,21 +674,29 @@ export async function publishReview(
           await resolveStaleTasks(taskApi, own, desired, lineTextOf, outcome);
         }
       }
-      const commentIds = await reconcileInlineComments(
+      const { commentIds, anchors } = await reconcileInlineComments(
         scm,
         presentation,
         desired,
         outcome,
         settled,
-        input.resolvedIn,
+        input.reviewedCommit,
         notRejudged,
       );
+      for (const [fingerprint, id] of anchors) {
+        const finding = desired.get(fingerprint);
+        if (finding !== undefined) commentOf.set(finding, id);
+      }
       if (taskApi !== undefined) {
         await createTasks(taskApi, own, desired, commentIds, lineTextOf, outcome, presentation);
       }
       if (input.factsOnly !== undefined && notRejudged !== undefined && notRejudged.length > 0) {
-        notRejudged.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-        summaryInput = { ...input, factsOnly: { ...input.factsOnly, notRejudged } };
+        notRejudged.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+        const named = notRejudged.map(({ label, commentId }) => {
+          const url = scm.commentUrl?.(commentId);
+          return url === undefined ? label : `[${label}](${url})`;
+        });
+        summaryInput = { ...input, factsOnly: { ...input.factsOnly, notRejudged: named } };
       }
     }
     // a clean card carries a clean result, but never a facts only one, which must say so

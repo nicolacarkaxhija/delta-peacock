@@ -89,8 +89,12 @@ export interface ScmPort {
   readonly severityScale?: Readonly<Record<Severity, string>>;
   /** The token's own user id, matched against ScmComment.authorId. */
   currentUserId?(): Promise<string>;
-  /** Web link to a repository file on a branch, for guideline and docs links. */
-  fileUrl?(path: string, branch: string): string;
+  /** Web address of a repository file on a branch or at a commit, on one line when given. */
+  fileUrl?(path: string, ref: string, line?: number): string;
+  /** Web address of a commit. */
+  commitUrl?(sha: string): string;
+  /** Web address of one of the pull request's comments. */
+  commentUrl?(id: string): string;
   /** Inline review comments previously posted (any author; callers filter by marker). */
   listInlineComments(): Promise<ScmComment[]>;
   /** Resolves to the new comment's id (a string) where the host returns one. */

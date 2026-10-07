@@ -82,8 +82,9 @@ describe("publishing to github", () => {
       const comment = fake.reviewComments[0];
       expect(comment?.path).toBe("src/app.js");
       expect(comment?.line).toBe(2);
+      const rules = git(repo, "rev-parse", "main").trim();
       expect(comment?.body).toContain(
-        `**Major** · [no-console](${fake.baseUrl}/acme/widgets/blob/main/guidelines/no-console.md)`,
+        `**Major** · [no-console](${fake.baseUrl}/acme/widgets/blob/${rules}/guidelines/no-console.md)`,
       );
       expect(comment?.body).toContain("Replace the console.log with the logger.");
       expect(comment?.body).toContain("```suggestion");
@@ -94,7 +95,9 @@ describe("publishing to github", () => {
       expect(fake.issueComments).toHaveLength(1);
       const summary = fake.issueComments[0]?.body ?? "";
       expect(summary.startsWith("1 finding: 1 major\n")).toBe(true);
-      expect(summary).toContain("in `src/app.js` line 2: Console call added");
+      expect(summary).toContain(
+        `in [src/app.js line 2](${fake.baseUrl}/acme/widgets/pull/7#discussion_r${String(comment?.id)}): Console call added`,
+      );
       expect(summary).not.toContain("Blocked");
       expect(summary).toContain("<!-- delta-peacock:summary -->");
 
@@ -144,7 +147,9 @@ describe("publishing to github", () => {
       const fourth = await reviewAgainst(fake, repo, clean);
       expect(fourth.stderr).toContain("1 resolved");
       expect(fake.reviewComments).toHaveLength(1);
-      expect(fake.reviewComments[0]?.body).toMatch(/Resolved in `[0-9a-f]{12}`/);
+      expect(fake.reviewComments[0]?.body).toContain(
+        `Resolved in [${git(repo, "rev-parse", "--short=12", "HEAD").trim()}](${fake.baseUrl}/acme/widgets/commit/${git(repo, "rev-parse", "HEAD").trim()}): `,
+      );
       // a later run leaves the trace alone
       const fifth = await reviewAgainst(fake, repo, clean);
       expect(fifth.stderr).toContain("0 created, 0 updated, 0 resolved, 0 unchanged");
@@ -315,11 +320,20 @@ describe("publishing to github", () => {
     }
   });
 
-  it("a blocked gate names what must be resolved and points at the reviews doc", async () => {
+  it("a blocked gate names what must be resolved and links the reviews doc on the target", async () => {
     const fake = await startFakeGitHub();
     try {
-      const repo = makeScenario();
+      const repo = makeRepo();
+      write(repo, "guidelines/no-console.md", GUIDELINE);
       write(repo, "docs/reviews.md", "# Reviews\n");
+      commitAll(repo, "add guidelines and the reviews doc");
+      git(repo, "checkout", "-q", "-b", "feature");
+      write(
+        repo,
+        "src/app.js",
+        "function greet(name) {\n  console.log(name);\n  return name;\n}\n",
+      );
+      commitAll(repo, "add logging");
       const { code } = await reviewAgainst(
         fake,
         repo,
@@ -331,9 +345,22 @@ describe("publishing to github", () => {
       const summary = fake.issueComments[0]?.body ?? "";
       expect(summary).toContain("**Blocked: a major finding must be resolved.**");
       expect(summary).toContain(
-        `[docs/reviews.md](${fake.baseUrl}/acme/widgets/blob/main/docs/reviews.md)`,
+        `How reviews work and how to respond: [docs/reviews.md](${fake.baseUrl}/acme/widgets/blob/main/docs/reviews.md)`,
       );
       expect(fake.statuses[0]?.description).toBe("1 finding, 1 major. See the comments.");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("names a reviews doc the target does not hold yet without a link", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario();
+      write(repo, "docs/reviews.md", "# Reviews\n");
+      await reviewAgainst(fake, repo, FINDING_WITH_SUGGESTION, "--fail-on", "MAJOR");
+      const summary = fake.issueComments[0]?.body ?? "";
+      expect(summary).toContain("How reviews work and how to respond: docs/reviews.md\n");
     } finally {
       await fake.close();
     }
@@ -363,7 +390,9 @@ describe("publishing to github", () => {
       expect(fake.issueComments[0]?.body.startsWith("1 finding: 1 major\n")).toBe(true);
       expect(fake.issueComments[0]?.body).not.toContain("Automated review");
       expect(fake.statuses[0]?.context).toBe("Automated review");
-      expect(fake.reviewComments[0]?.body).toContain("/blob/main/guidelines/no-console.md");
+      expect(fake.reviewComments[0]?.body).toMatch(
+        /\/blob\/[0-9a-f]{40}\/guidelines\/no-console\.md\)/,
+      );
     } finally {
       await fake.close();
     }

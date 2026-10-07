@@ -87,7 +87,7 @@ function publishOn(
   scm: ScmPort,
   findings: readonly Finding[],
   lineTextOf: (file: string, line: number) => string | undefined,
-  resolvedIn?: string,
+  reviewedCommit?: string,
 ): ReturnType<Publish> {
   return publish(scm, {
     findings,
@@ -98,7 +98,7 @@ function publishOn(
     commitStatus: false,
     tasks: true,
     lineTextOf,
-    ...(resolvedIn !== undefined ? { resolvedIn } : {}),
+    ...(reviewedCommit !== undefined ? { reviewedCommit } : {}),
     dryRun: false,
   });
 }
@@ -113,7 +113,7 @@ export async function rerunProblems(
   prior: readonly PriorFinding[],
   current: readonly Finding[],
   lineTextOf: (file: string, line: number) => string | undefined,
-  resolvedIn: string,
+  reviewedCommit: string,
   publish: Publish = publishReview,
 ): Promise<string[]> {
   const scm = memoryBitbucket();
@@ -126,7 +126,7 @@ export async function rerunProblems(
     task: scm.tasks[index],
   }));
   const kept = new Set(current.map((one) => `${one.file}:${String(one.line)}`));
-  const outcome = await publishOn(publish, scm, current, lineTextOf, resolvedIn);
+  const outcome = await publishOn(publish, scm, current, lineTextOf, reviewedCommit);
   const problems: string[] = outcome.notices.map((notice) => `rerun notice: ${notice}`);
   for (const { finding, comment, task } of posted) {
     const where = `${finding.file}:${String(finding.line)}`;

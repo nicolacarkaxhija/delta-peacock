@@ -195,7 +195,7 @@ describe("summary rendering", () => {
     ).toBe(undefined);
   });
 
-  it("omits the doc pointer when there is no doc or no link", () => {
+  it("omits the doc pointer without a doc, and names the doc plainly where nothing links", () => {
     const noGuide: Presentation = { ...BITBUCKET_LOOK };
     delete noGuide.guidePath;
     const blocked: GateDecision = { threshold: "MAJOR", failing: 1, failed: true };
@@ -203,7 +203,8 @@ describe("summary rendering", () => {
     const noLinks: Presentation = { ...BITBUCKET_LOOK };
     delete noLinks.fileLink;
     const plain = summaryOf([violation()], blocked, noLinks);
-    expect(plain).not.toContain("How reviews work");
+    expect(plain).toContain(`How reviews work and how to respond: ${String(noLinks.guidePath)}`);
+    expect(plain).not.toContain("](");
     expect(plain).toContain("- **Major** `no-console` in");
   });
 

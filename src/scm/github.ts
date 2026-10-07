@@ -7,6 +7,7 @@ import type {
   StatusState,
 } from "./port.js";
 import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
+import { encodeFilePath } from "./addresses.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface GitHubPortOptions {
@@ -38,6 +39,9 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
   const base = normalizeBaseUrl(options.baseUrl, "https://api.github.com");
   const repo = options.repository;
   const pr = String(options.pullRequest);
+  // api.github.com serves github.com; an enterprise API lives under <host>/api/v3
+  const web = `${base === "https://api.github.com" ? "https://github.com" : base.replace(/\/api\/v3$/, "")}/${repo}`;
+  const pullRequestUrl = `${web}/pull/${pr}`;
   let headSha: string | undefined;
 
   async function request(method: string, path: string, body?: unknown): Promise<unknown> {
@@ -90,6 +94,11 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
     return headSha;
   }
 
+  function fileUrl(file: string, ref: string, line?: number): string {
+    const anchor = line === undefined ? "" : `#L${String(line)}`;
+    return `${web}/blob/${encodeURIComponent(ref)}/${encodeFilePath(file)}${anchor}`;
+  }
+
   const toComment = (comment: GitHubComment): ScmComment => ({
     id: String(comment.id),
     body: comment.body,
@@ -101,14 +110,15 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
     async listInlineComments(): Promise<ScmComment[]> {
       return (await paginate(`/repos/${repo}/pulls/${pr}/comments`)).map(toComment);
     },
-    async createInlineComment(comment: NewInlineComment): Promise<void> {
-      await request("POST", `/repos/${repo}/pulls/${pr}/comments`, {
+    async createInlineComment(comment: NewInlineComment): Promise<string> {
+      const created = (await request("POST", `/repos/${repo}/pulls/${pr}/comments`, {
         body: comment.body,
         commit_id: await resolveHeadSha(),
         path: comment.path,
         line: comment.line,
         side: "RIGHT",
-      });
+      })) as GitHubComment;
+      return String(created.id);
     },
     async updateComment(id: string, body: string): Promise<void> {
       await request("PATCH", `/repos/${repo}/pulls/comments/${id}`, { body });
@@ -130,13 +140,15 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
         state,
         description,
         context: name ?? DEFAULT_DISPLAY_NAME,
+        target_url: pullRequestUrl,
       });
     },
-    fileUrl(file: string, branch: string): string {
-      // api.github.com serves github.com; an enterprise API lives under <host>/api/v3
-      const web =
-        base === "https://api.github.com" ? "https://github.com" : base.replace(/\/api\/v3$/, "");
-      return `${web}/${repo}/blob/${encodeURIComponent(branch)}/${encodeURI(file)}`;
+    fileUrl,
+    commitUrl(sha: string): string {
+      return `${web}/commit/${encodeURIComponent(sha)}`;
+    },
+    commentUrl(id: string): string {
+      return `${pullRequestUrl}#discussion_r${id}`;
     },
     async listCommentSignals(): Promise<CommentSignal[]> {
       const all = await paginate(`/repos/${repo}/pulls/${pr}/comments`);
