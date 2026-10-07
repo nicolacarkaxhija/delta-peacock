@@ -41,6 +41,11 @@ from a clean checkout; a red line blocks it.
   per run and times a silent provider out after `model.timeoutSeconds`; a review with a working
   model posts and exits as before. On its own:
   `pnpm exec vitest run tests/model-fallback`.
+- `linked references`: every commit, file and line, guideline and finding comment the reviewer
+  writes is a link where the host can build its address and plain text where it cannot; a task
+  text stays plain; comments and summaries an earlier version wrote are claimed and updated in
+  place with no second comment or task. On its own:
+  `pnpm exec vitest run tests/linked-references tests/guideline-sources`.
 
 ## Release
 
