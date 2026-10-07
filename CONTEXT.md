@@ -89,7 +89,7 @@ A selectable way of giving the model awareness beyond the diff: repo map, agenti
 Several provider and model pairs reviewing the same changeset. Union merges every member's findings; judge has one model reconcile them.
 
 **Cost guard**:
-The pre-flight check that blocks a review expected to exceed the per-review or monthly spending cap.
+The check that stops a review's model calls once their actual cost reaches the per-review cap or what is left of the monthly cap, and blocks every call when the month has already reached it. Facts are checked and posted either way.
 
 **Spend source**:
 Where month-to-date spending is read from when the monthly cap is checked.

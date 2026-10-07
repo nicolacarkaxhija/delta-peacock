@@ -225,11 +225,18 @@ the model cannot run:
 | a rate or quota limit    | an answer of 429, or one that names a rate limit, a quota, throttling or the credit balance, after the retries | the model provider answered with a rate or quota limit | `rate or quota limit` |
 | a timeout                | a request past `model.timeoutSeconds` (default 60), `ETIMEDOUT`, or a connect, header or body timeout          | the model call timed out                               | `timed out`           |
 | a refused credential     | an answer of 401 or 403, or one that says the key or the security token is invalid                             | the credential was refused                             | `credential refused`  |
-| the cost cap             | the cost guard stops the model part before any call (`cost.maxPerReview` or `cost.monthlyCap`)                 | the review reached its cost cap                        | `cost cap`            |
+| the cost cap             | the actual cost of the review's calls reached `cost.maxPerReview` or what is left of `cost.monthlyCap`         | the review reached its cost cap                        | `cost cap`            |
 
-Facts cost nothing, so a cap never drops them: a review the cost guard stops still runs every
-check, posts and counts its fact findings and gates on them like any other fallback, and its report
-carries `budget.blocked` with the reasons next to `factsOnly.fallback: cost-cap`.
+Facts cost nothing, so a cap never drops them. The cost guard prices every reply the review
+receives (the batches, the judge and the exclusion check) at the configured rates and refuses the
+next call once the sum reaches `cost.maxPerReview`, or what is left of `cost.monthlyCap` for the
+month, whichever is lower; calls already in flight finish. The batches that answered keep their
+findings, the summary names the files no model reviewed, the judge's candidates are left to a
+person, calibration is skipped, and the report carries `budget.stopped` with the spend and the
+limit. A month already at its cap blocks every call: the review checks facts only and the report
+carries `budget.blocked`. Either way every check runs and its fact findings are posted, counted
+and gated like in any other fallback. An ensemble sends its calls as one wave, so for an ensemble
+`cost.maxPerReview` still compares the estimate with the cap before any call.
 
 Any other failure, an unreadable reply among them, fails the run as before, and so do the
 ensemble and calibration calls, which keep their own handling. The log says

@@ -16,6 +16,8 @@ export interface CostGuardDecision {
   allowed: boolean;
   estimated: number;
   monthToDate?: number;
+  /** USD the review may still spend on actual usage; Infinity when no cap bites. */
+  limit: number;
   reasons: string[];
   notices: string[];
 }
@@ -33,6 +35,8 @@ export function modelCallCount(config: Config): number {
 export interface CostGuardOptions {
   /** Planned diff batches; each is its own call carrying the system prefix. */
   batches?: number;
+  /** `estimate` blocks on the priced estimate; `actual` only on a month already at its cap. */
+  basis?: "estimate" | "actual";
   /** Injected for tests; production reads the real Cost Explorer. */
   costExplorerSend?: CostExplorerSend;
 }
@@ -65,8 +69,11 @@ export async function checkCostGuard(
     rates,
   ).total;
   const estimated = perStrategy * modelCallCount(config);
+  const actual = options.basis === "actual";
+  // what the running cost may reach before the next call is refused
+  let limit = config.cost.maxPerReview > 0 ? config.cost.maxPerReview : Number.POSITIVE_INFINITY;
 
-  if (config.cost.maxPerReview > 0 && estimated > config.cost.maxPerReview) {
+  if (!actual && config.cost.maxPerReview > 0 && estimated > config.cost.maxPerReview) {
     reasons.push(
       `estimated cost ${estimated.toFixed(4)} USD exceeds cost.maxPerReview ${config.cost.maxPerReview.toFixed(4)} USD`,
     );
@@ -85,7 +92,13 @@ export async function checkCostGuard(
       }
     }
     monthToDate ??= readMonthSpend(counterPath, monthKey(now));
-    if (monthToDate + estimated > config.cost.monthlyCap) {
+    limit = Math.min(limit, config.cost.monthlyCap - monthToDate);
+    if (actual && monthToDate >= config.cost.monthlyCap) {
+      reasons.push(
+        `month-to-date ${monthToDate.toFixed(4)} USD reached cost.monthlyCap ${config.cost.monthlyCap.toFixed(4)} USD`,
+      );
+    }
+    if (!actual && monthToDate + estimated > config.cost.monthlyCap) {
       reasons.push(
         `month-to-date ${monthToDate.toFixed(4)} USD plus the estimate exceeds cost.monthlyCap ${config.cost.monthlyCap.toFixed(4)} USD`,
       );
@@ -96,6 +109,8 @@ export async function checkCostGuard(
     allowed: reasons.length === 0,
     estimated,
     ...(monthToDate !== undefined ? { monthToDate } : {}),
+    // with no rates every cost reads zero, so no cap can bite
+    limit: anyRateConfigured(rates) ? limit : Number.POSITIVE_INFINITY,
     reasons,
     notices,
   };

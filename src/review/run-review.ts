@@ -27,6 +27,7 @@ import { buildModelPort, noModel } from "../model/build.js";
 import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/port.js";
 import { withFetched } from "../model/generate.js";
 import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
+import { ceilingReason, metered, spendCeiling } from "../cost/ceiling.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../cost/counter.js";
 import { addUsage } from "../model/usage.js";
@@ -224,20 +225,29 @@ export async function runReview(
   const now = deps.clock?.() ?? new Date();
   // set when the cost guard stops the model part; the facts still run and post
   let blocked: ReviewReport["budget"];
+  // an ensemble sends one wave of calls, so only its estimate can be capped
+  let limit = Number.POSITIVE_INFINITY;
   if (!factsOnly && guardActive(config)) {
-    const decision = await checkCostGuard(config, request, now, { batches: batchCount });
+    const decision = await checkCostGuard(config, request, now, {
+      batches: batchCount,
+      basis: config.ensemble.enabled ? "estimate" : "actual",
+    });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
+    limit = decision.limit;
     if (!decision.allowed) {
       for (const reason of decision.reasons) deps.out(`budget: ${reason}\n`);
       deps.out("review blocked by the cost guard before any model call; checking facts only\n");
       blocked = {
         blocked: true,
-        estimated: decision.estimated,
         ...(decision.monthToDate !== undefined ? { monthToDate: decision.monthToDate } : {}),
         reasons: decision.reasons,
       };
     }
   }
+  const ceiling = spendCeiling(limit, modelRates(config));
+  let meteredPort: ModelPort | undefined;
+  // the batches, the judge and the exclusion check spend from one ceiling
+  const modelPort = (): ModelPort => (meteredPort ??= metered(reviewPort(deps, config), ceiling));
 
   let executed: ExecuteResult;
   // with every applicable guideline checked, an open call could only produce what is dropped
@@ -257,7 +267,7 @@ export async function runReview(
     executed =
       allChecked || factsOnly || blocked !== undefined
         ? idleExecution()
-        : await executeReview(deps, config, request, passes, batchCount, parseOptions);
+        : await executeReview(deps, config, modelPort, request, passes, batchCount, parseOptions);
     if (executed.outage !== undefined) {
       const { why, detail } = executed.outage;
       if (!fallsBack(why)) throw new ModelUnavailableError(why, detail);
@@ -295,12 +305,11 @@ export async function runReview(
   // two findings that quote one line under one guideline are one finding
   const placed = dedupeFindings(placeFindings(open.kept, linesOfFile));
   // a case the guideline says is never a finding is held against every finding it could excuse
-  let exclusionPort: ModelPort | undefined;
   const excluded =
     noOpenReview || placed.length === 0
       ? undefined
       : await applyExclusions(placed, {
-          port: () => (exclusionPort ??= reviewPort(deps, config)),
+          port: modelPort,
           guidelinesById: parseOptions.guidelinesById,
           linesOf: linesOfFile,
           concurrency: PASS_CONCURRENCY,
@@ -321,7 +330,7 @@ export async function runReview(
           files: fromApi ? () => [] : () => trackedFiles(deps.cwd),
           ...(declared !== undefined ? { declared } : {}),
           configFiles: [config.review.repoConfigPath, "playwright.config.ts"],
-          ...(noOpenReview ? {} : { port: () => reviewPort(deps, config) }),
+          ...(noOpenReview ? {} : { port: modelPort }),
           redact: (text) =>
             redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
               strict: config.redaction.strict,
@@ -442,6 +451,7 @@ export async function runReview(
     parsed.findings,
     redacted.text,
     usage,
+    ceiling.reached(),
   );
   const filtered = finalized.filtered;
   const baselined = finalized.baselined;
@@ -562,6 +572,16 @@ export async function runReview(
       ...(checks !== undefined ? { checks: checks.tally } : {}),
       ...(facts !== undefined ? { factsOnly: facts } : {}),
       ...(blocked !== undefined ? { budget: blocked } : {}),
+      ...(blocked === undefined && ceiling.reached()
+        ? {
+            budget: {
+              stopped: true as const,
+              spent: ceiling.spent(),
+              limit: ceiling.limit,
+              reasons: [ceilingReason(ceiling)],
+            },
+          }
+        : {}),
     });
     if (config.output.report !== undefined) {
       writeFileSync(
@@ -892,6 +912,7 @@ interface ExecuteResult {
 async function executeReview(
   deps: ReviewDeps,
   config: Config,
+  modelPort: () => ModelPort,
   request: ModelRequest,
   passes: readonly PlannedPass[],
   batchCount: number,
@@ -910,12 +931,11 @@ async function executeReview(
     };
   }
 
-  const modelPort = reviewPort(deps, config);
   if (batchCount > 1) {
     deps.err(`budget: reviewing the diff in ${String(batchCount)} batch(es)\n`);
   }
   return {
-    ...(await runPasses(deps, modelPort, passes, parseOptions)),
+    ...(await runPasses(deps, modelPort(), passes, parseOptions)),
     ensembleMembers: undefined,
   };
 }
@@ -951,6 +971,10 @@ function assembleFacts(
 
 /** The one log line a review prints when its model could not run. */
 function logFallback(deps: ReviewDeps, outage: ModelOutage): void {
+  if (outage.why === "cost-cap") {
+    deps.err(`cost cap: ${outage.detail}; no further model call, the rest checks facts only\n`);
+    return;
+  }
   deps.err(
     `model unavailable (${fallbackReason(outage.why)}): ${String(outage.detail.split("\n")[0])}; falling back to facts only\n`,
   );
@@ -1181,12 +1205,16 @@ async function finalizeFindings(
   findings: readonly Finding[],
   diffText: string,
   usageIn: ModelUsage | undefined,
+  capReached: boolean,
 ): Promise<FinalizedFindings> {
   const partitioned = partitionFindings(findings, config);
   const filtered = partitioned.filtered;
   let kept = partitioned.kept;
   let usage = usageIn;
-  if (config.calibration.enabled) {
+  if (config.calibration.enabled && capReached) {
+    deps.err("calibration skipped: the review reached its cost cap\n");
+  }
+  if (config.calibration.enabled && !capReached) {
     const ref = config.calibration.model;
     const calibrationPort = ref
       ? (deps.modelPortFor?.(ref) ??

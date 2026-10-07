@@ -82,33 +82,120 @@ async function reviewWith(
   return { code, stdout, stderr, requests };
 }
 
-describe("per-review cap", () => {
-  it("blocks before any model call, writes the reason everywhere, exits clean in advisory", async () => {
-    const repo = makeScenario();
-    const { code, stdout, requests } = await reviewWith(
-      repo,
-      { DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001" },
-      { report: "b.json" },
-    );
-    expect(code).toBe(0);
-    expect(requests).toBe(0); // nothing reached the model
-    expect(stdout).toContain("exceeds cost.maxPerReview");
-    expect(stdout).toContain("blocked by the cost guard");
-    const report = JSON.parse(readFileSync(path.join(repo, "b.json"), "utf8")) as ReviewReport;
-    expect(report.budget?.blocked).toBe(true);
-    expect(report.budget?.reasons[0]).toContain("maxPerReview");
-    expect(report.findings).toEqual([]);
-  });
+/** Six changed files, one per batch, and a port that cites the file of each batch it is asked. */
+function sixFiles(): string {
+  const repo = makeRepo();
+  write(repo, "guidelines/no-console.md", GUIDELINE);
+  commitAll(repo, "rules");
+  git(repo, "checkout", "-q", "-b", "feature");
+  for (let index = 1; index <= 6; index += 1) {
+    write(repo, `src/f${String(index)}.js`, "console.log('x');\n");
+  }
+  commitAll(repo, "change");
+  return repo;
+}
 
-  it("checks facts only under a gate, which no fact fails here", async () => {
-    const repo = makeScenario();
-    const { code, requests, stdout } = await reviewWith(repo, {
-      DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001",
-      DELTA_PEACOCK_GATE_FAIL_ON: "MAJOR",
+const citing: ModelPort = {
+  complete(request) {
+    const file = /\+\+\+ b\/(\S+)/.exec(request.user)?.[1] ?? "";
+    const finding = {
+      guidelineId: "no-console",
+      file,
+      line: 1,
+      quote: "console.log('x');",
+      guidelineQuote: "Use the logger.",
+      title: "t",
+      body: "b",
+    };
+    return Promise.resolve({
+      text: JSON.stringify({ findings: [finding] }),
+      usage: { inputTokens: 1000, outputTokens: 100 },
+    });
+  },
+};
+
+async function reviewBatches(
+  env: Record<string, string>,
+): Promise<RunResult & { report: ReviewReport }> {
+  const repo = sixFiles();
+  let stdout = "";
+  let stderr = "";
+  let requests = 0;
+  const code = await runCli(["review", "--report", "r.json"], {
+    cwd: repo,
+    env: {
+      DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+      DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+      DELTA_PEACOCK_REVIEW_MAX_FILES_PER_BATCH: "1",
+      ...env,
+    },
+    out: (text) => {
+      stdout += text;
+    },
+    err: (text) => {
+      stderr += text;
+    },
+    modelPort: {
+      complete(request) {
+        requests += 1;
+        return citing.complete(request);
+      },
+    },
+  });
+  const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+  return { code, stdout, stderr, requests, report };
+}
+
+describe("per-review cap", () => {
+  it("stops further calls once the actual cost reaches it and keeps what was found", async () => {
+    // one call costs 0.0045 USD, so the first wave of four crosses a 0.001 cap
+    const { code, stdout, stderr, requests, report } = await reviewBatches({
+      DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.001",
     });
     expect(code).toBe(0);
-    expect(requests).toBe(0);
-    expect(stdout).toContain("the review reached its cost cap");
+    expect(requests).toBe(4); // the calls in flight finish, the last two batches are refused
+    expect(report.findings.map((finding) => finding.file)).toEqual([
+      "src/f1.js",
+      "src/f2.js",
+      "src/f3.js",
+      "src/f4.js",
+    ]);
+    expect(report.budget).toMatchObject({ stopped: true, limit: 0.001 });
+    expect(report.budget?.spent).toBeCloseTo(0.018);
+    expect(report.factsOnly).toMatchObject({
+      fallback: "cost-cap",
+      modelReviewed: "part",
+      unjudgedFiles: ["src/f5.js", "src/f6.js"],
+    });
+    expect(stderr).toContain("cost cap: the running cost 0.0180 USD reached the cap of 0.0010 USD");
+    expect(stdout).toContain(
+      "The model reviewed part of the change, then could not run (the review reached its cost cap): no model reviewed src/f5.js, src/f6.js",
+    );
+  });
+
+  it("lets every batch run while the cost stays under it", async () => {
+    const { requests, report } = await reviewBatches({ DELTA_PEACOCK_COST_MAX_PER_REVIEW: "1" });
+    expect(requests).toBe(6);
+    expect(report.findings).toHaveLength(6);
+    expect(report.budget).toBeUndefined();
+    expect(report.factsOnly).toBeUndefined();
+  });
+
+  it("no longer blocks on the estimate before the first call", async () => {
+    const repo = makeScenario();
+    const { requests, stdout } = await reviewWith(repo, {
+      DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001",
+    });
+    expect(requests).toBe(1);
+    expect(stdout).not.toContain("blocked by the cost guard");
+  });
+
+  it("gates on the findings the model gave before the cap", async () => {
+    const { code } = await reviewBatches({
+      DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.001",
+      DELTA_PEACOCK_GATE_FAIL_ON: "MAJOR",
+    });
+    expect(code).toBe(2);
   });
 
   it("multiplies the estimate by the ensemble call count", async () => {
@@ -196,10 +283,21 @@ describe("monthly cap and the counter", () => {
   const JULY = () => new Date(Date.UTC(2026, 6, 15));
   const AUGUST = () => new Date(Date.UTC(2026, 7, 1));
 
-  it("blocks when month-to-date plus the estimate exceeds the cap, and a new month unblocks", async () => {
+  it("stops calls once the month's remaining cap is spent", async () => {
+    const counter = counterFile();
+    await recordSpend(counter, monthKey(new Date()), 0.999);
+    const { requests, report } = await reviewBatches({
+      DELTA_PEACOCK_COST_MONTHLY_CAP: "1",
+      DELTA_PEACOCK_COST_COUNTER_PATH: counter,
+    });
+    expect(requests).toBe(4);
+    expect(report.budget?.limit).toBeCloseTo(0.001);
+  });
+
+  it("blocks every call once the month reached the cap, and a new month unblocks", async () => {
     const repo = makeScenario();
     const counter = counterFile();
-    await recordSpend(counter, monthKey(JULY()), 0.99);
+    await recordSpend(counter, monthKey(JULY()), 1);
     const env = {
       DELTA_PEACOCK_COST_MONTHLY_CAP: "1",
       DELTA_PEACOCK_COST_COUNTER_PATH: counter,

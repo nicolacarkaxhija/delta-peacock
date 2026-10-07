@@ -76,11 +76,17 @@ export interface ReviewReport {
     mode: "union" | "judge";
     members: { provider: string; id: string; ok: boolean; usage?: ModelUsage; error?: string }[];
   };
-  /** Present when the cost guard blocked the review before any model call. */
+  /** Present when a cost cap stopped the model part: before any call, or once the running cost reached it. */
   budget?: {
-    blocked: true;
-    estimated: number;
+    /** Stopped before any model call. */
+    blocked?: true;
+    /** Stopped once the running cost reached the cap; the calls already answered stand. */
+    stopped?: true;
     monthToDate?: number;
+    /** USD spent when the cap stopped further calls. */
+    spent?: number;
+    /** USD the review could spend. */
+    limit?: number;
     reasons: string[];
   };
   /** How many agentic context tools the model invoked. */

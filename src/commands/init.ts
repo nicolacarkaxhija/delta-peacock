@@ -80,8 +80,8 @@ export function renderConfigYaml(answers: WalkthroughAnswers): string {
     lines.push(
       "",
       "cost:",
-      "  # reviews estimated above this many USD are blocked before any model call;",
-      "  # set the rate* fields for your model so the estimate has prices to work with",
+      "  # once a review has spent this many USD it makes no further model call;",
+      "  # set the rate* fields for your model so its usage has prices to work with",
       `  maxPerReview: ${String(answers.maxPerReview)}`,
     );
   }

@@ -93,8 +93,8 @@ const CAP_QUESTION: Question<number> = {
   intro: [
     "Cap spending per review?",
     "  none       no ceiling; every review runs",
-    "  an amount  a USD ceiling; a review estimated above it is blocked before any",
-    "             model call (set the cost.rate* fields later so the estimate has prices)",
+    "  an amount  a USD ceiling; a review that has spent it makes no further model",
+    "             call (set the cost.rate* fields later so its usage has prices)",
   ],
   prompt: "per-review cap in USD [none]",
   parse: (input) => {
