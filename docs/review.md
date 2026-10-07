@@ -17,7 +17,7 @@ model.
 ## The workflow
 
 `.github/workflows/dogfood.yml` builds the reviewer from the pull request and runs it with the
-scm, the model and the cost caps from its environment: Anthropic's Haiku 4.5 with a 0.10 USD cap
+scm, the model and the cost caps from its environment: Anthropic's Sonnet 4.5 with a 0.10 USD cap
 per review. The config leaves those three out on purpose, since two tests load it from the
 repository root and expect the defaults.
 GitHub Actions are off on the owner's account for now, so the review is dormant until they are
@@ -35,7 +35,7 @@ status `Facts only, no model: needs a person's approval`, and the summary asks f
 | `GITHUB_TOKEN`                                             | the workflow's own token posts the comments         |
 
 To review on Amazon Bedrock as the reference configuration does, set `DELTA_PEACOCK_MODEL_PROVIDER` to
-`bedrock` and `DELTA_PEACOCK_MODEL_ID` to `eu.anthropic.claude-haiku-4-5-20251001-v1:0` in
+`bedrock` and `DELTA_PEACOCK_MODEL_ID` to `eu.anthropic.claude-sonnet-4-5-20250929-v1:0` in
 `dogfood.yml`, and pass `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`
 (`eu-central-1`) as secrets.
 
