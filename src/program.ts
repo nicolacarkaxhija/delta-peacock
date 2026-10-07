@@ -343,6 +343,11 @@ export function buildProgram(deps: RuntimeDeps): Command {
     .option("--concurrency <n>", "reviews in flight at once", "3")
     .option("--report <path>", "write the outcome as JSON")
     .option("--provider <name>", "run every case under this model provider; none scores facts only")
+    .option(
+      "--anchor-window <lines>",
+      "a finding this many lines either side of an expected span still counts",
+      "0",
+    )
     .action(
       async (options: {
         cases: string;
@@ -352,12 +357,14 @@ export function buildProgram(deps: RuntimeDeps): Command {
         concurrency: string;
         report?: string;
         provider?: string;
+        anchorWindow: string;
       }) => {
         const { runBacktestCommand } = await import("./commands/backtest.js");
         const code = await runBacktestCommand(deps, {
           cases: options.cases,
           repeats: Number(options.repeats),
           concurrency: Number(options.concurrency),
+          anchorWindow: Number(options.anchorWindow),
           version: manifest.version,
           ...(options.config !== undefined ? { config: options.config } : {}),
           ...(options.only !== undefined

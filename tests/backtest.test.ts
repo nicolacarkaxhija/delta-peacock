@@ -186,6 +186,20 @@ describe("scoring a replay", () => {
     expect(scoreRun([right], [want], [])).toMatchObject({ right: 1, wrong: [] });
   });
 
+  it("counts a finding a few lines beside the span as right within the anchor window", () => {
+    const want = { file: "a.ts", line: 10, guidelineId: "g" };
+    expect(scoreRun([at(12)], [want], [])).toMatchObject({ right: 0, missed: [want] });
+    expect(scoreRun([at(12)], [want], [], 2)).toMatchObject({ right: 1, wrong: [], missed: [] });
+    expect(scoreRun([at(13)], [want], [], 2).wrong[0]?.reason).toBe("not in the human judgement");
+  });
+
+  it("gives a finding inside the window to the nearest open span", () => {
+    const far = { file: "a.ts", line: 10, guidelineId: "g" };
+    const near = { file: "a.ts", line: 14, guidelineId: "g" };
+    const score = scoreRun([at(13), at(9)], [far, near], [], 3);
+    expect(score).toMatchObject({ right: 2, wrong: [], missed: [] });
+  });
+
   it("lists what nobody found as missed", () => {
     const score = scoreRun([], [{ file: "a.ts", line: 1 }], []);
     expect(score.missed).toHaveLength(1);
@@ -344,6 +358,13 @@ describe("the backtest command", () => {
     expect(summary.cases).toHaveLength(2);
     expect(existsSync(path.join(dir, "runs", "2026-09-25T12-00-00", "a.r1.log"))).toBe(true);
     expect(io.err.join("")).toMatch(/backtest: a\.r1 1 found, 0 wrong, 0 missed/);
+  });
+
+  it("refuses an anchor window that is not a whole number of lines", async () => {
+    const dir = makeCases({ a: {} });
+    await expect(
+      runBacktestCommand(testDeps(dir, {}, {}), { ...options(dir), anchorWindow: -1 }),
+    ).rejects.toThrow("--anchor-window takes a whole number of lines, 0 or more");
   });
 
   it("writes the baseline on a pass and fails a later run whose recall fell under it", async () => {

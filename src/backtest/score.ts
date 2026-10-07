@@ -32,12 +32,18 @@ interface Span {
   endLine?: number | undefined;
 }
 
-function covers(entry: Span, finding: Pick<ReplayedFinding, "file" | "line">): boolean {
+/** True when the finding sits on the span, or at most `window` lines before or after it. */
+function covers(entry: Span, finding: Pick<ReplayedFinding, "file" | "line">, window = 0): boolean {
   return (
     entry.file === finding.file &&
-    finding.line >= entry.line &&
-    finding.line <= (entry.endLine ?? entry.line)
+    finding.line >= entry.line - window &&
+    finding.line <= (entry.endLine ?? entry.line) + window
   );
+}
+
+/** Lines between a finding and a span; zero on the span. */
+function distance(entry: Span, line: number): number {
+  return Math.max(0, entry.line - line, line - (entry.endLine ?? entry.line));
 }
 
 function sameGuideline(
@@ -65,19 +71,28 @@ function contentProblem(want: ExpectedFinding, have: ReplayedFinding): string | 
 
 /**
  * Scores one replayed review against the human judgement. Every finding is
- * either right (on an expected span, same guideline, severity and wording
- * checks hold) or wrong, named with its reason; nothing is left unjudged.
+ * either right (on an expected span or within `window` lines of it, same
+ * guideline, severity and wording checks hold) or wrong, named with its
+ * reason; nothing is left unjudged. The nearest open span wins.
  */
 export function scoreRun(
   produced: readonly ReplayedFinding[],
   expected: readonly ExpectedFinding[],
   noFinding: readonly NoFinding[],
+  window = 0,
 ): RunScore {
   const open = [...expected];
   const wrong: WrongFinding[] = [];
   let right = 0;
   for (const finding of produced) {
-    const index = open.findIndex((want) => covers(want, finding) && sameGuideline(want, finding));
+    let index = -1;
+    for (const [at, want] of open.entries()) {
+      if (!covers(want, finding, window) || !sameGuideline(want, finding)) continue;
+      const nearest = open[index];
+      if (nearest === undefined || distance(want, finding.line) < distance(nearest, finding.line)) {
+        index = at;
+      }
+    }
     const want = open[index];
     if (want !== undefined) {
       open.splice(index, 1);
@@ -90,7 +105,7 @@ export function scoreRun(
       (entry) => covers(entry, finding) && sameGuideline(entry, finding),
     );
     const repeated = expected.some(
-      (entry) => covers(entry, finding) && sameGuideline(entry, finding),
+      (entry) => covers(entry, finding, window) && sameGuideline(entry, finding),
     );
     wrong.push({
       finding,
@@ -119,8 +134,9 @@ export function scoreFacts(
   expected: readonly ExpectedFinding[],
   noFinding: readonly NoFinding[],
   reach: FactsReach,
+  window = 0,
 ): FactsScore {
-  const score = scoreRun(produced, expected, noFinding);
+  const score = scoreRun(produced, expected, noFinding, window);
   const judgement: ExpectedFinding[] = [];
   const missed: ExpectedFinding[] = [];
   for (const want of score.missed) {

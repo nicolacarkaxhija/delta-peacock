@@ -6,7 +6,7 @@ it. A release that finds something new that a person judged wrong, drifts betwee
 less than the last passing run fails the backtest.
 
 ```
-delta-peacock backtest --cases <dir> [--repeats 3] [--config <file>] [--only a,b] [--concurrency 3] [--report out.json] [--provider none]
+delta-peacock backtest --cases <dir> [--repeats 3] [--config <file>] [--only a,b] [--concurrency 3] [--report out.json] [--provider none] [--anchor-window 0]
 ```
 
 `--provider` runs every case under that model provider. With `none` the run checks facts only and
@@ -57,6 +57,12 @@ A finding is right when it sits on an expected span (`line` to `endLine`), cites
 guideline, has the expected severity, mentions every `mustMention` text and suggests none of the
 `mustNotSuggest` texts. Every other finding is wrong and is named with its reason; one on a
 `noFinding` span says it was judged wrong before. An expected finding nobody produced is missed.
+
+A person comments on the line they read, which is not always the line the code breaks: the call
+one line below, the opening of the block above. `--anchor-window <lines>` widens every expected
+span by that many lines either way, so a finding on such a nearby line counts as right. A
+finding inside the window of two spans goes to the nearest one. The window is 0 by default, it
+never widens a `noFinding` span, and the run's `summary.json` records it as `anchorWindow`.
 
 ## What a run does
 
