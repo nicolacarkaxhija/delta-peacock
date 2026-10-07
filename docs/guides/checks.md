@@ -46,6 +46,84 @@ counts when it names the locator vocabulary (test id, role, class, attribute, sh
 gives a because. A helper call with a `suffix` builds a derived hook attribute that `getByTestId`
 cannot read; it is still CSS, so it needs the same comment.
 
+## A pattern the guideline declares
+
+A guideline whose rule a regular expression can state declares the check in its own frontmatter,
+under `check:`, and needs no binding under `review.checks`. Every finding is a measured fact: no
+model, no judge and no drift, so it counts as decided by facts in the backtest and in the facts
+only mode.
+
+```markdown
+---
+id: logger-category
+severity: MAJOR
+paths: ["cartridges/**"]
+check:
+  type: pattern
+  files: ["cartridges/**/*.js"]
+  added: "getLogger\\(\\s*['\"][^'\"]+['\"]\\s*\\)"
+  unless: "getLogger\\([^,]+,\\s*['\"]"
+  message: "getLogger takes a category as its second argument"
+---
+
+# Loggers name their category
+
+getLogger takes a category as its second argument, so the log lines of one area can be filtered.
+```
+
+| Key          | Meaning                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------ |
+| `type`       | `pattern`, the one type a guideline declares itself                                                          |
+| `files`      | path globs on top of the guideline's own `paths` and `languages`; left out, every file the guideline covers  |
+| `added`      | a regex no added line may match; every match is a finding on that line                                       |
+| `unless`     | a regex whose match on the same line excuses an `added` match                                                |
+| `absent`     | a regex a changed file must match somewhere; a file that never does is one finding on its first added line   |
+| `scope`      | `line` for `added`, `file` for `absent`; left out, it follows the key                                        |
+| `maxPerFile` | at most this many findings in one file; the last one says how many more lines match                          |
+| `message`    | the guideline sentence every finding quotes and the finding's title; the guideline must say it word for word |
+
+A guideline declares exactly one of `added` and `absent`. The pattern reads every file type, so
+templates, XML and properties files can carry one. A finding has the guideline's severity and
+quotes its `message` as the `Guideline: ...` line, exactly like the checks above.
+
+Two more rules a pattern decides. Rhino era constructs:
+
+```yaml
+check:
+  type: pattern
+  files: ["cartridges/**/*.js"]
+  added: '\b(?:importPackage|importClass)\s*\('
+  message: "Scripts load modules with require, never with importPackage or importClass."
+```
+
+Writes to `session.custom` outside an allowlist of keys:
+
+```yaml
+check:
+  type: pattern
+  files: ["cartridges/**/*.js"]
+  added: 'session\.custom\.\w+\s*=[^=]'
+  unless: 'session\.custom\.(?:basketToken|lastSearch)\s*='
+  message: "Only basketToken and lastSearch live in session.custom."
+```
+
+And a file rule with `absent`:
+
+```yaml
+check:
+  type: pattern
+  files: ["cartridges/**/*.js"]
+  absent: '^\s*[''"]use strict[''"];'
+  scope: file
+  message: "Every script opens with the use strict directive."
+```
+
+Each regex is compiled once, when the guidelines load. `guidelines lint` fails on an invalid
+regex, naming the guideline and the error (`guideline "logger-category" check: "added" is not a
+valid regex: ...`), and on an unknown key, a missing `message` or a `message` the guideline does
+not say; a review skips such a guideline with the same words. A binding under `review.checks`
+still wins over a declared pattern.
+
 ## Facts and the judge
 
 Most candidates are measured facts and become findings without a model call. Some turn on
@@ -197,6 +275,7 @@ stats ledger's finding line carries it as `guidelineQuote`.
 | `timeouts`   | another sleep, an inline timeout   | Waits longer than the framework defaults live as named values in one timeouts module, which then explains every slow run in one place.                                                         |
 | `numbers`    | an inline number, a named constant | Every timeout, delay, retry count, limit or threshold is a named constant declared once, next to the reason it has that value, so one place answers why the code waits or stops where it does. |
 | `rows`       | a test copied but for its literals | Sites, products, payment methods and addresses become data rows of one scenario.                                                                                                               |
+| `pattern`    | every kind                         | The guideline's own `message`, checked when the guidelines load.                                                                                                                               |
 
 At startup the review confirms that each bound guideline says its check's sentences word for word
 (whitespace, backticks and emphasis aside). A missing sentence is a configuration error: the run

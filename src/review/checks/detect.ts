@@ -2,6 +2,7 @@ import { GUIDELINE_CHECKS, type Guideline, type GuidelineCheck } from "../../dom
 import { appliesTo } from "../../guidelines/languages.js";
 import type { DeclaredTags } from "../declared.js";
 import { numberCandidates } from "./numbers.js";
+import { patternCandidates } from "./pattern.js";
 import { rowCandidates } from "./rows.js";
 import {
   closingParen,
@@ -18,7 +19,8 @@ import {
 
 /** The static checks a guideline can be bound to in `review.checks`. */
 export const CHECKS = GUIDELINE_CHECKS;
-export type CheckName = GuidelineCheck;
+/** A bindable check, or the pattern a guideline declares itself. */
+export type CheckName = GuidelineCheck | "pattern";
 
 export type Shape =
   | "test-id"
@@ -37,7 +39,9 @@ export type Shape =
   | "inline-timeout"
   | "inline-number"
   | "unexplained-constant"
-  | "copy";
+  | "copy"
+  | "pattern-added"
+  | "pattern-absent";
 
 /** A line a static check found; the only way a checked guideline yields a finding. */
 export interface Candidate {
@@ -55,6 +59,8 @@ export interface Candidate {
   suggestion?: string;
   /** The replacement form the fix names, such as `toHaveURL`; model text naming another is dropped. */
   form?: string;
+  /** The guideline sentence quoted when the guideline, not the check, declares it. */
+  sentence?: string;
   /** Set when prose decides: the comments a judge reads before it may drop the candidate. */
   judge?: {
     question: string;
@@ -1218,14 +1224,28 @@ export function findCandidates(
   const methods = methodIndex(context);
   const found: Candidate[] = [];
   const seen = new Set<string>();
+  const patterns = bound.filter(({ check }) => check === "pattern");
   for (const [file, changed] of context.changed) {
+    // a pattern reads any file type, so it runs before the source filter below
+    const covering = patterns.filter(({ guideline }) => appliesTo(guideline, [file]));
+    const patternText = covering.length > 0 ? context.read(file) : undefined;
+    if (patternText !== undefined) {
+      for (const { guideline } of covering) {
+        for (const candidate of patternCandidates(guideline, file, patternText, changed)) {
+          const key = `${candidate.file}:${String(candidate.line)}:${candidate.guidelineId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          found.push(candidate);
+        }
+      }
+    }
     const shell = SHELL_FILE.test(file);
     if ((!SOURCE_FILE.test(file) && !shell) || changed.size === 0) continue;
     const text = context.read(file);
     if (text === undefined) continue;
     const parsed = shell ? undefined : parse(text);
     for (const { guideline, check } of bound) {
-      if (!appliesTo(guideline, [file])) continue;
+      if (check === "pattern" || !appliesTo(guideline, [file])) continue;
       if (check === "numbers") {
         for (const candidate of numberCandidates(guideline, file, text, changed)) {
           const key = `${candidate.file}:${String(candidate.line)}:${candidate.guidelineId}`;
