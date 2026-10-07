@@ -252,9 +252,12 @@ export function isResolvedTrace(body: string): boolean {
   return body.split("\n").some((line) => line.startsWith(RESOLVED_PREFIX));
 }
 
+/** Twelve hex digits of a commit hash: unique in any repository this size, short enough for a line. */
+const SHORT_HASH_LENGTH = 12;
+
 /** A commit as readers see it: the short hash, linked where the host can. */
 function commitText(sha: string, presentation: Pick<Presentation, "commitLink">): string {
-  const short = sha.slice(0, 12);
+  const short = sha.slice(0, SHORT_HASH_LENGTH);
   const url = presentation.commitLink?.(sha);
   return url === undefined ? `\`${short}\`` : `[${short}](${url})`;
 }
