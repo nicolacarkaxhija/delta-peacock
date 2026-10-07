@@ -6,6 +6,7 @@ import { STRUCTURAL_CHECKS, type StructuralCheck } from "../domain/guideline.js"
 import { SEVERITIES, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { runGit } from "../git/git.js";
+import { readPatternCheck } from "../review/checks/pattern.js";
 import { assertSafeRef } from "../git/diff.js";
 import { resolvePack } from "./packs.js";
 
@@ -167,16 +168,23 @@ export function parseGuidelineContent(
         `${missingFields.join(", ")}; skipping the rule (strict frontmatter contract)`,
     };
   }
+  const title = deriveTitle(record, body, displayPath);
+  const check =
+    record["check"] !== undefined
+      ? readPatternCheck(record["check"], { id: trimmedId, title, body })
+      : undefined;
+  if (typeof check === "string") return { problem: `${displayPath}: ${check}` };
   const guideline: Guideline = {
     id: trimmedId,
     severity: severity as Severity,
-    title: deriveTitle(record, body, displayPath),
+    title,
     body: body.trim(),
     sourcePath: displayPath,
     languages,
     paths,
     tags,
     ...(structural !== undefined ? { structural } : {}),
+    ...(check !== undefined ? { check } : {}),
   };
   if (missingFields.length > 0) {
     notices.push(

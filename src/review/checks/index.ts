@@ -35,7 +35,9 @@ export function splitChecked(
   const bound: BoundGuideline[] = [];
   const free: Guideline[] = [];
   for (const guideline of guidelines) {
-    const check = bindings[guideline.id] ?? impliedCheck(guideline);
+    const check =
+      bindings[guideline.id] ??
+      (guideline.check !== undefined ? "pattern" : impliedCheck(guideline));
     if (check === undefined) free.push(guideline);
     else bound.push({ guideline, check });
   }

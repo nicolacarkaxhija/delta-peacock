@@ -39,7 +39,11 @@ describe("the shipped packs and the static checks", () => {
     const owned = new Set<string | undefined>(
       guidelines.map((guideline) => impliedCheck(guideline)),
     );
-    expect(Object.keys(CHECK_SENTENCES).filter((check) => !owned.has(check))).toEqual([]);
+    // a pattern quotes its guideline's own message, so no pack sentence implies it
+    const implied = Object.entries(CHECK_SENTENCES).filter(
+      ([, shapes]) => Object.keys(shapes).length > 0,
+    );
+    expect(implied.map(([check]) => check).filter((check) => !owned.has(check))).toEqual([]);
   });
 
   it("leave every other pack rule marked as judged by the model, and no checked rule marked", () => {

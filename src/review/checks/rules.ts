@@ -48,6 +48,8 @@ export const CHECK_SENTENCES: Readonly<
   rows: {
     copy: "Sites, products, payment methods and addresses become data rows of one scenario.",
   },
+  // each guideline names its own sentence in its check's message
+  pattern: {},
 };
 
 /** The sentence a check quotes for a shape it reports. */

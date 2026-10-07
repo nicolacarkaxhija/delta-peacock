@@ -28,6 +28,26 @@ export const GUIDELINE_CHECKS = [
 
 export type GuidelineCheck = (typeof GUIDELINE_CHECKS)[number];
 
+/**
+ * A pattern a guideline declares under `check:` in its frontmatter: regexes
+ * over added lines or whole changed files decide it, with no model.
+ */
+export interface PatternCheck {
+  type: "pattern";
+  /** Path globs on top of the guideline's own scope; empty means every file it covers. */
+  files: readonly string[];
+  /** A regex no added line may match. */
+  added?: string;
+  /** A regex whose match on the same line excuses an `added` match. */
+  unless?: string;
+  /** A regex every changed file the check covers must match somewhere. */
+  absent?: string;
+  /** At most this many findings per file. */
+  maxPerFile?: number;
+  /** The guideline sentence every finding quotes. */
+  message: string;
+}
+
 export interface Guideline {
   id: string;
   severity: Severity;
@@ -43,4 +63,6 @@ export interface Guideline {
   pack?: string;
   /** Opts into a deterministic AST check on every finding this guideline produces; absent means none. */
   structural?: StructuralCheck;
+  /** A pattern that decides the guideline by facts alone; absent means none. */
+  check?: PatternCheck;
 }

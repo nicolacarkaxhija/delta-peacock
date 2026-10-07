@@ -196,7 +196,10 @@ function normalizeQuote(text: string): string {
 const MIN_GUIDELINE_QUOTE = 12;
 
 /** True when the quote is a verbatim passage of the guideline's title or body. */
-export function quotesGuideline(quote: string | undefined, guideline: Guideline): boolean {
+export function quotesGuideline(
+  quote: string | undefined,
+  guideline: Pick<Guideline, "title" | "body">,
+): boolean {
   if (quote === undefined) return false;
   const wanted = normalizeQuote(quote);
   if (wanted.length < MIN_GUIDELINE_QUOTE) return false;

@@ -197,7 +197,7 @@ export async function settle(
   excerpt: string,
   credentialRefused: Config["fallback"]["credentialRefused"] = "fallback",
 ): Promise<JudgedCandidate> {
-  const rule = sentenceOf(candidate.check, candidate.shape);
+  const rule = candidate.sentence ?? sentenceOf(candidate.check, candidate.shape);
   if (
     candidate.judge === undefined ||
     (port === undefined && candidate.judge.decided !== undefined)
