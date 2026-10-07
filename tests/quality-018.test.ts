@@ -1,4 +1,8 @@
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { monthKey, recordSpend } from "../src/cost/counter.js";
 import { runCli } from "../src/index.js";
 import type { Finding } from "../src/domain/finding.js";
 import { evaluateGate } from "../src/domain/gate.js";
@@ -7,8 +11,7 @@ import type { Severity } from "../src/domain/severity.js";
 import type { ModelPort } from "../src/model/port.js";
 import { parseReviewResponse, quotesGuideline, type ParseOptions } from "../src/review/parse.js";
 import { renderReview } from "../src/review/render.js";
-import { buildReport } from "../src/review/report.js";
-import { capReason } from "../src/review/run-review.js";
+import { buildReport, type ReviewReport } from "../src/review/report.js";
 import { NOT_REVIEWED, statusLine } from "../src/scm/comment-format.js";
 import { publishReview } from "../src/scm/publish.js";
 import type { ScmPort } from "../src/scm/port.js";
@@ -373,23 +376,22 @@ describe("publishReview with outcome capped", () => {
   });
 });
 
-describe("capReason", () => {
-  it("names the monthly cap when a monthlyCap reason is present", () => {
-    expect(
-      capReason(["month-to-date 1.0000 USD plus the estimate exceeds cost.monthlyCap 1.0000 USD"]),
-    ).toBe("the monthly cost cap is reached");
-  });
-
-  it("names the per-review cap otherwise", () => {
-    expect(capReason(["estimated cost 1.0000 USD exceeds cost.maxPerReview 1.0000 USD"])).toBe(
-      "this change would cost more than the per review cap",
-    );
-  });
-});
-
-describe("an end-to-end review blocked by cost.maxPerReview", () => {
-  const GUIDELINE_MD =
-    "---\nid: no-console\nseverity: MAJOR\n---\n# No console\n\nUse the logger.\n";
+describe("an end-to-end review the monthly cap blocks", () => {
+  const GUIDELINE_MD = [
+    "---",
+    "id: no-console",
+    "severity: MAJOR",
+    "check:",
+    "  type: pattern",
+    "  added: 'console\\.log\\('",
+    "  message: Use the logger.",
+    "---",
+    "# No console",
+    "",
+    "Use the logger.",
+    "",
+  ].join("\n");
+  const JUDGED_MD = "---\nid: small-functions\nseverity: MINOR\n---\n# Small\n\nKeep it short.\n";
   const CITED = JSON.stringify({
     findings: [
       {
@@ -403,78 +405,96 @@ describe("an end-to-end review blocked by cost.maxPerReview", () => {
     ],
   });
 
-  function makeScenario(): string {
+  function makeScenario(added: string): string {
     const repo = makeRepo();
     write(repo, "guidelines/no-console.md", GUIDELINE_MD);
+    write(repo, "guidelines/small-functions.md", JUDGED_MD);
     commitAll(repo, "rules");
     git(repo, "checkout", "-q", "-b", "feature");
-    write(repo, "src/app.js", "console.log('x');\n");
+    write(repo, "src/app.js", added);
     commitAll(repo, "change");
     return repo;
   }
 
-  it("posts the capped status through a fake SCM without calling the model", async () => {
+  /** A counter file whose current month already holds the whole cap. */
+  async function spentCounter(): Promise<string> {
+    const counter = path.join(mkdtempSync(path.join(tmpdir(), "peacock-spent-")), "spend.json");
+    await recordSpend(counter, monthKey(new Date()), 1);
+    return counter;
+  }
+
+  async function review(repo: string, baseUrl: string, failOn: string) {
+    let requests = 0;
+    const port: ModelPort = {
+      complete() {
+        requests += 1;
+        return Promise.resolve({ text: CITED });
+      },
+    };
+    const code = await runCli(["review", "--fail-on", failOn, "--report", "r.json"], {
+      cwd: repo,
+      env: {
+        DELTA_PEACOCK_SCM_PROVIDER: "github",
+        DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+        DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+        DELTA_PEACOCK_SCM_BASE_URL: baseUrl,
+        GITHUB_TOKEN: "test-token",
+        DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+        DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+        DELTA_PEACOCK_COST_MONTHLY_CAP: "1",
+        DELTA_PEACOCK_COST_COUNTER_PATH: await spentCounter(),
+      },
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: port,
+    });
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    return { code, requests, report };
+  }
+
+  it("posts the facts and says the cost cap stopped the model", async () => {
     const fake = await startFakeGitHub();
     try {
-      const repo = makeScenario();
-      let requests = 0;
-      const port: ModelPort = {
-        complete() {
-          requests += 1;
-          return Promise.resolve({ text: CITED });
-        },
-      };
-      const code = await runCli(["review"], {
-        cwd: repo,
-        env: {
-          DELTA_PEACOCK_SCM_PROVIDER: "github",
-          DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
-          DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
-          DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
-          GITHUB_TOKEN: "test-token",
-          DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
-          DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
-          DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001",
-        },
-        out: () => undefined,
-        err: () => undefined,
-        modelPort: port,
-      });
-      expect(code).toBe(0); // advisory: gate.failOn defaults to none
+      const repo = makeScenario("console.log('x');\n");
+      const { code, requests, report } = await review(repo, fake.baseUrl, "none");
+      expect(code).toBe(0);
       expect(requests).toBe(0);
-      expect(fake.statuses).toHaveLength(1);
+      expect(report.findings.map((finding) => finding.file)).toEqual(["src/app.js"]);
+      expect(report.factsOnly).toMatchObject({
+        fallback: "cost-cap",
+        notReviewed: ["small-functions"],
+      });
+      expect(report.budget?.blocked).toBe(true);
       expect(fake.statuses[0]?.state).toBe("success");
-      expect(fake.statuses[0]?.description).toBe(
-        "Skipped. this change would cost more than the per review cap.",
+      expect(fake.statuses[0]?.description).toBe("Facts only, no model: needs a person's approval");
+      expect(fake.issueComments[0]?.body).toContain(
+        "The model could not run (the review reached its cost cap), so this review checked facts only: 1 finding",
       );
-      expect(fake.issueComments[0]?.body).toContain("The review was skipped:");
     } finally {
       await fake.close();
     }
   });
 
-  it("fails the status once a gate is configured", async () => {
+  it("fails the gate on a fact finding the cap did not stop", async () => {
     const fake = await startFakeGitHub();
     try {
-      const repo = makeScenario();
-      const code = await runCli(["review", "--fail-on", "MAJOR"], {
-        cwd: repo,
-        env: {
-          DELTA_PEACOCK_SCM_PROVIDER: "github",
-          DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
-          DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
-          DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
-          GITHUB_TOKEN: "test-token",
-          DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
-          DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
-          DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.000001",
-        },
-        out: () => undefined,
-        err: () => undefined,
-        modelPort: { complete: () => Promise.resolve({ text: CITED }) },
-      });
-      expect(code).toBe(1);
+      const repo = makeScenario("console.log('x');\n");
+      const { code, requests } = await review(repo, fake.baseUrl, "MAJOR");
+      expect(code).toBe(2);
+      expect(requests).toBe(0);
       expect(fake.statuses[0]?.state).toBe("failure");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("passes the gate when the facts find nothing", async () => {
+    const fake = await startFakeGitHub();
+    try {
+      const repo = makeScenario("logger.info('x');\n");
+      const { code, report } = await review(repo, fake.baseUrl, "MAJOR");
+      expect(code).toBe(0);
+      expect(report.findings).toEqual([]);
     } finally {
       await fake.close();
     }

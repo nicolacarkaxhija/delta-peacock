@@ -1,9 +1,9 @@
 import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
 
-/** Why the model could not run: none configured, the provider out of reach, a rate or quota limit, a timeout, a refused credential. */
+/** Why the model could not run: none configured, the provider out of reach, a rate or quota limit, a timeout, a refused credential, the review's cost cap. */
 export type ModelUnavailability =
-  "not-configured" | "unreachable" | "limit" | "timeout" | "credential-refused";
+  "not-configured" | "unreachable" | "limit" | "timeout" | "credential-refused" | "cost-cap";
 
 /** A model that could not run at all; a review falls back to the checks that need none. */
 export class ModelUnavailableError extends ToolError {
