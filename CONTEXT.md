@@ -44,6 +44,9 @@ _Avoid_: metric, score
 A markdown document in the reviewed repository declaring one reviewable rule, identified by an id and carrying a severity.
 _Avoid_: rule, policy, standard, check
 
+**Exclusion**:
+A sentence of a guideline, listed in its frontmatter, that names a case never to be a finding under it. Every finding under the guideline is held against its exclusions before it stands.
+
 **Severity**:
 How bad a violation is, on exactly five steps: BLOCKER, CRITICAL, MAJOR, MINOR, INFO. Nothing else lives on this scale.
 

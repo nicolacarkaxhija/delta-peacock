@@ -124,6 +124,38 @@ valid regex: ...`), and on an unknown key, a missing `message` or a `message` th
 not say; a review skips such a guideline with the same words. A binding under `review.checks`
 still wins over a declared pattern.
 
+## Exclusions a guideline declares
+
+A guideline often names cases that are never a finding under it: a parameter, a value the
+framework hands in, a step the rule does not cover. A model asked to review a whole batch against
+many guidelines reads past such a sentence now and then. List those sentences under `exclusions:`
+and the reviewer enforces them itself.
+
+```markdown
+---
+id: guard-before-use
+severity: MAJOR
+exclusions:
+  - A value the function receives as a parameter is never a finding.
+---
+
+# Guard a value before use
+
+Check a value for null before reading a property of it. A value the function receives as a
+parameter is never a finding.
+```
+
+Each entry must be a sentence the guideline says word for word (whitespace, backticks and
+emphasis aside); `guidelines lint` fails on one it does not say, and a review skips such a
+guideline with the same words. Every finding the model reports under the guideline is then held
+against the list in one short call: the guideline, the listed cases, the finding and the code
+around its line. The finding is dropped only when the answer is `excluded` and copies one of the
+listed cases; `stands`, an unlisted case, an unreadable answer (asked twice) or a failed call keep
+it. A dropped finding is logged as `dropped, the guideline excludes it`, counted in the log line
+`finding(s) dropped: their guideline says the line is never a finding` and recorded in the
+report's `rejectedCandidates` with the reason `excluded`. A guideline without `exclusions` costs no
+call, and no call is made when the model cannot run.
+
 ## Facts and the judge
 
 Most candidates are measured facts and become findings without a model call. Some turn on

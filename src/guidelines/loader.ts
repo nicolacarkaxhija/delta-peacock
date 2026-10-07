@@ -7,6 +7,7 @@ import { SEVERITIES, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { runGit } from "../git/git.js";
 import { readPatternCheck } from "../review/checks/pattern.js";
+import { readExclusions } from "../review/exclusions.js";
 import { assertSafeRef } from "../git/diff.js";
 import { resolvePack } from "./packs.js";
 
@@ -174,6 +175,8 @@ export function parseGuidelineContent(
       ? readPatternCheck(record["check"], { id: trimmedId, title, body })
       : undefined;
   if (typeof check === "string") return { problem: `${displayPath}: ${check}` };
+  const exclusions = readExclusions(record["exclusions"], { id: trimmedId, title, body });
+  if (typeof exclusions === "string") return { problem: `${displayPath}: ${exclusions}` };
   const guideline: Guideline = {
     id: trimmedId,
     severity: severity as Severity,
@@ -185,6 +188,7 @@ export function parseGuidelineContent(
     tags,
     ...(structural !== undefined ? { structural } : {}),
     ...(check !== undefined ? { check } : {}),
+    ...(exclusions.length > 0 ? { exclusions } : {}),
   };
   if (missingFields.length > 0) {
     notices.push(
