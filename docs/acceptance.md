@@ -52,6 +52,11 @@ from a clean checkout; a red line blocks it.
 - `facts under a cost cap`: a review the cost guard stops makes no model call, posts and counts
   its fact findings, gates on them and says the cost cap stopped the model. On its own:
   `pnpm exec vitest run tests/quality-018 tests/cost-guard`.
+- `cost cap on actual spend`: a review refuses every model call once the actual cost of its replies
+  reaches `cost.maxPerReview` or what is left of `cost.monthlyCap`, keeps the findings of the calls
+  that answered, names the files no model reviewed and records the spend in `budget.stopped`; no
+  estimate blocks a single model review before its first call. On its own:
+  `pnpm exec vitest run tests/cost-ceiling tests/cost-guard`.
 - `linked references`: every commit, file and line, guideline and finding comment the reviewer
   writes is a link where the host can build its address and plain text where it cannot; a task
   text stays plain; comments and summaries an earlier version wrote are claimed and updated in

@@ -229,7 +229,7 @@ review:
 gate:
   failOn: MAJOR
 cost:
-  maxPerReview: 0.50 # block a review estimated above this, before any model call
+  maxPerReview: 0.50 # no further model call once the review has spent this
 ```
 
 ### Facts only, with no model

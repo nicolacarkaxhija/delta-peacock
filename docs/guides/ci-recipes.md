@@ -169,7 +169,7 @@ The npm tarball bundles its runtime dependencies, so a runner with no registry a
 
 ## The monthly cap in CI
 
-`cost.maxPerReview` works anywhere: it compares one review's estimate with the cap before any model call. `cost.monthlyCap` needs the month's spend so far, and where that comes from matters in CI:
+`cost.maxPerReview` works anywhere: it adds up the actual usage of every model call of one review and makes no further call once the sum reaches the cap. `cost.monthlyCap` needs the month's spend so far, and where that comes from matters in CI:
 
 - `spendSource: counter` (the default) keeps a small JSON file, in the home directory unless `cost.counterPath` names another place. A CI runner starts from a clean container on every pipeline run, so the counter starts at zero every time and the monthly cap only ever sees the current review. It still works on a long lived runner or a developer machine.
 - `spendSource: aws-cost-explorer` asks AWS Cost Explorer for the month to date spend of the account, which suits Bedrock. The credentials the review runs with need the `ce:GetCostAndUsage` permission; without it the reviewer warns and falls back to the counter. Cost Explorer reports the whole account's spend under the `Amazon Bedrock` service, lags by several hours, and each call costs 0.01 USD. Anthropic models on Bedrock can bill as AWS Marketplace line items with their own service names, so check in the Cost Explorer console that the `Amazon Bedrock` service carries the review spend before relying on this source.
