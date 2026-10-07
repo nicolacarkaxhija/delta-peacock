@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.2.0...delta-peacock-v0.3.0) (2026-10-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **checks:** let a doc comment span lines under the comments check
+* **checks:** address the undeclared tag sentence to the test author
+* **checks:** name the web first form in the sentence the assertion check quotes
+
+### Features
+
+* **bench:** review a case with the packs its packs.json names ([18c66b5](https://github.com/nicolacarkaxhija/delta-peacock/commit/18c66b5220f7759b2cbd9bcb9d3b99ec2d53a0ac))
+* **checks:** address the undeclared tag sentence to the test author ([46c391a](https://github.com/nicolacarkaxhija/delta-peacock/commit/46c391abc7d0abd9b28bae7e0b6f0f37c929f456))
+* **checks:** let a doc comment span lines under the comments check ([c81f5bd](https://github.com/nicolacarkaxhija/delta-peacock/commit/c81f5bddc90a44f8cfe0eb0a63a4c69b5eaa7468))
+* **checks:** name the web first form in the sentence the assertion check quotes ([845da96](https://github.com/nicolacarkaxhija/delta-peacock/commit/845da96796ccd5cc0644160fe976644e68147e74))
+* **packs:** ship a commits pack for subjects, scope and change texts ([924a0d5](https://github.com/nicolacarkaxhija/delta-peacock/commit/924a0d598013755d5a5ba1f16764ae03873a2753))
+* **packs:** ship a playwright pack and typescript rules that quote every static check sentence ([40f507c](https://github.com/nicolacarkaxhija/delta-peacock/commit/40f507cf9ea651a69e5f6f7790d837543b9ec381))
+
+
+### Bug Fixes
+
+* install production dependencies in the image without lifecycle scripts ([a66aab9](https://github.com/nicolacarkaxhija/delta-peacock/commit/a66aab9943ed5338161095f3946e45ca406ed4e1))
+
 ## [0.2.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.1.13...delta-peacock-v0.2.0) (2026-10-01)
 
 
