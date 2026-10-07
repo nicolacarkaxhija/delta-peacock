@@ -16,7 +16,7 @@ RUN apt-get update \
 WORKDIR /app
 RUN corepack enable pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 COPY --from=build /app/dist ./dist
 COPY schema ./schema
 RUN useradd --create-home reviewer
