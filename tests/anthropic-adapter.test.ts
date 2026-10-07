@@ -58,6 +58,20 @@ describe("anthropic adapter contract", () => {
     expect(reply.usage).toMatchObject({ inputTokens: 120, outputTokens: 34 });
   });
 
+  it("marks the stable prefix of the system prompt for the cache", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fakeFetch: typeof globalThis.fetch = (_input, init) => {
+      bodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+      return Promise.resolve(cannedAnthropicResponse('{"findings": []}'));
+    };
+    const port = createAnthropicPort({ apiKey: "k", modelId: "claude-test", fetch: fakeFetch });
+    await port.complete({ system: "guidelines\ncontext", user: "u", stablePrefix: 10 });
+    expect(bodies[0]?.["system"]).toEqual([
+      { type: "text", text: "guidelines", cache_control: { type: "ephemeral" } },
+      { type: "text", text: "\ncontext" },
+    ]);
+  });
+
   it("forwards context tools into the request body", async () => {
     const captured: CapturedRequest[] = [];
     const fakeFetch: typeof globalThis.fetch = (input, init) => {

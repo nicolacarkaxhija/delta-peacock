@@ -1,5 +1,5 @@
 import { appendFileSync } from "node:fs";
-import { generateText, stepCountIs, type LanguageModel } from "ai";
+import { generateText, stepCountIs, type LanguageModel, type SystemModelMessage } from "ai";
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
   DEFAULT_MAX_TOOL_ROUNDS,
@@ -73,6 +73,23 @@ export function withFetched(user: string, transcript: string | undefined): strin
   ].join("\n");
 }
 
+/** How a provider marks the end of a prompt part it may cache. */
+export type CacheMarker = SystemModelMessage["providerOptions"];
+
+/** The system prompt, split at the stable prefix when the provider caches one. */
+function systemOf(
+  request: ModelRequest,
+  marker: CacheMarker | undefined,
+): string | SystemModelMessage[] {
+  const at = request.stablePrefix ?? 0;
+  if (marker === undefined || at <= 0) return request.system;
+  const rest = request.system.slice(at);
+  return [
+    { role: "system", content: request.system.slice(0, at), providerOptions: marker },
+    ...(rest.trim() === "" ? [] : [{ role: "system" as const, content: rest }]),
+  ];
+}
+
 /**
  * The one place a request meets the AI SDK: every adapter delegates here, so
  * tool wiring, bounds and usage mapping cannot drift between providers.
@@ -80,11 +97,12 @@ export function withFetched(user: string, transcript: string | undefined): strin
 export async function completeWith(
   model: LanguageModel,
   request: ModelRequest,
+  marker?: CacheMarker,
 ): Promise<ModelReply> {
   const rounds = request.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   const result = await generateText({
     model,
-    system: request.system,
+    system: systemOf(request, marker),
     prompt: request.user,
     // pinned low by default: two fresh reviews of one diff should agree, so the
     // gate outcome does not swing on sampling noise the caller never asked for

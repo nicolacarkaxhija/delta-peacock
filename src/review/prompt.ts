@@ -75,7 +75,7 @@ export function buildReviewPrompt(
   diff: string,
   options: PromptOptions = DEFAULT_OPTIONS,
 ): ModelRequest {
-  const system = [
+  const stable = [
     "You are delta-peacock, a code reviewer that judges a diff strictly against the team's guidelines below.",
     "Report a finding only when the diff violates one of these guidelines, and cite that guideline's id.",
     "Do not invent guidelines and do not report style opinions of your own.",
@@ -108,6 +108,9 @@ export function buildReviewPrompt(
     ...(options.declarations !== undefined && options.declarations !== ""
       ? ["", options.declarations]
       : []),
+  ].join("\n");
+  const system = [
+    stable,
     ...(options.projectContext !== undefined && options.projectContext !== ""
       ? [
           "",
@@ -129,5 +132,5 @@ export function buildReviewPrompt(
     "</diff>",
   ].join("\n");
 
-  return { system, user };
+  return { system, user, stablePrefix: stable.length };
 }
