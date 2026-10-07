@@ -44,6 +44,11 @@ from a clean checkout; a red line blocks it.
 - `exclusions`: a guideline's `exclusions` must be sentences it says word for word; a finding
   under it is dropped only when the exclusion check copies a listed case, and kept on any other
   answer, an unreadable one or a failed call. On its own: `pnpm exec vitest run tests/exclusions`.
+- `batch cost`: a change reviewed in batches sends no more input tokens than the same files
+  reviewed as separate changes, each batch carries only its own files' context, the shared prefix
+  carries a cache marker on Anthropic and on Anthropic models on Bedrock, and no cached token is
+  priced twice. On its own:
+  `pnpm exec vitest run tests/batch-cost tests/anthropic-adapter tests/model-providers`.
 - `linked references`: every commit, file and line, guideline and finding comment the reviewer
   writes is a link where the host can build its address and plain text where it cannot; a task
   text stays plain; comments and summaries an earlier version wrote are claimed and updated in

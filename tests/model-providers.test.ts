@@ -72,8 +72,9 @@ describe("openai-compatible adapter contract", () => {
     expect(calls[0]?.body["model"]).toBe("test-model");
     expect(JSON.stringify(calls[0]?.body["messages"])).toContain("usr");
     expect(reply.text).toBe('{"findings": []}');
+    // the 30 cached tokens are priced once, at the cache rate
     expect(reply.usage).toMatchObject({
-      inputTokens: 100,
+      inputTokens: 70,
       outputTokens: 20,
       cacheReadTokens: 30,
     });
@@ -137,6 +138,52 @@ describe("bedrock adapter contract", () => {
     expect(calls[0]?.headers["authorization"]).toContain("AWS4-HMAC-SHA256");
     expect(reply.text).toBe('{"findings": []}');
     expect(reply.usage).toMatchObject({ inputTokens: 50, outputTokens: 10 });
+  });
+
+  function bedrockPort(modelId: string, fetch: typeof globalThis.fetch) {
+    return createBedrockPort({
+      region: "eu-central-1",
+      accessKeyId: "AKIA_TEST",
+      secretAccessKey: "secret",
+      modelId,
+      fetch,
+    });
+  }
+
+  it("puts a cache point after the stable prefix of an Anthropic model's system prompt", async () => {
+    const { calls, fetch } = capturingFetch(canned);
+    await bedrockPort("eu.anthropic.claude-test", fetch).complete({
+      system: "rules shared by every batch\ncontext of this batch",
+      user: "usr",
+      stablePrefix: "rules shared by every batch".length,
+    });
+    expect(calls[0]?.body["system"]).toEqual([
+      { text: "rules shared by every batch" },
+      { cachePoint: { type: "default" } },
+      { text: "\ncontext of this batch" },
+    ]);
+  });
+
+  it("sends other models the system prompt whole", async () => {
+    const { calls, fetch } = capturingFetch(canned);
+    await bedrockPort("amazon.nova-test", fetch).complete({
+      system: "rules",
+      user: "usr",
+      stablePrefix: 5,
+    });
+    expect(JSON.stringify(calls[0]?.body["system"])).not.toContain("cachePoint");
+  });
+
+  it("maps cache reads apart from the uncached input", async () => {
+    const { fetch } = capturingFetch({
+      ...canned,
+      usage: { inputTokens: 50, outputTokens: 10, totalTokens: 960, cacheReadInputTokens: 900 },
+    });
+    const reply = await bedrockPort("eu.anthropic.claude-test", fetch).complete({
+      system: "s",
+      user: "u",
+    });
+    expect(reply.usage).toMatchObject({ inputTokens: 50, cacheReadTokens: 900 });
   });
 });
 
@@ -456,6 +503,15 @@ describe("cost accounting", () => {
       }),
     ).toBe(false);
     expect(anyRateConfigured(rates)).toBe(true);
+  });
+
+  it("prices cached tokens as plain input when no cache rate is set", () => {
+    const cost = computeCost(
+      { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000, cacheWriteTokens: 1_000_000 },
+      { ...rates, rateCacheReadPer1M: 0, rateCacheWritePer1M: 0 },
+    );
+    expect(cost.cacheRead).toBeCloseTo(3);
+    expect(cost.cacheWrite).toBeCloseTo(3);
   });
 
   it("prices usage that carries no cache counts", () => {

@@ -1,6 +1,9 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { completeWith } from "./generate.js";
+import { completeWith, type CacheMarker } from "./generate.js";
 import type { ModelPort } from "./port.js";
+
+/** Caches the system prompt's stable prefix, the guidelines every batch shares. */
+const CACHE: CacheMarker = { anthropic: { cacheControl: { type: "ephemeral" } } };
 
 export { normalizeUsage } from "./usage.js";
 
@@ -17,6 +20,6 @@ export function createAnthropicPort(options: AnthropicPortOptions): ModelPort {
     ...(options.fetch ? { fetch: options.fetch } : {}),
   });
   return {
-    complete: (request) => completeWith(provider(options.modelId), request),
+    complete: (request) => completeWith(provider(options.modelId), request, CACHE),
   };
 }

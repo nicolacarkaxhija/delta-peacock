@@ -1,6 +1,9 @@
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
-import { completeWith } from "./generate.js";
+import { completeWith, type CacheMarker } from "./generate.js";
 import type { ModelPort } from "./port.js";
+
+/** Caches the system prompt's stable prefix, the guidelines every batch shares. */
+const CACHE: CacheMarker = { bedrock: { cachePoint: { type: "default" } } };
 
 export interface BedrockPortOptions {
   region: string;
@@ -22,7 +25,9 @@ export function createBedrockPort(options: BedrockPortOptions): ModelPort {
     ...(options.baseUrl !== undefined ? { baseURL: options.baseUrl } : {}),
     ...(options.fetch ? { fetch: options.fetch } : {}),
   });
+  // only Anthropic models take a cache point on Bedrock's system prompt here
+  const cache = options.modelId.includes("anthropic.") ? CACHE : undefined;
   return {
-    complete: (request) => completeWith(provider(options.modelId), request),
+    complete: (request) => completeWith(provider(options.modelId), request, cache),
   };
 }

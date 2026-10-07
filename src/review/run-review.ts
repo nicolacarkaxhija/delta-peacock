@@ -838,7 +838,22 @@ async function assembleReview(
     },
   );
   for (const notice of batches.notices) deps.err(`${notice}\n`);
-  const { diffBatches, batchContexts, degraded: budgetDegraded } = batches;
+  const { diffBatches, degraded: budgetDegraded } = batches;
+  // each batch carries the context of its own files, never the whole change's again
+  const batchContexts =
+    diffBatches.length < 2
+      ? batches.batchContexts
+      : await Promise.all(
+          diffBatches.map((batchDiff, index) =>
+            batches.batchContexts[index] === ""
+              ? Promise.resolve("")
+              : resolvedContext.scoped({
+                  cwd: deps.cwd,
+                  diff: batchDiff,
+                  changedFiles: changedFilesFromDiff(batchDiff),
+                }),
+          ),
+        );
 
   const request = attachContextTools(
     promptOf(diffBatches[0] ?? redacted.text, batchContexts[0] ?? ""),

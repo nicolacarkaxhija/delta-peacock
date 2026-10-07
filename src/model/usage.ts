@@ -4,18 +4,24 @@ interface SdkUsageShape {
   inputTokens: number | undefined;
   outputTokens: number | undefined;
   inputTokenDetails?: {
+    noCacheTokens?: number | null | undefined;
     cacheReadTokens?: number | null | undefined;
     cacheWriteTokens?: number | null | undefined;
   };
 }
 
-/** SDK usage fields are optional; missing counts become zero rather than NaN downstream. */
+/** Missing counts become zero; input is the uncached part, so no token is priced twice. */
 export function normalizeUsage(usage: SdkUsageShape): ModelUsage {
+  const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+  const cacheWriteTokens = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
+  const uncached =
+    usage.inputTokenDetails?.noCacheTokens ??
+    Math.max(0, (usage.inputTokens ?? 0) - cacheReadTokens - cacheWriteTokens);
   return {
-    inputTokens: usage.inputTokens ?? 0,
+    inputTokens: uncached,
     outputTokens: usage.outputTokens ?? 0,
-    cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
-    cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens ?? 0,
+    cacheReadTokens,
+    cacheWriteTokens,
   };
 }
 
@@ -69,11 +75,15 @@ export interface ComputedCost {
 
 const PER_MILLION = 1_000_000;
 
+/** Prices usage; a cache rate left at zero prices its tokens as plain input. */
 export function computeCost(usage: ModelUsage, rates: CostRates): ComputedCost {
   const input = (usage.inputTokens / PER_MILLION) * rates.rateInputPer1M;
   const output = (usage.outputTokens / PER_MILLION) * rates.rateOutputPer1M;
-  const cacheRead = ((usage.cacheReadTokens ?? 0) / PER_MILLION) * rates.rateCacheReadPer1M;
-  const cacheWrite = ((usage.cacheWriteTokens ?? 0) / PER_MILLION) * rates.rateCacheWritePer1M;
+  const readRate = rates.rateCacheReadPer1M > 0 ? rates.rateCacheReadPer1M : rates.rateInputPer1M;
+  const writeRate =
+    rates.rateCacheWritePer1M > 0 ? rates.rateCacheWritePer1M : rates.rateInputPer1M;
+  const cacheRead = ((usage.cacheReadTokens ?? 0) / PER_MILLION) * readRate;
+  const cacheWrite = ((usage.cacheWriteTokens ?? 0) / PER_MILLION) * writeRate;
   return { input, output, cacheRead, cacheWrite, total: input + output + cacheRead + cacheWrite };
 }
 

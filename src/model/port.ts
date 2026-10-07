@@ -21,6 +21,8 @@ export interface ModelRequest {
   temperature?: number;
   /** Ceiling on reply length; defaults to {@link DEFAULT_MAX_OUTPUT_TOKENS}. */
   maxOutputTokens?: number;
+  /** How many leading characters of system every call of one review shares; a provider may cache them. */
+  stablePrefix?: number;
 }
 
 export interface ModelUsage {

@@ -331,12 +331,12 @@ describe("rendering and reporting edges", () => {
     });
     expect(
       normalizeUsage({
-        inputTokens: 3,
+        inputTokens: 10,
         outputTokens: undefined,
         inputTokenDetails: { cacheReadTokens: 2, cacheWriteTokens: 1 },
       }),
     ).toEqual({
-      inputTokens: 3,
+      inputTokens: 7,
       outputTokens: 0,
       cacheReadTokens: 2,
       cacheWriteTokens: 1,

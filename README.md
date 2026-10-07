@@ -138,9 +138,9 @@ Credentials, tokens and API keys must come from the environment, never a literal
 
 **Models.** Anthropic, Amazon Bedrock, OpenRouter, and any OpenAI-compatible host including local models (Ollama, vLLM). Multi-model **ensemble** review with union or judge merging.
 
-**Cross-file awareness.** A zero-cost deterministic repo map by default, the full post-change text of every changed file, on-demand agentic tools, and retrieval that runs on lexical TF-IDF or real embeddings behind a pluggable port. Strategies layer, and a prompt budget ledger keeps the assembled request inside the model's window, degrading in a documented order.
+**Cross-file awareness.** A zero-cost deterministic repo map by default, the full post-change text of every changed file, on-demand agentic tools, and retrieval that runs on lexical TF-IDF or real embeddings behind a pluggable port. Strategies layer, and a prompt budget ledger keeps the assembled request inside the model's window, degrading in a documented order. A change split into batches (`review.maxFilesPerBatch`) gives each batch the context of its own files only, so a large change costs about what the same files cost as separate small changes.
 
-**Governance and cost.** An in-process cost guard with per-review and monthly spend caps checked against real usage, secret and PII redaction before anything reaches a model, an optional response cache for re-triggered runs, and a stable prompt prefix so provider-side caching keeps hitting.
+**Governance and cost.** An in-process cost guard with per-review and monthly spend caps checked against real usage, secret and PII redaction before anything reaches a model, an optional response cache for re-triggered runs, and a stable prompt prefix so provider-side caching keeps hitting. On Anthropic and on Anthropic models through Amazon Bedrock that prefix (the instructions and the guidelines every batch shares) carries a cache marker, so the batches of one review read it from the cache after the first; cached tokens are priced at `cost.rateCacheReadPer1M` and `cost.rateCacheWritePer1M`, or as plain input while those are unset.
 
 **The command surface** (`delta-peacock --help`):
 

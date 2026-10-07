@@ -67,6 +67,8 @@ export interface ResolvedContext {
   tools: ToolSet | undefined;
   /** Notices the provider raised while resolving (cache rebuilds, degradations). */
   notices: string[];
+  /** The same strategies over one part of the change: that part's diff and files only. */
+  scoped(part: ContextInput): Promise<string>;
 }
 
 /**
@@ -93,6 +95,8 @@ export async function resolveContext(
     projectContext,
     tools: provider.tools?.(input),
     notices: provider.notices?.() ?? [],
+    scoped: async (part) =>
+      capToTokenBudget(await provider.systemContext(part), config.context.maxTokens),
   };
 }
 
