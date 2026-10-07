@@ -65,4 +65,6 @@ export interface Guideline {
   structural?: StructuralCheck;
   /** A pattern that decides the guideline by facts alone; absent means none. */
   check?: PatternCheck;
+  /** Sentences of the guideline naming cases that are never a finding; each one is checked before a finding stands. */
+  exclusions?: readonly string[];
 }

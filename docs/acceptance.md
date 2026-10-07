@@ -41,6 +41,9 @@ from a clean checkout; a red line blocks it.
   per run and times a silent provider out after `model.timeoutSeconds`; a review with a working
   model posts and exits as before. On its own:
   `pnpm exec vitest run tests/model-fallback`.
+- `exclusions`: a guideline's `exclusions` must be sentences it says word for word; a finding
+  under it is dropped only when the exclusion check copies a listed case, and kept on any other
+  answer, an unreadable one or a failed call. On its own: `pnpm exec vitest run tests/exclusions`.
 - `linked references`: every commit, file and line, guideline and finding comment the reviewer
   writes is a link where the host can build its address and plain text where it cannot; a task
   text stays plain; comments and summaries an earlier version wrote are claimed and updated in

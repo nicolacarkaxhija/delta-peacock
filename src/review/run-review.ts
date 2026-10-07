@@ -43,6 +43,7 @@ import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
+import { applyExclusions } from "./exclusions.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
@@ -302,6 +303,23 @@ export async function runReview(
   }
   // two findings that quote one line under one guideline are one finding
   const placed = dedupeFindings(placeFindings(open.kept, linesOfFile));
+  // a case the guideline says is never a finding is held against every finding it could excuse
+  let exclusionPort: ModelPort | undefined;
+  const excluded =
+    noOpenReview || placed.length === 0
+      ? undefined
+      : await applyExclusions(placed, {
+          port: () => (exclusionPort ??= reviewPort(deps, config)),
+          guidelinesById: parseOptions.guidelinesById,
+          linesOf: linesOfFile,
+          concurrency: PASS_CONCURRENCY,
+        });
+  for (const notice of excluded?.notices ?? []) deps.err(`${notice}\n`);
+  if (excluded !== undefined && excluded.dropped.length > 0) {
+    deps.err(
+      `${String(excluded.dropped.length)} finding(s) dropped: their guideline says the line is never a finding\n`,
+    );
+  }
   const checks =
     bound.length > 0
       ? await runChecks({
@@ -332,7 +350,7 @@ export async function runReview(
     fromApi
       ? linesFromDiff(diffLines.get(file) ?? new Map<number, string>())
       : linesAtHead(deps.cwd, file, diffLines.get(file), options.staged === true);
-  const moved = dropCommentMoves(placed, reviewedLines);
+  const moved = dropCommentMoves(excluded?.kept ?? placed, reviewedLines);
   if (moved.dropped.length > 0) {
     deps.err(
       `${String(moved.dropped.length)} finding(s) dropped: the reason they ask for already sits above the line or on the declaration\n`,
@@ -375,6 +393,7 @@ export async function runReview(
     rejected: [
       ...executed.parsed.rejected,
       ...open.dropped,
+      ...(excluded?.dropped ?? []),
       ...(checks?.rejected ?? []),
       ...moved.dropped,
       ...fitted.dropped,
@@ -400,6 +419,9 @@ export async function runReview(
     }
   }
   let usage = executed.usage;
+  if (excluded?.usage !== undefined) {
+    usage = usage === undefined ? excluded.usage : addUsage(usage, excluded.usage);
+  }
   if (checks?.usage !== undefined) {
     usage = usage === undefined ? checks.usage : addUsage(usage, checks.usage);
   }
