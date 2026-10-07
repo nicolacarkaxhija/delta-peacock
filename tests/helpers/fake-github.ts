@@ -18,7 +18,13 @@ export interface FakeGitHub {
   baseUrl: string;
   reviewComments: FakeComment[];
   issueComments: FakeComment[];
-  statuses: { state: string; description: string; context: string; sha: string }[];
+  statuses: {
+    state: string;
+    description: string;
+    context: string;
+    sha: string;
+    targetUrl?: string;
+  }[];
   /** Every non-GET request the server ever saw; dry-run asserts this stays empty. */
   writes: WriteRecord[];
   prText: { title: string; body: string };
@@ -153,6 +159,7 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
           description: body["description"] as string,
           context: body["context"] as string,
           sha: statuses.exec(path)?.[1] ?? "",
+          ...(typeof body["target_url"] === "string" ? { targetUrl: body["target_url"] } : {}),
         });
         send(response, 201, state.statuses.at(-1));
       } else {

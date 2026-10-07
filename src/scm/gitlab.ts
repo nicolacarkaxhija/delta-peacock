@@ -6,6 +6,7 @@ import type {
   StatusState,
 } from "./port.js";
 import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
+import { encodeFilePath } from "./addresses.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface GitLabPortOptions {
@@ -48,6 +49,8 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
   const base = normalizeBaseUrl(options.baseUrl, "https://gitlab.com/api/v4");
   const project = encodeURIComponent(options.repository);
   const mr = `${base}/projects/${project}/merge_requests/${String(options.pullRequest)}`;
+  const web = `${base.replace(/\/api\/v4$/, "")}/${options.repository}`;
+  const mergeRequestUrl = `${web}/-/merge_requests/${String(options.pullRequest)}`;
   let meta: MergeRequestMeta | undefined;
 
   async function request(method: string, url: string, body?: unknown): Promise<Response> {
@@ -94,6 +97,11 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
     return meta;
   }
 
+  function fileUrl(file: string, ref: string, line?: number): string {
+    const anchor = line === undefined ? "" : `#L${String(line)}`;
+    return `${web}/-/blob/${encodeURIComponent(ref)}/${encodeFilePath(file)}${anchor}`;
+  }
+
   const toComment = (note: GitLabNote): ScmComment => ({
     id: String(note.id),
     body: note.body,
@@ -105,9 +113,9 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
     async listInlineComments(): Promise<ScmComment[]> {
       return (await listNotes()).filter((note) => note.position != null).map(toComment);
     },
-    async createInlineComment(comment: NewInlineComment): Promise<void> {
+    async createInlineComment(comment: NewInlineComment): Promise<string | undefined> {
       const refs = (await resolveMeta()).diff_refs;
-      await request("POST", `${mr}/discussions`, {
+      const response = await request("POST", `${mr}/discussions`, {
         body: comment.body,
         position: {
           position_type: "text",
@@ -118,6 +126,9 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
           new_line: comment.line,
         },
       });
+      // the note, not the discussion, is what a link and a later edit address
+      const created = (await response.json()) as { notes: { id: number }[] };
+      return created.notes.map((note) => String(note.id))[0];
     },
     async updateComment(id: string, body: string): Promise<void> {
       await request("PUT", `${mr}/notes/${id}`, { body });
@@ -140,11 +151,15 @@ export function createGitLabPort(options: GitLabPortOptions): ScmPort {
         state: STATUS_STATES[state],
         name: name ?? DEFAULT_DISPLAY_NAME,
         description,
+        target_url: mergeRequestUrl,
       });
     },
-    fileUrl(file: string, branch: string): string {
-      const web = base.replace(/\/api\/v4$/, "");
-      return `${web}/${options.repository}/-/blob/${encodeURIComponent(branch)}/${encodeURI(file)}`;
+    fileUrl,
+    commitUrl(sha: string): string {
+      return `${web}/-/commit/${encodeURIComponent(sha)}`;
+    },
+    commentUrl(id: string): string {
+      return `${mergeRequestUrl}#note_${id}`;
     },
     async getPullRequestAuthor(): Promise<string> {
       const current = (await (await request("GET", mr)).json()) as {

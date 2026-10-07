@@ -10,6 +10,7 @@ import type {
 } from "./port.js";
 import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
 import type { Severity } from "../domain/severity.js";
+import { encodeFilePath } from "./addresses.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
 export interface BitbucketPortOptions {
@@ -86,8 +87,8 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
   const base = normalizeBaseUrl(options.baseUrl, "https://api.bitbucket.org/2.0");
   const repo = options.repository;
   const pr = String(options.pullRequest);
-  const statusUrl =
-    absoluteHttpUrl(options.statusUrl) ?? `https://bitbucket.org/${repo}/pull-requests/${pr}`;
+  const site = `https://bitbucket.org/${repo}`;
+  const statusUrl = absoluteHttpUrl(options.statusUrl) ?? `${site}/pull-requests/${pr}`;
   let source: { sha: string; branch: string | undefined } | undefined;
   let self: Promise<string> | undefined;
 
@@ -187,6 +188,11 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     return (await resolveSource()).sha;
   }
 
+  function fileUrl(file: string, ref: string, line?: number): string {
+    const anchor = line === undefined ? "" : `#lines-${String(line)}`;
+    return `${site}/src/${encodeURIComponent(ref)}/${encodeFilePath(file)}${anchor}`;
+  }
+
   function currentUserId(): Promise<string> {
     self ??= resolveSelf();
     return self;
@@ -199,8 +205,12 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     // one word everywhere: comments, summary and status read like the annotations
     severityScale: BITBUCKET_SEVERITIES,
     currentUserId,
-    fileUrl(file: string, branch: string): string {
-      return `https://bitbucket.org/${repo}/src/${encodeURIComponent(branch)}/${encodeURI(file)}`;
+    fileUrl,
+    commitUrl(sha: string): string {
+      return `${site}/commits/${encodeURIComponent(sha)}`;
+    },
+    commentUrl(id: string): string {
+      return `${site}/pull-requests/${pr}#comment-${id}`;
     },
     async listInlineComments(): Promise<ScmComment[]> {
       const all = await listComments();

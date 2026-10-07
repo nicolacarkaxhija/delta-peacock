@@ -19,7 +19,7 @@ export interface FakeNote {
 export interface FakeGitLab {
   baseUrl: string;
   notes: FakeNote[];
-  statuses: { state: string; description: string; name: string; sha: string }[];
+  statuses: { state: string; description: string; name: string; sha: string; targetUrl?: string }[];
   /** Every non-GET request the server ever saw; dry-run asserts this stays empty. */
   writes: { method: string; url: string }[];
   /** URL-encoded project ids the server was addressed with. */
@@ -155,6 +155,7 @@ export async function startFakeGitLab(): Promise<FakeGitLab> {
           description: body["description"] as string,
           name: body["name"] as string,
           sha: statuses.exec(path)?.[1] ?? "",
+          ...(typeof body["target_url"] === "string" ? { targetUrl: body["target_url"] } : {}),
         });
         send(response, 201, state.statuses.at(-1));
       } else {

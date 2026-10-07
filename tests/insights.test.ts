@@ -94,8 +94,8 @@ describe("bitbucket code insights", () => {
         { title: "Critical", type: "NUMBER", value: 1 },
         { title: "High", type: "NUMBER", value: 1 },
       ]);
-      expect(fake.insightAnnotations[0]?.link).toBe(
-        "https://bitbucket.org/acme/widgets/src/main/guidelines/no-console.md",
+      expect(fake.insightAnnotations[0]?.link).toMatch(
+        /^https:\/\/bitbucket\.org\/acme\/widgets\/src\/[0-9a-f]{40}\/guidelines\/g0\.md$/,
       );
       expect(fake.insightAnnotations.map((a) => a.severity)).toEqual(["CRITICAL", "HIGH"]);
       expect(fake.insightAnnotations[0]).toMatchObject({

@@ -95,12 +95,14 @@ describe("bitbucket pull request tasks", () => {
       commitStatus: true,
       tasks: true,
       lineTextOf: () => "const panel = page.getByTestId('size-guide');",
-      resolvedIn: "0123456789abcdef",
+      reviewedCommit: "0123456789abcdef",
       dryRun: false,
     });
     expect(fake.tasks[0]?.state).toBe("RESOLVED");
     const comment = fake.comments.find((entry) => entry.inline !== undefined);
-    expect(comment?.content.raw).toContain("Resolved in `0123456789ab`");
+    expect(comment?.content.raw).toContain(
+      "Resolved in [0123456789ab](https://bitbucket.org/ws/repo/commits/0123456789abcdef)",
+    );
     const taskWrite = fake.writes.findIndex((write) => /\/tasks\/\d+$/.test(write.url));
     const commentWrite = fake.writes.findIndex(
       (write, index) => index > 0 && write.method === "PUT" && /\/comments\/\d+$/.test(write.url),

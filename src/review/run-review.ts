@@ -21,7 +21,8 @@ import {
   type AcquiredDiff,
 } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
-import { resolveGuidelines } from "../guidelines/loader.js";
+import { resolveGuidelines, type ResolvedGuidelines } from "../guidelines/loader.js";
+import { guidelineSources } from "./guideline-sources.js";
 import { buildModelPort, noModel } from "../model/build.js";
 import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/port.js";
 import { withFetched } from "../model/generate.js";
@@ -134,12 +135,13 @@ export async function runReview(
   }
   for (const notice of loaded.notices) deps.err(`${notice}\n`);
   for (const problem of loaded.problems) deps.err(`guideline skipped: ${problem}\n`);
+  const sources: PublishSources = { guidelines: loaded, targetRef: resolvedTarget.ref };
   // a check posts only a sentence its guideline really says
   const unquotable = checkSentenceProblems(loaded.guidelines, config.review.checks);
   if (unquotable.length > 0) throw new ConfigError(unquotable);
   if (loaded.guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no usable guidelines found; nothing to review against\n");
-    await publishAllClear(deps, config, NOT_REVIEWED.noGuidelines);
+    await publishAllClear(deps, config, NOT_REVIEWED.noGuidelines, sources);
     return 0;
   }
 
@@ -176,13 +178,13 @@ export async function runReview(
   for (const notice of acquired.notices) deps.err(`${notice}\n`);
   if (acquired.skipped === "too-large") {
     deps.out("review skipped: the diff exceeds the configured size ceiling\n");
-    await publishAllClear(deps, config, NOT_REVIEWED.tooLarge);
+    await publishAllClear(deps, config, NOT_REVIEWED.tooLarge, sources);
     return 0;
   }
   const diff = acquired.text;
   if (diff.trim() === "") {
     deps.out(`nothing to review: no changes against ${acquired.targetRef}\n`);
-    await publishAllClear(deps, config, NOT_REVIEWED.nothingInScope);
+    await publishAllClear(deps, config, NOT_REVIEWED.nothingInScope, sources);
     return 0;
   }
 
@@ -194,7 +196,7 @@ export async function runReview(
   }
   if (guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no guidelines apply to this change; nothing to review against\n");
-    await publishAllClear(deps, config, NOT_REVIEWED.noneApply);
+    await publishAllClear(deps, config, NOT_REVIEWED.noneApply, sources);
     return 0;
   }
 
@@ -564,18 +566,23 @@ export async function runReview(
     }
   }
 
-  await publishIfConfigured(deps, config, {
-    findings: kept,
-    proposals,
-    droppedUncited: parsed.droppedUncited,
-    filtered: filtered.length,
-    gate,
-    changedFiles: changedFiles.length,
-    commitStatus: config.scm.commitStatus,
-    comments: config.scm.comments,
-    dryRun: isDryRun(config),
-    ...(facts !== undefined ? { factsOnly: factsScope(facts, config) } : {}),
-  });
+  await publishIfConfigured(
+    deps,
+    config,
+    {
+      findings: kept,
+      proposals,
+      droppedUncited: parsed.droppedUncited,
+      filtered: filtered.length,
+      gate,
+      changedFiles: changedFiles.length,
+      commitStatus: config.scm.commitStatus,
+      comments: config.scm.comments,
+      dryRun: isDryRun(config),
+      ...(facts !== undefined ? { factsOnly: factsScope(facts, config) } : {}),
+    },
+    sources,
+  );
 
   if (usage !== undefined) {
     deps.err(`${await spendLine(config, usage, now)}\n`);
@@ -1240,18 +1247,28 @@ async function apiDiffFallback(
  * A run with nothing to review still reconciles: stale comments from earlier
  * runs resolve, the summary refreshes, and the status turns green.
  */
-async function publishAllClear(deps: ReviewDeps, config: Config, line: string): Promise<void> {
-  await publishIfConfigured(deps, config, {
-    findings: [],
-    proposals: [],
-    droppedUncited: 0,
-    filtered: 0,
-    gate: evaluateGate([], config.gate.failOn),
-    outcome: { kind: "not-reviewed", line },
-    commitStatus: config.scm.commitStatus,
-    comments: config.scm.comments,
-    dryRun: isDryRun(config),
-  });
+async function publishAllClear(
+  deps: ReviewDeps,
+  config: Config,
+  line: string,
+  sources: PublishSources,
+): Promise<void> {
+  await publishIfConfigured(
+    deps,
+    config,
+    {
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 0,
+      gate: evaluateGate([], config.gate.failOn),
+      outcome: { kind: "not-reviewed", line },
+      commitStatus: config.scm.commitStatus,
+      comments: config.scm.comments,
+      dryRun: isDryRun(config),
+    },
+    sources,
+  );
 }
 
 /**
@@ -1340,12 +1357,28 @@ export function trackedFiles(cwd: string): string[] {
   }
 }
 
-/** The checked out commit, short; undefined outside a git checkout. */
+/** The checked out commit, full hash; undefined outside a git checkout. */
 function reviewedCommit(cwd: string): string | undefined {
   try {
-    return runGit(cwd, ["rev-parse", "--short=12", "HEAD"]).trim();
+    return runGit(cwd, ["rev-parse", "HEAD"]).trim();
   } catch {
     return undefined;
+  }
+}
+
+/** Where the published text's links come from: the loaded guidelines and the target ref. */
+interface PublishSources {
+  guidelines: Pick<ResolvedGuidelines, "guidelines" | "origin">;
+  targetRef: string;
+}
+
+/** True when the ref holds the file. */
+function fileOnRef(cwd: string, ref: string, file: string): boolean {
+  try {
+    runGit(cwd, ["cat-file", "-e", `${ref}:${file}`]);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -1361,6 +1394,7 @@ async function publishIfConfigured(
     Parameters<typeof publishReview>[1],
     "codeInsights" | "presentation" | "tasks" | "lineTextOf"
   >,
+  sources?: PublishSources,
 ): Promise<void> {
   if (config.scm.provider === "local") return;
   // publishReview itself holds the hard guarantee now: a dry run trips zero
@@ -1369,9 +1403,13 @@ async function publishIfConfigured(
   const { guidePath } = config.review;
   const lines = new Map<string, readonly string[] | undefined>();
   const head = reviewedCommit(deps.cwd);
+  // the guide links to the target branch, so only a guide already there gets a link
+  const guideOnTarget =
+    sources === undefined ? undefined : fileOnRef(deps.cwd, sources.targetRef, guidePath);
+  const guideExists = guideOnTarget === true || existsSync(path.resolve(deps.cwd, guidePath));
   const outcome = await publishReview(scm, {
     ...input,
-    ...(head !== undefined ? { resolvedIn: head } : {}),
+    ...(head !== undefined ? { reviewedCommit: head } : {}),
     tasks: config.scm.tasks,
     lineTextOf: (file, line) => {
       if (!lines.has(file)) lines.set(file, linesAtHead(deps.cwd, file, undefined));
@@ -1383,7 +1421,11 @@ async function publishIfConfigured(
       displayName: config.review.displayName,
       guidelinesDir: config.review.guidelinesDir,
       targetBranch: targetBranch(config.review.target),
-      ...(existsSync(path.resolve(deps.cwd, guidePath)) ? { guidePath } : {}),
+      ...(guideExists ? { guidePath } : {}),
+      ...(guideOnTarget === false ? { guideLinked: false } : {}),
+      ...(sources !== undefined
+        ? { guidelineFiles: guidelineSources(deps.cwd, sources.guidelines, head) }
+        : {}),
     },
   });
   for (const notice of outcome.notices) deps.err(`${notice}\n`);
