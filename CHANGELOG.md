@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.3.0...delta-peacock-v0.4.0) (2026-10-07)
+
+
+### Features
+
+* **scm:** link every commit, file, guideline and finding comment the reviewer writes ([980b9fa](https://github.com/nicolacarkaxhija/delta-peacock/commit/980b9fa44d813066569de92d5be52a0c7b94f4a5))
+
+
+### Bug Fixes
+
+* **scm:** name the short hash length ([cdb332c](https://github.com/nicolacarkaxhija/delta-peacock/commit/cdb332c3ff3f44eb9498355411f7539868a3e3c4))
+
 ## [0.3.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.2.0...delta-peacock-v0.3.0) (2026-10-07)
 
 
