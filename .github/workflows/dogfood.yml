@@ -36,14 +36,14 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DELTA_PEACOCK_MODEL_PROVIDER: bedrock
-          DELTA_PEACOCK_MODEL_ID: eu.anthropic.claude-sonnet-4-5-20250929-v1:0
+          DELTA_PEACOCK_MODEL_ID: eu.anthropic.claude-haiku-4-5-20251001-v1:0
           DELTA_PEACOCK_SCM_PROVIDER: github
           DELTA_PEACOCK_SCM_REPOSITORY: ${{ github.repository }}
           DELTA_PEACOCK_SCM_PULL_REQUEST: ${{ github.event.pull_request.number }}
           DELTA_PEACOCK_REVIEW_TARGET: ${{ github.event.pull_request.base.ref }}
-          # the cost guard is armed for real: sonnet rates, cents-level ceiling
-          DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3.30"
-          DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "16.50"
+          # the cost guard is armed for real: haiku rates, cents-level ceiling
+          DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "1.10"
+          DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "5.50"
           DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.10"
       - uses: actions/upload-artifact@v4
         if: always()
