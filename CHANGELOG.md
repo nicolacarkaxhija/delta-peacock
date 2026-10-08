@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.8.0...delta-peacock-v0.9.0) (2026-10-08)
+
+
+### Features
+
+* **scm:** link the guideline and the finding's comment in a Bitbucket task ([20b990f](https://github.com/nicolacarkaxhija/delta-peacock/commit/20b990fdf2d6a6be8c6ebd97181178ff4a34a7c5))
+* **scm:** link ticket keys in comments, summaries and resolved traces ([96d04dd](https://github.com/nicolacarkaxhija/delta-peacock/commit/96d04ddca7858b62003eee9b1d6c4451d02b2811))
+
 ## [0.8.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.7.0...delta-peacock-v0.8.0) (2026-10-08)
 
 
