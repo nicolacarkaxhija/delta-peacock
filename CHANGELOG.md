@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.6.0...delta-peacock-v0.7.0) (2026-10-08)
+
+
+### Features
+
+* **review:** exclusions in the judge prompt ([a320aa2](https://github.com/nicolacarkaxhija/delta-peacock/commit/a320aa2d85e70ddee4c0d86291a387f7314d0325))
+
+
+### Bug Fixes
+
+* **review:** decide exclusions the same way every time ([a745939](https://github.com/nicolacarkaxhija/delta-peacock/commit/a7459392c0ed1ca7af8741b23bcf2d32dc7b0132))
+* **review:** keep findings on changed lines only ([6517320](https://github.com/nicolacarkaxhija/delta-peacock/commit/65173205bb82b52663cec0336ffe0d3cd6b7a97d))
+
 ## [0.6.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.5.0...delta-peacock-v0.6.0) (2026-10-08)
 
 
