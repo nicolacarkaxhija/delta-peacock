@@ -76,7 +76,9 @@ It fails when any finding is wrong, when a finding appears in some repeats and n
 (for the whole run, and per case).
 
 The table shows per case: the findings expected, then found, right, wrong and missed per repeat,
-the drift, the mean time and the cost of all repeats. Logs and reports of every review land in
+the findings the review dropped off the change per repeat (see
+[findings on changed lines](checks.md#findings-on-changed-lines)), the drift, the mean time and
+the cost of all repeats. The total line and `summary.json` carry the same count as `offChange`. Logs and reports of every review land in
 `<cases>/runs/<timestamp>/`, with each refused candidate in the log for tracing a miss.
 
 ## The baseline

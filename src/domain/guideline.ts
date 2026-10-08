@@ -67,4 +67,6 @@ export interface Guideline {
   check?: PatternCheck;
   /** Sentences of the guideline naming cases that are never a finding; each one is checked before a finding stands. */
   exclusions?: readonly string[];
+  /** file lets a model finding sit on any line of a changed file; absent keeps it to added or edited lines. */
+  scope?: "file";
 }

@@ -44,6 +44,7 @@ import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
+import { keepOnChangedLines } from "./changed-lines.js";
 import { applyExclusions } from "./exclusions.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
@@ -303,7 +304,13 @@ export async function runReview(
     );
   }
   // two findings that quote one line under one guideline are one finding
-  const placed = dedupeFindings(placeFindings(open.kept, linesOfFile));
+  // a diff review judges the change: a finding on hunk context alone is not about it
+  const onChange = keepOnChangedLines(
+    dedupeFindings(placeFindings(open.kept, linesOfFile)),
+    diffLines,
+    parseOptions.guidelinesById,
+  );
+  const placed = onChange.kept;
   // a case the guideline says is never a finding is held against every finding it could excuse
   const excluded =
     noOpenReview || placed.length === 0
@@ -393,6 +400,7 @@ export async function runReview(
     rejected: [
       ...executed.parsed.rejected,
       ...open.dropped,
+      ...onChange.dropped,
       ...(excluded?.dropped ?? []),
       ...(checks?.rejected ?? []),
       ...moved.dropped,
@@ -493,6 +501,7 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
       droppedStructural,
+      droppedOffChange: onChange.dropped.length,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       droppedMisquoted: parsed.droppedMisquoted,
@@ -552,6 +561,7 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
       droppedStructural,
+      droppedOffChange: onChange.dropped.length,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       droppedMisquoted: parsed.droppedMisquoted,
@@ -607,6 +617,7 @@ export async function runReview(
       findings: kept,
       proposals,
       droppedUncited: parsed.droppedUncited,
+      droppedOffChange: onChange.dropped.length,
       filtered: filtered.length,
       gate,
       changedFiles: changedFiles.length,

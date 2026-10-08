@@ -344,7 +344,7 @@ describe("the backtest command", () => {
     // b gets the same scripted finding although the human judged b clean
     expect(code).toBe(2);
     expect(io.text()).toContain(
-      "| case | expected | found | right | wrong | missed | drift | time | cost |",
+      "| case | expected | found | right | wrong | missed | off change | drift | time | cost |",
     );
     expect(io.text()).toMatch(
       /b r1 wrong: src\/app\.js:2 no-console MAJOR "Console call added", not in the human judgement/,
@@ -358,6 +358,36 @@ describe("the backtest command", () => {
     expect(summary.cases).toHaveLength(2);
     expect(existsSync(path.join(dir, "runs", "2026-09-25T12-00-00", "a.r1.log"))).toBe(true);
     expect(io.err.join("")).toMatch(/backtest: a\.r1 1 found, 0 wrong, 0 missed/);
+  });
+
+  it("counts the findings the review dropped off the change in the table and the report", async () => {
+    const dir = makeCases({ a: {} });
+    const io = capture();
+    const unchanged = {
+      ...CONSOLE_FINDING,
+      line: 1,
+      quote: "function greet(name) {",
+      title: "Console call nearby",
+    };
+    const model = scripted(found([CONSOLE_FINDING, unchanged]));
+    const report = path.join(dir, "..", `${path.basename(dir)}-off-change.json`);
+    const code = await runBacktestCommand(
+      {
+        ...testDeps(dir, {}, { modelPort: model.port }),
+        out: (text) => io.out.push(text),
+        err: () => undefined,
+      },
+      { ...options(dir), report },
+    );
+    expect(code).toBe(0);
+    expect(io.text()).toMatch(/^\| a \| 1 \| 1\/1 \| 1\/1 \| 0\/0 \| 0\/0 \| 1\/1 \| 0 \|/m);
+    expect(io.text()).toContain("2 finding(s) off the change");
+    const summary = JSON.parse(readFileSync(report, "utf8")) as {
+      offChange: number;
+      cases: { runs: { offChange: number }[] }[];
+    };
+    expect(summary.offChange).toBe(2);
+    expect(summary.cases[0]?.runs.map((run) => run.offChange)).toEqual([1, 1]);
   });
 
   it("refuses an anchor window that is not a whole number of lines", async () => {
