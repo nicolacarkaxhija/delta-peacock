@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.5.0...delta-peacock-v0.6.0) (2026-10-08)
+
+
+### Features
+
+* **backtest:** count a finding a few lines beside the expected span with --anchor-window ([b06075f](https://github.com/nicolacarkaxhija/delta-peacock/commit/b06075f1d3343a030b5b9d5e79893fd6476258e3))
+* **cost:** post and count the fact findings of a review the cost cap stops ([71a009d](https://github.com/nicolacarkaxhija/delta-peacock/commit/71a009d9785e55d242de14c1b06aca81eb45754a))
+* **cost:** stop a review's model calls once their actual cost reaches the cap ([29e798c](https://github.com/nicolacarkaxhija/delta-peacock/commit/29e798c9dcb232abe77b4432ebe0ac7b1cd1f667))
+* **review:** hold every finding against the exclusions its guideline lists ([513a85d](https://github.com/nicolacarkaxhija/delta-peacock/commit/513a85d55aacb9454b53ec34823412462c40c526))
+
+
+### Bug Fixes
+
+* **review:** name the exclusion check limits ([ce7919c](https://github.com/nicolacarkaxhija/delta-peacock/commit/ce7919c933caa92d5e6f3f06eb925814e8b7cf69))
+* **review:** send each batch only its own files' context and cache the shared prompt prefix ([8c65fa9](https://github.com/nicolacarkaxhija/delta-peacock/commit/8c65fa95d55ab3e085c7a9564414c5f56b602fdc))
+
 ## [0.5.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.4.0...delta-peacock-v0.5.0) (2026-10-07)
 
 
