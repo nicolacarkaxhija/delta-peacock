@@ -32,6 +32,35 @@ export interface Presentation {
   guideLinked?: boolean;
   /** The host's own severity words; absent means the reviewer's scale. */
   severityScale?: SeverityScale;
+  /** Ticket keys in prose and their web links; absent leaves keys plain. */
+  tickets?: TicketLinks;
+}
+
+/** What a ticket key looks like and where its ticket lives. */
+export interface TicketLinks {
+  /** A regular expression source matching one key. */
+  pattern: string;
+  link: (key: string) => string;
+}
+
+/** Spans a key is never linked inside: code, links, HTML and addresses. */
+const NEVER_LINKED =
+  /```[\s\S]*?```|`[^`\n]*`|!?\[[^\]\n]*\]\([^)\s]*\)|<[^>\n]*>|https?:\/\/[^\s<>()]+/g;
+
+/** Links every ticket key in prose; code, links and addresses stay as they are. */
+export function linkTickets(text: string, presentation: Pick<Presentation, "tickets">): string {
+  const { tickets } = presentation;
+  if (tickets === undefined) return text;
+  const key = new RegExp(`(?<![\\w-])(?:${tickets.pattern})(?!\\w)`, "g");
+  const link = (prose: string) =>
+    prose.replace(key, (match) => `[${match}](${tickets.link(match)})`);
+  let linked = "";
+  let last = 0;
+  for (const span of text.matchAll(NEVER_LINKED)) {
+    linked += link(text.slice(last, span.index)) + span[0];
+    last = span.index + span[0].length;
+  }
+  return linked + link(text.slice(last));
 }
 
 /** A host's name for each review severity, upper case; the gate keeps the review scale. */
@@ -122,14 +151,14 @@ export function renderCommentBody(
   const lines = [
     `**${severityWord(finding.severity, presentation)}** · ${citation(finding, presentation)}`,
     "",
-    reason,
+    linkTickets(reason, presentation),
   ];
   const rule = guidelineLine(finding);
-  if (rule !== undefined) lines.push("", rule);
+  if (rule !== undefined) lines.push("", linkTickets(rule, presentation));
   if (finding.suggestion !== undefined) {
     lines.push("", `\`\`\`${presentation.suggestionFence}`, finding.suggestion, "```");
   }
-  if (finding.note !== undefined) lines.push("", `_${finding.note}_`);
+  if (finding.note !== undefined) lines.push("", `_${linkTickets(finding.note, presentation)}_`);
   if (presentation.markers) lines.push("", `<!-- delta-peacock:finding:${fingerprint} -->`);
   return lines.join("\n");
 }
@@ -493,10 +522,11 @@ function placeText(finding: Finding, presentation: Presentation): string {
 
 function listItem(finding: Finding, presentation: Presentation): string {
   const head = `- **${severityWord(finding.severity, presentation)}** ${citation(finding, presentation)} in ${placeText(finding, presentation)}`;
-  if (finding.unplaced === true) {
-    return `${head}: ${finding.title.replace(/[.\s]+$/, "")}. ${String(finding.note)}`;
-  }
-  return `${head}: ${finding.title}`;
+  const text =
+    finding.unplaced === true
+      ? `${finding.title.replace(/[.\s]+$/, "")}. ${String(finding.note)}`
+      : finding.title;
+  return `${head}: ${linkTickets(text, presentation)}`;
 }
 
 /** The summary's first line; guideline ids in it link where they can. */
@@ -548,7 +578,7 @@ export function renderSummaryBody(
     lines.push("", "### Proposed guidelines", "");
     for (const proposal of input.proposals) {
       lines.push(
-        `- \`${proposal.id}\` (${lowerWord(proposal.severity, presentation)}): ${proposal.rationale}`,
+        `- \`${proposal.id}\` (${lowerWord(proposal.severity, presentation)}): ${linkTickets(proposal.rationale, presentation)}`,
       );
     }
   }

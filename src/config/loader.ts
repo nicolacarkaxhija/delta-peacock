@@ -57,6 +57,8 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_SCM_TASKS: "scm.tasks",
   DELTA_PEACOCK_SCM_BASE_URL: "scm.baseUrl",
   DELTA_PEACOCK_SCM_DRY_RUN: "scm.dryRun",
+  DELTA_PEACOCK_TICKETS_URL: "tickets.url",
+  DELTA_PEACOCK_TICKETS_PATTERN: "tickets.pattern",
   DELTA_PEACOCK_STATS_ENABLED: "stats.enabled",
   DELTA_PEACOCK_STATS_PATH: "stats.path",
   DELTA_PEACOCK_CACHE_ENABLED: "cache.enabled",

@@ -225,6 +225,30 @@ export const ScmSchema = z.strictObject({
   dryRun: z.boolean().default(false),
 });
 
+/** A regular expression source that compiles. */
+function compiles(source: string): boolean {
+  try {
+    new RegExp(source);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const TicketsSchema = z.strictObject({
+  /** A ticket's web address with {key} for its key; unset leaves keys plain. */
+  url: z
+    .string()
+    .regex(/^https?:\/\/\S*\{key\}/, "tickets.url must be an http(s) address holding {key}")
+    .optional(),
+  /** What a ticket key looks like, as a regular expression. */
+  pattern: z
+    .string()
+    .min(1)
+    .refine(compiles, "tickets.pattern must be a regular expression")
+    .default("[A-Z][A-Z0-9]+-\\d+"),
+});
+
 export const RedactionSchema = z.strictObject({
   /** Extra patterns applied on top of the built-ins; each compiles as a global RegExp. */
   patterns: z
@@ -250,6 +274,7 @@ export const ConfigSchema = z
     exclusions: ExclusionsSchema.prefault({}),
     cache: CacheSchema.prefault({}),
     stats: StatsSchema.prefault({}),
+    tickets: TicketsSchema.prefault({}),
   })
   .superRefine((config, ctx) => {
     if (config.model.provider === "none") {

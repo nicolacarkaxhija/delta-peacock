@@ -85,6 +85,13 @@ export function renderConfigYaml(answers: WalkthroughAnswers): string {
       `  maxPerReview: ${String(answers.maxPerReview)}`,
     );
   }
+  lines.push(
+    "",
+    "# ticket keys in comments and summaries link to their tickets; {key} is the key",
+    "# tickets:",
+    "#   url: https://tracker.example.com/browse/{key}",
+    "#   pattern: '[A-Z][A-Z0-9]+-\\d+'",
+  );
   return `${lines.join("\n")}\n`;
 }
 
