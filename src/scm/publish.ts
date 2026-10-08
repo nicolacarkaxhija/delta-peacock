@@ -475,16 +475,23 @@ export function lineDigest(text: string | undefined): string {
 
 const TASK_REF = /\bref ([0-9a-f]+(?:-\d+)?)\.([0-9a-f]{8})$/;
 
-/** One line a person reads, ending in the reference a later run matches on. */
+/** One line a person reads, ending in the reference a later run matches on; Bitbucket renders its links. */
 export function taskContent(
   finding: Finding,
   fingerprint: string,
   digest: string,
-  presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
+  presentation: Presentation = DEFAULT_PRESENTATION,
 ): string {
-  // plain on purpose: no recorded host answer shows a task rendering Markdown
-  const cite = finding.kind === "violation" ? finding.guidelineId : "observation";
-  return `${severityWord(finding.severity, presentation)}: ${cite} in ${finding.file} line ${String(finding.line)}, ref ${fingerprint}.${digest}`;
+  const id = finding.kind === "violation" ? finding.guidelineId : "observation";
+  const guideline =
+    finding.kind === "violation" && finding.pack === undefined
+      ? guidelineUrl(id, presentation)
+      : undefined;
+  const cite = guideline === undefined ? id : `[${id}](${guideline})`;
+  const where = `${finding.file} line ${String(finding.line)}`;
+  const place = presentation.placeLink?.(finding);
+  const at = place === undefined ? where : `[${where}](${place})`;
+  return `${severityWord(finding.severity, presentation)}: ${cite} in ${at}, ref ${fingerprint}.${digest}`;
 }
 
 interface OwnTask {
@@ -497,14 +504,15 @@ interface OwnTask {
 
 function ownTask(task: ScmTask): OwnTask | undefined {
   const ref = TASK_REF.exec(task.content);
-  const where = / in (.+) line (\d+), ref /.exec(task.content);
+  // a linked place, or the plain one earlier versions wrote
+  const where = / in (?:\[(.+) line (\d+)\]\([^)\s]*\)|(.+) line (\d+)), ref /.exec(task.content);
   if (ref === null || where === null) return undefined;
   return {
     task,
     fingerprint: String(ref[1]),
     digest: String(ref[2]),
-    file: String(where[1]),
-    line: Number(where[2]),
+    file: String(where[1] ?? where[3]),
+    line: Number(where[2] ?? where[4]),
   };
 }
 
