@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.7.0...delta-peacock-v0.8.0) (2026-10-08)
+
+
+### Features
+
+* **checks:** decide a guideline from the syntax tree ([f72e38b](https://github.com/nicolacarkaxhija/delta-peacock/commit/f72e38b652d3c645c4f1da4afa20a9d602c72a61))
+
 ## [0.7.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.6.0...delta-peacock-v0.7.0) (2026-10-08)
 
 
