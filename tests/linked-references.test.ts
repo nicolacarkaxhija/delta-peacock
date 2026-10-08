@@ -42,7 +42,7 @@ const REASON =
   "Name the spec for what it checks.\n\nGuideline: A spec file is named for the feature it checks.";
 const LINKED_BODY = `**Medium** · [spec-named-for-feature](${GUIDE})\n\n${REASON}`;
 const RESOLVED_TAIL = "the flagged line changed or the finding no longer holds.";
-/** The task text every version writes; plain, since no recorded host answer shows a task rendering Markdown. */
+/** The plain task text earlier versions wrote; still matched by its reference. */
 const TASK = `Medium: spec-named-for-feature in ${FILE} line 1, ${REF}`;
 
 /** The headings earlier versions wrote for the same finding. */
@@ -208,11 +208,14 @@ describe("addresses each host builds", () => {
 });
 
 describe("inline comments on a bitbucket pull request", () => {
-  it("link the guideline in the heading and leave the task text plain", async () => {
+  it("link the guideline in the heading, and the guideline and comment in the task", async () => {
     const outcome = await publish([finding]);
     expect(outcome.created).toBe(1);
     expect(inline()[0]?.content.raw).toBe(LINKED_BODY);
-    expect(fake.tasks.map((task) => task.content.raw)).toEqual([TASK]);
+    const comment = `${SITE}/pull-requests/10#comment-${String(inline()[0]?.id)}`;
+    expect(fake.tasks.map((task) => task.content.raw)).toEqual([
+      `Medium: [spec-named-for-feature](${GUIDE}) in [${FILE} line 1](${comment}), ${REF}`,
+    ]);
   });
 
   it("keep a pack guideline in code, since it has no file in the repository", async () => {

@@ -59,7 +59,7 @@ describe("bitbucket pull request tasks", () => {
     const [task] = fake.tasks;
     expect(task?.comment?.id).toBe(fake.comments.find((c) => c.inline !== undefined)?.id);
     expect(task?.content.raw).toMatch(
-      /^High: prefer-test-ids in pages\/pdp\.ts line 29, ref [0-9a-f]+\.[0-9a-f]{8}$/,
+      /^High: \[prefer-test-ids\]\(https:\/\/bitbucket\.org\/ws\/repo\/src\/main\/guidelines\/prefer-test-ids\.md\) in \[pages\/pdp\.ts line 29\]\(https:\/\/bitbucket\.org\/ws\/repo\/pull-requests\/10#comment-\d+\), ref [0-9a-f]+\.[0-9a-f]{8}$/,
     );
     expect(outcome.tasksCreated).toBe(1);
   });
@@ -276,7 +276,9 @@ describe("bitbucket pull request tasks", () => {
       return stderr;
     };
     expect(await run(reply)).toContain("tasks: 1 created, 0 resolved");
-    expect(fake.tasks[0]?.content.raw).toMatch(/^High: no-console in src\/app\.js line 1, ref /);
+    expect(fake.tasks[0]?.content.raw).toMatch(
+      /^High: \[no-console\]\([^)\s]+\) in \[src\/app\.js line 1\]\([^)\s]+#comment-\d+\), ref /,
+    );
     write(repo, "src/app.js", "logger.info('x');\n");
     commitAll(repo, "fix");
     expect(await run('{"findings": []}')).toContain("tasks: 0 created, 1 resolved");
