@@ -1525,6 +1525,9 @@ async function publishIfConfigured(
       targetBranch: targetBranch(config.review.target),
       ...(guideExists ? { guidePath } : {}),
       ...(guideOnTarget === false ? { guideLinked: false } : {}),
+      ...(config.tickets.url !== undefined
+        ? { tickets: { url: config.tickets.url, pattern: config.tickets.pattern } }
+        : {}),
       ...(sources !== undefined
         ? { guidelineFiles: guidelineSources(deps.cwd, sources.guidelines, head) }
         : {}),

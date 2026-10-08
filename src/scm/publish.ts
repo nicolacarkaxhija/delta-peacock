@@ -8,6 +8,7 @@ import {
   guidelineUrl,
   headingAnchor,
   linkedHeading,
+  linkTickets,
   markerFingerprint,
   renderCommentBody,
   isSummaryBody,
@@ -20,6 +21,7 @@ import {
   twoSentences,
   type Presentation,
   type SummaryInput,
+  type TicketLinks,
 } from "./comment-format.js";
 import type { InsightReport, ScmComment, ScmPort, ScmTask, StatusState } from "./port.js";
 
@@ -43,6 +45,16 @@ export interface PresentationSettings {
   guideLinked?: boolean;
   /** Each local guideline's file; an id missing here gets no link. */
   guidelineFiles?: ReadonlyMap<string, GuidelineSource>;
+  /** Ticket address with {key} for the key, and the key's pattern; absent leaves keys plain. */
+  tickets?: { url: string; pattern: string };
+}
+
+/** The ticket address with the key put in place of every {key}. */
+function ticketLinks(tickets: { url: string; pattern: string }): TicketLinks {
+  return {
+    pattern: tickets.pattern,
+    link: (key) => tickets.url.replaceAll("{key}", encodeURIComponent(key)),
+  };
 }
 
 /** Combines the settings with what the host can render; commentOf names a finding's comment. */
@@ -93,6 +105,7 @@ export function presentationFor(
     ...(base.guidePath !== undefined ? { guidePath: base.guidePath } : {}),
     ...(base.guideLinked !== undefined ? { guideLinked: base.guideLinked } : {}),
     ...(scm.severityScale !== undefined ? { severityScale: scm.severityScale } : {}),
+    ...(base.tickets !== undefined ? { tickets: ticketLinks(base.tickets) } : {}),
   };
 }
 
@@ -271,7 +284,10 @@ export function resolvedBody(
   const heading = linkedHeading(String(body.split("\n")[0]), presentation);
   const where =
     reviewedCommit !== undefined ? commitText(reviewedCommit, presentation) : "a later commit";
-  return `${heading}\n\n${RESOLVED_PREFIX}${where}: the flagged line changed or the finding no longer holds.`;
+  return linkTickets(
+    `${heading}\n\n${RESOLVED_PREFIX}${where}: the flagged line changed or the finding no longer holds.`,
+    presentation,
+  );
 }
 
 const TRACE_HASH = /^Resolved in `([0-9a-f]{7,40})`:/;
@@ -284,7 +300,7 @@ export function linkedTrace(body: string, presentation: Presentation): string {
     if (sha === undefined || presentation.commitLink === undefined) return line;
     return `${RESOLVED_PREFIX}${commitText(sha, presentation)}:${line.slice(line.indexOf("`:") + 2)}`;
   });
-  return [linkedHeading(heading, presentation), ...lines].join("\n");
+  return linkTickets([linkedHeading(heading, presentation), ...lines].join("\n"), presentation);
 }
 
 const LINK_TARGET = /\]\([^)\s]*\)/g;

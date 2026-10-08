@@ -693,6 +693,22 @@
         }
       },
       "additionalProperties": false
+    },
+    "tickets": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?:\\/\\/\\S*\\{key\\}"
+        },
+        "pattern": {
+          "default": "[A-Z][A-Z0-9]+-\\d+",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
