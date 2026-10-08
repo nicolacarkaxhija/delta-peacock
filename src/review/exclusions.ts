@@ -42,6 +42,12 @@ const SYSTEM = [
 const BEFORE = 20;
 const AFTER = 5;
 
+/** A verdict, a copied sentence and one reason fit well inside this many tokens. */
+const VERDICT_MAX_TOKENS = 300;
+
+/** An unreadable reply is asked once more, the same rule the judge follows. */
+const VERDICT_ATTEMPTS = 2;
+
 /** Numbered lines around a finding; >> marks the flagged one. */
 function excerptAround(lines: readonly string[], line: number): string {
   const from = Math.max(1, line - BEFORE);
@@ -72,7 +78,7 @@ function exclusionRequest(finding: Violation, guideline: Guideline, excerpt: str
       "</code>",
     ].join("\n"),
     temperature: 0,
-    maxOutputTokens: 300,
+    maxOutputTokens: VERDICT_MAX_TOKENS,
   };
 }
 
@@ -124,7 +130,7 @@ async function settle(finding: Finding, options: ExclusionOptions): Promise<Sett
   let usage: ModelUsage | undefined;
   let verdict: Verdict | undefined;
   let failure = "no readable verdict";
-  for (let attempt = 0; attempt < 2 && verdict === undefined; attempt += 1) {
+  for (let attempt = 0; attempt < VERDICT_ATTEMPTS && verdict === undefined; attempt += 1) {
     try {
       const reply = await options.port().complete(request);
       if (reply.usage !== undefined) {
