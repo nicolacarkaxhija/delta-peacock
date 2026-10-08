@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { ConfigSchema } from "../src/config/schema.js";
+import { spendCeiling } from "../src/cost/ceiling.js";
 import type { Finding } from "../src/domain/finding.js";
 import type { Guideline } from "../src/domain/guideline.js";
 import { parseGuidelineContent } from "../src/guidelines/loader.js";
@@ -61,6 +63,13 @@ function scripted(...replies: string[]): { port: ModelPort; requests: ModelReque
 
 const verdict = (value: object): string => JSON.stringify(value);
 
+const ZERO = {
+  rateInputPer1M: 0,
+  rateOutputPer1M: 0,
+  rateCacheReadPer1M: 0,
+  rateCacheWritePer1M: 0,
+};
+
 function options(port: ModelPort, rule: Guideline = guideline(GUARD)) {
   return {
     port: () => port,
@@ -88,9 +97,9 @@ describe("exclusions in the guideline frontmatter", () => {
 });
 
 describe("the exclusion check", () => {
-  it("drops a finding the judge excludes by copying a listed case", async () => {
+  it("drops a finding the verdict excludes by naming a listed sentence", async () => {
     const { port, requests } = scripted(
-      verdict({ verdict: "excluded", exclusion: EXCLUSION, reason: "name is a parameter" }),
+      verdict({ exclusion: EXCLUSION, reason: "name is a parameter" }),
     );
     const outcome = await applyExclusions([FINDING], options(port));
     expect(outcome.kept).toEqual([]);
@@ -99,23 +108,60 @@ describe("the exclusion check", () => {
       guidelineId: "guard-before-use",
     });
     expect(requests[0]?.user).toContain(`- ${EXCLUSION}`);
+    expect(requests[0]?.user).toContain("<line>\n  return name.length;\n</line>");
     expect(requests[0]?.user).toContain(">>   2|   return name.length;");
     expect(outcome.usage?.inputTokens).toBe(100);
   });
 
-  it("keeps a finding the judge says stands", async () => {
-    const { port } = scripted(verdict({ verdict: "stands", reason: "no listed case" }));
+  it("asks at temperature 0 for the listed sentence or none", async () => {
+    const { port, requests } = scripted(verdict({ exclusion: "none" }));
+    await applyExclusions([FINDING], options(port));
+    expect(requests[0]?.temperature).toBe(0);
+    expect(requests[0]?.system).toContain(
+      '{"exclusion": "<one listed sentence, copied exactly, or none>"',
+    );
+  });
+
+  it("reads a listed sentence despite quotes, a bullet and spacing", async () => {
+    const loose = `- "${EXCLUSION.replace(" the ", "  the ")}"`;
+    const { port } = scripted(verdict({ exclusion: loose }));
+    expect((await applyExclusions([FINDING], options(port))).kept).toEqual([]);
+  });
+
+  it("keeps a finding the verdict answers none for", async () => {
+    const { port } = scripted(verdict({ exclusion: "none", reason: "no listed case" }));
     const outcome = await applyExclusions([FINDING], options(port));
     expect(outcome.kept).toEqual([FINDING]);
     expect(outcome.dropped).toEqual([]);
+    expect(outcome.notices).toEqual([]);
   });
 
-  it("keeps a finding excluded on a case the guideline does not list", async () => {
-    const { port } = scripted(
-      verdict({ verdict: "excluded", exclusion: "Template conditions are presentation." }),
-    );
+  it("reads a sentence the list does not hold as none and logs it", async () => {
+    const { port } = scripted(verdict({ exclusion: "Template conditions are presentation." }));
     const outcome = await applyExclusions([FINDING], options(port));
     expect(outcome.kept).toEqual([FINDING]);
+    expect(outcome.notices).toEqual([
+      'exclusions: src/app.js:2 guard-before-use: the verdict names a sentence the guideline does not list, read as none: "Template conditions are presentation."',
+    ]);
+  });
+
+  it("decides one guideline and line text once per run, so a repeat cannot drift", async () => {
+    const { port, requests } = scripted(
+      verdict({ exclusion: EXCLUSION }),
+      verdict({ exclusion: "none" }),
+    );
+    const again = { ...FINDING, file: "src/other.js" };
+    const outcome = await applyExclusions([FINDING, again], options(port));
+    expect(requests).toHaveLength(1);
+    expect(outcome.dropped).toHaveLength(2);
+    expect(outcome.usage?.inputTokens).toBe(100);
+  });
+
+  it("asks again for another line text", async () => {
+    const { port, requests } = scripted(verdict({ exclusion: "none" }));
+    const other = { ...FINDING, line: 1 };
+    await applyExclusions([FINDING, other], options(port));
+    expect(requests).toHaveLength(2);
   });
 
   it("asks once more after an unreadable reply, then keeps the finding", async () => {
@@ -194,8 +240,74 @@ describe("a review with an excluded finding", () => {
   });
 
   it("keeps the finding and gates when no listed case covers it", async () => {
-    const { code, report } = await review(verdict({ verdict: "stands" }));
+    const { code, report } = await review(verdict({ exclusion: "none" }));
     expect(code).toBe(2);
     expect(report.findings).toHaveLength(1);
+  });
+
+  it("sends only the verdicts to exclusions.model and prices them at its own rates", async () => {
+    const cwd = repo();
+    const asked: { review: number; verdicts: number; refs: string[] } = {
+      review: 0,
+      verdicts: 0,
+      refs: [],
+    };
+    const usage = { inputTokens: 1_000_000, outputTokens: 0 };
+    const reviewer: ModelPort = {
+      complete(request) {
+        expect(request.system).not.toContain("exclusion check");
+        asked.review += 1;
+        return Promise.resolve({ text: REVIEW, usage });
+      },
+    };
+    const judge: ModelPort = {
+      complete(request) {
+        expect(request.system).toContain("exclusion check");
+        asked.verdicts += 1;
+        return Promise.resolve({ text: verdict({ exclusion: "none" }), usage });
+      },
+    };
+    const err: string[] = [];
+    await runCli(["review", "--report", "r.json"], {
+      cwd,
+      env: {
+        DELTA_PEACOCK_MODEL_ID: "small",
+        DELTA_PEACOCK_EXCLUSIONS_MODEL: '{"provider":"bedrock","id":"large"}',
+        DELTA_PEACOCK_COST_RATES: '{"small":{"rateInputPer1M":1},"large":{"rateInputPer1M":3}}',
+        DELTA_PEACOCK_COST_COUNTER_PATH: path.join(cwd, "spend.json"),
+      },
+      out: () => undefined,
+      err: (text) => err.push(text),
+      modelPort: reviewer,
+      modelPortFor: (ref) => {
+        asked.refs.push(ref.id);
+        return judge;
+      },
+    });
+    const report = JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
+    expect(asked).toEqual({ review: 1, verdicts: 1, refs: ["large"] });
+    expect(report.usage?.inputTokens).toBe(1_000_000);
+    expect(report.cost?.total).toBe(1);
+    expect(report.exclusionModel).toMatchObject({ id: "large", cost: { total: 3 } });
+    expect(err.join("")).toMatch(
+      /^cost: 1000000 tokens in, 0 out on small, verdicts 1000000 tokens in, 0 out on large, 4\.0000 USD;/m,
+    );
+  });
+});
+
+describe("the exclusions.model setting", () => {
+  it("needs a base url for an openai-compatible host", () => {
+    const parsed = ConfigSchema.safeParse({
+      exclusions: { model: { provider: "openai-compatible", id: "local" } },
+    });
+    expect(parsed.success).toBe(false);
+    expect(JSON.stringify(parsed.error?.issues)).toContain("exclusions.model.baseUrl");
+  });
+
+  it("prices a verdict at the rates of its own model under one ceiling", () => {
+    const ceiling = spendCeiling(10, { ...ZERO, rateInputPer1M: 1 });
+    ceiling.add({ inputTokens: 1_000_000, outputTokens: 0 }, { ...ZERO, rateInputPer1M: 3 });
+    ceiling.add({ inputTokens: 1_000_000, outputTokens: 0 });
+    expect(ceiling.spent()).toBe(4);
   });
 });

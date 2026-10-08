@@ -8,7 +8,8 @@ export interface SpendCeiling {
   readonly limit: number;
   /** USD spent so far, priced from the replies' actual usage. */
   spent(): number;
-  add(usage: ModelUsage): void;
+  /** Prices usage at the review's rates unless a call on another model brings its own. */
+  add(usage: ModelUsage, rates?: CostRates): void;
   /** True once the running cost reached the limit. */
   reached(): boolean;
 }
@@ -18,8 +19,8 @@ export function spendCeiling(limit: number, rates: CostRates): SpendCeiling {
   return {
     limit,
     spent: () => spent,
-    add(usage) {
-      spent += computeCost(usage, rates).total;
+    add(usage, own) {
+      spent += computeCost(usage, own ?? rates).total;
     },
     reached: () => spent >= limit,
   };
@@ -33,12 +34,12 @@ export function ceilingReason(ceiling: SpendCeiling): string {
 }
 
 /** Counts every paid reply and refuses the next call once the cap is reached; calls in flight finish. */
-export function metered(port: ModelPort, ceiling: SpendCeiling): ModelPort {
+export function metered(port: ModelPort, ceiling: SpendCeiling, rates?: CostRates): ModelPort {
   return {
     async complete(request) {
       if (ceiling.reached()) throw new ModelUnavailableError("cost-cap", ceilingReason(ceiling));
       const reply = await port.complete(request);
-      if (reply.usage !== undefined && reply.cached !== true) ceiling.add(reply.usage);
+      if (reply.usage !== undefined && reply.cached !== true) ceiling.add(reply.usage, rates);
       return reply;
     },
   };

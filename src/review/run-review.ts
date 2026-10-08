@@ -26,7 +26,13 @@ import { guidelineSources } from "./guideline-sources.js";
 import { buildModelPort, noModel } from "../model/build.js";
 import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/port.js";
 import { withFetched } from "../model/generate.js";
-import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
+import {
+  anyRateConfigured,
+  computeCost,
+  modelRates,
+  ratesFor,
+  type CostRates,
+} from "../model/usage.js";
 import { ceilingReason, metered, spendCeiling } from "../cost/ceiling.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../cost/counter.js";
@@ -249,6 +255,18 @@ export async function runReview(
   let meteredPort: ModelPort | undefined;
   // the batches, the judge and the exclusion check spend from one ceiling
   const modelPort = (): ModelPort => (meteredPort ??= metered(reviewPort(deps, config), ceiling));
+  const verdictRef = config.exclusions.model;
+  let verdictPort: ModelPort | undefined;
+  // a model set for the verdicts alone spends from the same ceiling at its own rates
+  const exclusionPort = (): ModelPort =>
+    verdictRef === undefined
+      ? modelPort()
+      : (verdictPort ??= metered(
+          deps.modelPortFor?.(verdictRef) ??
+            buildModelPortFor(verdictRef, deps.credentials, config.model.timeoutSeconds),
+          ceiling,
+          ratesFor(config.cost, verdictRef.id),
+        ));
 
   let executed: ExecuteResult;
   // with every applicable guideline checked, an open call could only produce what is dropped
@@ -316,7 +334,7 @@ export async function runReview(
     noOpenReview || placed.length === 0
       ? undefined
       : await applyExclusions(placed, {
-          port: modelPort,
+          port: exclusionPort,
           guidelinesById: parseOptions.guidelinesById,
           linesOf: linesOfFile,
           concurrency: PASS_CONCURRENCY,
@@ -427,7 +445,12 @@ export async function runReview(
     }
   }
   let usage = executed.usage;
-  if (excluded?.usage !== undefined) {
+  // verdicts on their own model are priced apart; on the review model they join its usage
+  const verdicts: VerdictSpend | undefined =
+    verdictRef !== undefined && excluded?.usage !== undefined
+      ? { id: verdictRef.id, usage: excluded.usage, rates: ratesFor(config.cost, verdictRef.id) }
+      : undefined;
+  if (verdicts === undefined && excluded?.usage !== undefined) {
     usage = usage === undefined ? excluded.usage : addUsage(usage, excluded.usage);
   }
   if (checks?.usage !== undefined) {
@@ -571,6 +594,17 @@ export async function runReview(
       ...(usage && anyRateConfigured(modelRates(config))
         ? { cost: computeCost(usage, modelRates(config)) }
         : {}),
+      ...(verdicts !== undefined
+        ? {
+            exclusionModel: {
+              id: verdicts.id,
+              usage: verdicts.usage,
+              ...(anyRateConfigured(verdicts.rates)
+                ? { cost: computeCost(verdicts.usage, verdicts.rates) }
+                : {}),
+            },
+          }
+        : {}),
       ...(ensembleMembers !== undefined
         ? { ensemble: { mode: config.ensemble.mode, members: ensembleMembers } }
         : {}),
@@ -630,7 +664,7 @@ export async function runReview(
   );
 
   if (usage !== undefined) {
-    deps.err(`${await spendLine(config, usage, now)}\n`);
+    deps.err(`${await spendLine(config, usage, now, verdicts)}\n`);
   }
 
   if (config.stats.enabled) {
@@ -656,7 +690,7 @@ export async function runReview(
             : {}),
         ...(usage !== undefined ? { usage } : {}),
         ...(!factsOnly && usage !== undefined && anyRateConfigured(rates)
-          ? { cost: computeCost(usage, rates).total }
+          ? { cost: computeCost(usage, rates).total + verdictCost(verdicts) }
           : {}),
         durationMs: Math.round(performance.now() - startedAt),
       }),
@@ -671,13 +705,35 @@ export async function runReview(
  * Records the spend when rates are set and returns the one log line a run
  * prints about it: tokens in and out, the cost, and the month on the counter.
  */
-export async function spendLine(config: Config, usage: ModelUsage, now: Date): Promise<string> {
+/** The exclusion verdicts' spend when `exclusions.model` runs them on a model of their own. */
+export interface VerdictSpend {
+  id: string;
+  usage: ModelUsage;
+  rates: CostRates;
+}
+
+const verdictCost = (verdicts: VerdictSpend | undefined): number =>
+  verdicts === undefined ? 0 : computeCost(verdicts.usage, verdicts.rates).total;
+
+export async function spendLine(
+  config: Config,
+  usage: ModelUsage,
+  now: Date,
+  verdicts?: VerdictSpend,
+): Promise<string> {
   if (noModel(config)) return "cost: 0 tokens in, 0 out on none, 0.0000 USD; no model call";
   // the model id shows which rates priced the run, an env override included
-  const tokens = `${String(usage.inputTokens)} tokens in, ${String(usage.outputTokens)} out on ${config.model.id ?? "(unset model)"}`;
+  const tokens = [
+    `${String(usage.inputTokens)} tokens in, ${String(usage.outputTokens)} out on ${config.model.id ?? "(unset model)"}`,
+    ...(verdicts !== undefined
+      ? [
+          `verdicts ${String(verdicts.usage.inputTokens)} tokens in, ${String(verdicts.usage.outputTokens)} out on ${verdicts.id}`,
+        ]
+      : []),
+  ].join(", ");
   const rates = modelRates(config);
   if (!anyRateConfigured(rates)) return `usage: ${tokens}; no cost rates configured`;
-  const spent = computeCost(usage, rates).total;
+  const spent = computeCost(usage, rates).total + verdictCost(verdicts);
   const counterPath = config.cost.counterPath ?? defaultCounterPath();
   const month = monthKey(now);
   await recordSpend(counterPath, month, spent);

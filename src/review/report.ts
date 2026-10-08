@@ -73,6 +73,8 @@ export interface ReviewReport {
   usage?: ModelUsage;
   /** Present when any cost rate is configured. */
   cost?: ComputedCost;
+  /** The exclusion verdicts' own spend, when `exclusions.model` ran them; not part of usage or cost. */
+  exclusionModel?: { id: string; usage: ModelUsage; cost?: ComputedCost };
   /** Present when the ensemble reviewed; usage is attributed per member. */
   ensemble?: {
     mode: "union" | "judge";
@@ -146,6 +148,7 @@ export function buildReport(input: {
   gate: GateDecision;
   usage?: ModelUsage;
   cost?: ComputedCost;
+  exclusionModel?: ReviewReport["exclusionModel"];
   ensemble?: ReviewReport["ensemble"];
   budget?: ReviewReport["budget"];
   toolCalls?: number;
@@ -203,6 +206,7 @@ export function buildReport(input: {
     gate: input.gate,
     ...(input.usage ? { usage: input.usage } : {}),
     ...(input.cost ? { cost: input.cost } : {}),
+    ...(input.exclusionModel ? { exclusionModel: input.exclusionModel } : {}),
     ...(input.ensemble ? { ensemble: input.ensemble } : {}),
     ...(input.budget ? { budget: input.budget } : {}),
     ...(input.toolCalls !== undefined ? { toolCalls: input.toolCalls } : {}),
