@@ -1,6 +1,12 @@
-import { GUIDELINE_CHECKS, type Guideline, type GuidelineCheck } from "../../domain/guideline.js";
+import {
+  GUIDELINE_CHECKS,
+  type AstRule,
+  type Guideline,
+  type GuidelineCheck,
+} from "../../domain/guideline.js";
 import { appliesTo } from "../../guidelines/languages.js";
 import type { DeclaredTags } from "../declared.js";
+import { astCandidates, astCovers, parseScript } from "./ast.js";
 import { numberCandidates } from "./numbers.js";
 import { patternCandidates } from "./pattern.js";
 import { rowCandidates } from "./rows.js";
@@ -19,8 +25,8 @@ import {
 
 /** The static checks a guideline can be bound to in `review.checks`. */
 export const CHECKS = GUIDELINE_CHECKS;
-/** A bindable check, or the pattern a guideline declares itself. */
-export type CheckName = GuidelineCheck | "pattern";
+/** A bindable check, or the pattern or syntax tree rule a guideline declares itself. */
+export type CheckName = GuidelineCheck | "pattern" | "ast";
 
 export type Shape =
   | "test-id"
@@ -41,7 +47,8 @@ export type Shape =
   | "unexplained-constant"
   | "copy"
   | "pattern-added"
-  | "pattern-absent";
+  | "pattern-absent"
+  | `ast-${AstRule}`;
 
 /** A line a static check found; the only way a checked guideline yields a finding. */
 export interface Candidate {
@@ -85,6 +92,8 @@ export interface CheckContext {
   declared?: DeclaredTags;
   /** The attribute getByTestId reads. */
   testIdAttribute: string;
+  /** Receives one line per file a check had to skip, such as a script no parser reads. */
+  notices?: string[];
 }
 
 export interface BoundGuideline {
@@ -1225,7 +1234,29 @@ export function findCandidates(
   const found: Candidate[] = [];
   const seen = new Set<string>();
   const patterns = bound.filter(({ check }) => check === "pattern");
+  const trees = bound.flatMap(({ guideline, check }) =>
+    check === "ast" && guideline.check?.type === "ast"
+      ? [{ guideline, tree: guideline.check }]
+      : [],
+  );
   for (const [file, changed] of context.changed) {
+    const reading = trees.filter(
+      ({ guideline, tree }) => appliesTo(guideline, [file]) && astCovers(tree, file),
+    );
+    const treeText = reading.length > 0 && changed.size > 0 ? context.read(file) : undefined;
+    const script = treeText === undefined ? undefined : parseScript(treeText);
+    if (typeof script === "string") {
+      context.notices?.push(`check: ${file} skipped by the syntax tree checks: ${script}`);
+    } else if (script !== undefined) {
+      for (const { guideline, tree } of reading) {
+        for (const candidate of astCandidates(guideline, tree, file, script, changed)) {
+          const key = `${candidate.file}:${String(candidate.line)}:${candidate.guidelineId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          found.push(candidate);
+        }
+      }
+    }
     // a pattern reads any file type, so it runs before the source filter below
     const covering = patterns.filter(({ guideline }) => appliesTo(guideline, [file]));
     const patternText = covering.length > 0 ? context.read(file) : undefined;
@@ -1245,7 +1276,7 @@ export function findCandidates(
     if (text === undefined) continue;
     const parsed = shell ? undefined : parse(text);
     for (const { guideline, check } of bound) {
-      if (check === "pattern" || !appliesTo(guideline, [file])) continue;
+      if (check === "pattern" || check === "ast" || !appliesTo(guideline, [file])) continue;
       if (check === "numbers") {
         for (const candidate of numberCandidates(guideline, file, text, changed)) {
           const key = `${candidate.file}:${String(candidate.line)}:${candidate.guidelineId}`;

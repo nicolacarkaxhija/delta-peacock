@@ -48,6 +48,34 @@ export interface PatternCheck {
   message: string;
 }
 
+/** The named rules a syntax tree check can run. */
+export const AST_RULES = [
+  "max-function-lines",
+  "call-outside-wrapper",
+  "require-at-top",
+  "jsdoc-matches-signature",
+  "empty-catch",
+  "assignment-to-member",
+  "call-with-arity",
+] as const;
+
+export type AstRule = (typeof AST_RULES)[number];
+
+/**
+ * A rule over the parsed syntax tree a guideline declares under `check:`:
+ * the tree decides it, with no model.
+ */
+export interface AstCheck {
+  type: "ast";
+  /** Path globs on top of the guideline's own scope; empty means every file it covers. */
+  files: readonly string[];
+  rule: AstRule;
+  /** The rule's own parameters, checked when the guidelines load. */
+  params: Readonly<Record<string, unknown>>;
+  /** The guideline sentence every finding quotes. */
+  message: string;
+}
+
 export interface Guideline {
   id: string;
   severity: Severity;
@@ -63,8 +91,8 @@ export interface Guideline {
   pack?: string;
   /** Opts into a deterministic AST check on every finding this guideline produces; absent means none. */
   structural?: StructuralCheck;
-  /** A pattern that decides the guideline by facts alone; absent means none. */
-  check?: PatternCheck;
+  /** A pattern or a syntax tree rule that decides the guideline by facts alone; absent means none. */
+  check?: PatternCheck | AstCheck;
   /** Sentences of the guideline naming cases that are never a finding; each one is checked before a finding stands. */
   exclusions?: readonly string[];
   /** file lets a model finding sit on any line of a changed file; absent keeps it to added or edited lines. */

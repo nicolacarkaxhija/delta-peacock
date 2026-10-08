@@ -6,7 +6,7 @@ import { STRUCTURAL_CHECKS, type StructuralCheck } from "../domain/guideline.js"
 import { SEVERITIES, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { runGit } from "../git/git.js";
-import { readPatternCheck } from "../review/checks/pattern.js";
+import { readDeclaredCheck } from "../review/checks/pattern.js";
 import { readExclusions } from "../review/exclusions.js";
 import { assertSafeRef } from "../git/diff.js";
 import { resolvePack } from "./packs.js";
@@ -172,7 +172,7 @@ export function parseGuidelineContent(
   const title = deriveTitle(record, body, displayPath);
   const check =
     record["check"] !== undefined
-      ? readPatternCheck(record["check"], { id: trimmedId, title, body })
+      ? readDeclaredCheck(record["check"], { id: trimmedId, title, body })
       : undefined;
   if (typeof check === "string") return { problem: `${displayPath}: ${check}` };
   const exclusions = readExclusions(record["exclusions"], { id: trimmedId, title, body });
