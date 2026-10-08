@@ -175,13 +175,50 @@ parameter is never a finding.
 Each entry must be a sentence the guideline says word for word (whitespace, backticks and
 emphasis aside); `guidelines lint` fails on one it does not say, and a review skips such a
 guideline with the same words. Every finding the model reports under the guideline is then held
-against the list in one short call: the guideline, the listed cases, the finding and the code
-around its line. The finding is dropped only when the answer is `excluded` and copies one of the
-listed cases; `stands`, an unlisted case, an unreadable answer (asked twice) or a failed call keep
-it. A dropped finding is logged as `dropped, the guideline excludes it`, counted in the log line
-`finding(s) dropped: their guideline says the line is never a finding` and recorded in the
-report's `rejectedCandidates` with the reason `excluded`. A guideline without `exclusions` costs no
-call, and no call is made when the model cannot run.
+against the list in one short call at temperature 0: the guideline, the listed sentences, the
+flagged line's text, the finding and the code around its line. The call must answer with JSON
+naming the one listed sentence that covers the line, copied exactly, or `none`. The finding is
+dropped only on a listed sentence (quotes, a list bullet, case and spacing aside). `none`, an
+unreadable answer (asked twice) or a failed call keep it; an answer that names a sentence the list
+does not hold is read as `none` and logged as `the verdict names a sentence the guideline does not
+list, read as none`. A dropped finding is logged as `dropped, the guideline excludes it`, counted
+in the log line `finding(s) dropped: their guideline says the line is never a finding` and
+recorded in the report's `rejectedCandidates` with the reason `excluded`. A guideline without
+`exclusions` costs no call, and no call is made when the model cannot run.
+
+A verdict is decided once per guideline, flagged line text and exclusion list in a run: the same
+line flagged under the same guideline in another batch or another file reuses the first verdict and
+costs no second call, so the run cannot keep a finding in one place and drop its twin in another.
+
+### A stronger model for the verdicts
+
+A small review model reads past a listed sentence more often than a larger one. `exclusions.model`
+sends the verdict calls alone to another model while the review stays on `model`:
+
+```yaml
+model:
+  provider: bedrock
+  id: <the review model>
+exclusions:
+  model:
+    provider: bedrock
+    id: <the verdict model>
+cost:
+  rates:
+    <the review model>: { rateInputPer1M: 1, rateOutputPer1M: 5 }
+    <the verdict model>: { rateInputPer1M: 3, rateOutputPer1M: 15 }
+```
+
+It takes a provider and an id, like `calibration.model` (`DELTA_PEACOCK_EXCLUSIONS_MODEL` as JSON
+from the environment); unset, the review model decides. What it costs: one verdict call sends
+the guideline, its list and about 26 lines of code, typically 1,000 to 2,000 tokens, and receives
+at most 300, usually under 100. At the example rates above that is about 0.005 to 0.008 USD a
+verdict on the verdict model (at most 0.011) against 0.0015 to 0.0025 on the review model (at
+most 0.0035), paid only for findings under a guideline that
+lists exclusions, once per distinct line. The verdicts are priced at the verdict model's own
+`cost.rates` entry: they spend from the same `cost.maxPerReview` ceiling, the cost line prints them
+as `verdicts <n> tokens in, <m> out on <id>` and adds them to the total and the month, and the
+report carries them apart under `exclusionModel` (id, usage, cost) rather than in `usage`.
 
 ## Facts and the judge
 
@@ -255,7 +292,8 @@ the model cannot run:
 | the cost cap             | the actual cost of the review's calls reached `cost.maxPerReview` or what is left of `cost.monthlyCap`         | the review reached its cost cap                        | `cost cap`            |
 
 Facts cost nothing, so a cap never drops them. The cost guard prices every reply the review
-receives (the batches, the judge and the exclusion check) at the configured rates and refuses the
+receives (the batches, the judge and the exclusion check, the latter at the rates of
+`exclusions.model` when set) at the configured rates and refuses the
 next call once the sum reaches `cost.maxPerReview`, or what is left of `cost.monthlyCap` for the
 month, whichever is lower; calls already in flight finish. The batches that answered keep their
 findings, the summary names the files no model reviewed, the judge's candidates are left to a

@@ -64,6 +64,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_CACHE_PATH: "cache.path",
   DELTA_PEACOCK_CALIBRATION_ENABLED: "calibration.enabled",
   DELTA_PEACOCK_CALIBRATION_MODEL: "calibration.model",
+  DELTA_PEACOCK_EXCLUSIONS_MODEL: "exclusions.model",
   DELTA_PEACOCK_ENSEMBLE_ENABLED: "ensemble.enabled",
   DELTA_PEACOCK_ENSEMBLE_MEMBERS: "ensemble.members",
   DELTA_PEACOCK_ENSEMBLE_MODE: "ensemble.mode",
@@ -137,6 +138,7 @@ const JSON_PATHS = new Set([
   "ensemble.members",
   "ensemble.judge",
   "calibration.model",
+  "exclusions.model",
   "cost.rates",
 ]);
 

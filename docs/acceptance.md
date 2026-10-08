@@ -42,8 +42,10 @@ from a clean checkout; a red line blocks it.
   model posts and exits as before. On its own:
   `pnpm exec vitest run tests/model-fallback`.
 - `exclusions`: a guideline's `exclusions` must be sentences it says word for word; a finding
-  under it is dropped only when the exclusion check copies a listed case, and kept on any other
-  answer, an unreadable one or a failed call. On its own: `pnpm exec vitest run tests/exclusions`.
+  under it is dropped only when the exclusion check names a listed sentence, and kept on `none`,
+  an unlisted sentence (logged), an unreadable answer or a failed call; the verdict runs at
+  temperature 0, once per guideline, line text and list in a run, and on `exclusions.model` when
+  set, priced at that model's rates. On its own: `pnpm exec vitest run tests/exclusions`.
 - `findings on changed lines`: a model finding whose span touches no added or edited line is
   dropped before the exclusion check and counted in the report, the log, the summary comment and
   the backtest, unless its guideline declares `scope: file`. On its own:

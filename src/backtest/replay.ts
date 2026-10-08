@@ -175,7 +175,9 @@ export async function replayCase(
     log,
     ...(reportText !== undefined ? { report: reportText } : {}),
     milliseconds,
-    ...(report?.cost !== undefined ? { cost: report.cost.total } : {}),
+    ...(report?.cost !== undefined
+      ? { cost: report.cost.total + (report.exclusionModel?.cost?.total ?? 0) }
+      : {}),
     ...(error !== undefined ? { error } : {}),
     problems,
     offChange: report?.droppedOffChangeFindings ?? 0,

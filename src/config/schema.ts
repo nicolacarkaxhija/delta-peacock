@@ -142,6 +142,12 @@ export const CalibrationSchema = z.strictObject({
   model: ModelRefSchema.optional(),
 });
 
+/** The check that holds model findings against a guideline's listed exclusions. */
+export const ExclusionsSchema = z.strictObject({
+  /** A model for the verdict calls only; the review model serves when unset. */
+  model: ModelRefSchema.optional(),
+});
+
 /** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */
 export const RagSchema = z.strictObject({
   backend: z.enum(["tfidf", "embeddings"]).default("tfidf"),
@@ -241,6 +247,7 @@ export const ConfigSchema = z
     context: ContextSchema.prefault({}),
     ensemble: EnsembleSchema.prefault({}),
     calibration: CalibrationSchema.prefault({}),
+    exclusions: ExclusionsSchema.prefault({}),
     cache: CacheSchema.prefault({}),
     stats: StatsSchema.prefault({}),
   })
@@ -346,6 +353,16 @@ export const ConfigSchema = z
         code: "custom",
         path: ["calibration", "model", "baseUrl"],
         message: "calibration.model.baseUrl is required when its provider is openai-compatible",
+      });
+    }
+    if (
+      config.exclusions.model?.provider === "openai-compatible" &&
+      config.exclusions.model.baseUrl === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["exclusions", "model", "baseUrl"],
+        message: "exclusions.model.baseUrl is required when its provider is openai-compatible",
       });
     }
     if (config.scm.provider !== "local") {

@@ -624,6 +624,40 @@
       },
       "additionalProperties": false
     },
+    "exclusions": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "enum": [
+                "anthropic",
+                "bedrock",
+                "openrouter",
+                "openai-compatible"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "baseUrl": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "provider",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "cache": {
       "default": {},
       "type": "object",
