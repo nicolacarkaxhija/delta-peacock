@@ -35,9 +35,7 @@ export function splitChecked(
   const bound: BoundGuideline[] = [];
   const free: Guideline[] = [];
   for (const guideline of guidelines) {
-    const check =
-      bindings[guideline.id] ??
-      (guideline.check !== undefined ? "pattern" : impliedCheck(guideline));
+    const check = bindings[guideline.id] ?? guideline.check?.type ?? impliedCheck(guideline);
     if (check === undefined) free.push(guideline);
     else bound.push({ guideline, check });
   }
@@ -109,8 +107,10 @@ const JUDGE_CONCURRENCY = 4;
 export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
   const changed = new Map<string, Set<number>>();
   for (const [file, lines] of newLineTexts(input.diff)) changed.set(file, new Set(lines.keys()));
+  const skipped: string[] = [];
   const candidates = findCandidates(input.bound, {
     changed,
+    notices: skipped,
     read: input.read,
     files: input.files,
     ...(input.declared !== undefined ? { declared: input.declared } : {}),
@@ -188,7 +188,7 @@ export async function runChecks(input: ChecksInput): Promise<ChecksOutcome> {
     facts,
     rejected,
     left,
-    notices: outcomes.map((outcome) => outcome.notice),
+    notices: [...skipped, ...outcomes.map((outcome) => outcome.notice)],
     tally,
     ...(usage !== undefined ? { usage } : {}),
     ...(outage !== undefined ? { unavailable: outage } : {}),

@@ -1,6 +1,7 @@
 import picomatch from "picomatch";
-import type { Guideline, PatternCheck } from "../../domain/guideline.js";
+import type { AstCheck, Guideline, PatternCheck } from "../../domain/guideline.js";
 import { quotesGuideline } from "../parse.js";
+import { readAstCheck } from "./ast.js";
 import type { Candidate } from "./detect.js";
 import { item } from "./source.js";
 
@@ -49,7 +50,7 @@ const optionalString = (value: unknown): value is string | undefined =>
 function shapeProblem(raw: Record<string, unknown>): string | undefined {
   const unknown = Object.keys(raw).filter((key) => !KEYS.has(key));
   if (unknown.length > 0) return `unknown key(s) ${unknown.join(", ")}`;
-  if (raw["type"] !== "pattern") return `"type" must be pattern`;
+  if (raw["type"] !== "pattern") return `"type" must be pattern or ast`;
   const files = raw["files"];
   if (
     files !== undefined &&
@@ -78,19 +79,20 @@ function shapeProblem(raw: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Reads a guideline's `check:` frontmatter into a compiled pattern check, or
- * says why it cannot become one: its shape, an invalid regex, or a message
- * the guideline does not say word for word.
+ * Reads a guideline's `check:` frontmatter into a compiled pattern check, or a
+ * syntax tree check for type ast, or says why it cannot become one: its shape,
+ * an invalid regex, or a message the guideline does not say word for word.
  */
-export function readPatternCheck(
+export function readDeclaredCheck(
   raw: unknown,
   guideline: Pick<Guideline, "id" | "title" | "body">,
-): PatternCheck | string {
+): PatternCheck | AstCheck | string {
   const where = `guideline "${guideline.id}" check`;
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return `${where} must be a mapping`;
   }
   const record = raw as Record<string, unknown>;
+  if (record["type"] === "ast") return readAstCheck(record, guideline);
   const problem = shapeProblem(record);
   if (problem !== undefined) return `${where}: ${problem}`;
   const cap = record["maxPerFile"] as number | undefined;
@@ -128,7 +130,7 @@ export function patternCandidates(
   changed: ReadonlySet<number>,
 ): Candidate[] {
   const check = guideline.check;
-  if (check === undefined || changed.size === 0) return [];
+  if (check?.type !== "pattern" || changed.size === 0) return [];
   const compiled = compile(check);
   if (!compiled.covers(file)) return [];
   const lines = text.split("\n").map((line) => line.replace(/\r$/, ""));

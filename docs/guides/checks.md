@@ -73,7 +73,7 @@ getLogger takes a category as its second argument, so the log lines of one area 
 
 | Key          | Meaning                                                                                                      |
 | ------------ | ------------------------------------------------------------------------------------------------------------ |
-| `type`       | `pattern`, the one type a guideline declares itself                                                          |
+| `type`       | `pattern`; `ast` declares a rule over the syntax tree instead (next section)                                 |
 | `files`      | path globs on top of the guideline's own `paths` and `languages`; left out, every file the guideline covers  |
 | `added`      | a regex no added line may match; every match is a finding on that line                                       |
 | `unless`     | a regex whose match on the same line excuses an `added` match                                                |
@@ -123,6 +123,86 @@ regex, naming the guideline and the error (`guideline "logger-category" check: "
 valid regex: ...`), and on an unknown key, a missing `message` or a `message` the guideline does
 not say; a review skips such a guideline with the same words. A binding under `review.checks`
 still wins over a declared pattern.
+
+## A rule over the syntax tree
+
+Some rules a regex cannot state but a parser decides: how long a function runs, what a
+transaction body holds, whether a doc comment names the parameters the function takes. A guideline
+declares such a rule under `check:` with `type: ast`, a named `rule` and that rule's parameters.
+Like a pattern, every finding is a measured fact: no model, no judge, counted as decided by facts
+in the backtest and in the facts only mode.
+
+```markdown
+---
+id: slim-controllers
+severity: MAJOR
+paths: ["cartridges/**"]
+check:
+  type: ast
+  files: ["cartridges/**/controllers/*.js"]
+  rule: max-function-lines
+  limit: 40
+  message: "A route handler stays under 40 lines and hands its work to models and helpers."
+---
+
+# Slim controllers
+
+A route handler stays under 40 lines and hands its work to models and helpers.
+```
+
+No heavy work inside a transaction:
+
+```yaml
+check:
+  type: ast
+  rule: call-outside-wrapper
+  wrapper: [Transaction.wrap, Transaction.begin]
+  call: [ProductMgr.getProduct, OrderMgr.searchOrders]
+  end: [Transaction.commit, Transaction.rollback]
+  message: "A transaction holds only the writes, never a loop or a lookup."
+```
+
+One logger, one category, so a pattern regex need not count the arguments:
+
+```yaml
+check:
+  type: ast
+  rule: call-with-arity
+  callee: Logger.getLogger
+  arity: 1
+  message: "getLogger takes a category as its second argument."
+```
+
+| Rule                      | A finding is                                                                                                                                                                                                                                       | Parameters                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `max-function-lines`      | a function declaration, expression or arrow longer than `limit` lines, on its first changed line, the innermost function first                                                                                                                     | `limit`: a whole number of at least 1                                                                     |
+| `call-outside-wrapper`    | a loop or a `call` inside the function a `wrapper` call receives, or, for a `wrapper` called with no function, in the statements after it up to the first `end` call of its block (to the block's end with none); on its own line or the wrapper's | `wrapper`: names, required; `call`: names of the heavy calls; `end`: names that close a begin             |
+| `require-at-top`          | a `require(...)` inside a function body, unless its argument is a string an `except` regex matches                                                                                                                                                 | `except`: regexes                                                                                         |
+| `jsdoc-matches-signature` | a doc comment whose `@param` names differ from the parameters, an `@returns` on a function that returns no value (`{void}`, `{undefined}` and `{Promise<void>}` aside), or no `@returns` on one that does                                          | none                                                                                                      |
+| `empty-catch`             | a catch block with no statement, or only a comment                                                                                                                                                                                                 | none                                                                                                      |
+| `assignment-to-member`    | an assignment to a property of `object` whose name a `property` regex matches; with `maxLength`, a string literal no longer than it is excused and the finding names the length                                                                    | `object`: names, required; `property`: regexes, every property when left out; `maxLength`: a whole number |
+| `call-with-arity`         | a call to `callee` with exactly `arity` arguments; a spread argument hides the count and is never one                                                                                                                                              | `callee`: names, required; `arity`: a whole number or a list of them, required                            |
+
+A name is a dotted path such as `Transaction.wrap`; it also matches a longer path that ends in it
+(`dw.system.Transaction.wrap`), and a parameter that takes names takes one name or a list. A finding
+sits only on a line the change added or edited, like a pattern's: the rule names the lines it
+concerns and the first one the change touched holds the finding. A long function is a finding on
+its header or on any added line inside it, a stale doc comment on the doc comment or the signature
+(and for `@returns` on a return statement), a heavy call on its own line or on the line that opens
+the transaction around it.
+
+The rules read JavaScript files (`.js`, `.mjs`, `.cjs`), parsed as the newest ECMAScript, which
+reads ES5 era scripts as well as modules. A doc comment with no `@param`, `@returns` or `@return`
+tag documents no signature and is never compared, nor is one that says `@inheritDoc` or
+`@override`; a destructured parameter fits any name, a dotted `@param` documents a property and is
+skipped, and a generator is never held to its `@returns`. A file the parser cannot read is skipped
+with one line in the log, such as `check: cartridges/app/legacy.js skipped by the syntax tree
+checks: Unexpected token (1:4)`, and is never a finding.
+
+`guidelines lint` fails on a rule it does not know (naming every rule there is), a parameter the
+rule does not take (`unknown key(s) limit for the empty-catch rule`), a missing or unreadable
+parameter (`"limit" must be a whole number of at least 1`), an invalid regex, and on a `message`
+the guideline does not say word for word; a review skips such a guideline with the same words.
 
 ## Findings on changed lines
 
@@ -388,6 +468,7 @@ stats ledger's finding line carries it as `guidelineQuote`.
 | `numbers`    | an inline number, a named constant | Every timeout, delay, retry count, limit or threshold is a named constant declared once, next to the reason it has that value, so one place answers why the code waits or stops where it does. |
 | `rows`       | a test copied but for its literals | Sites, products, payment methods and addresses become data rows of one scenario.                                                                                                               |
 | `pattern`    | every kind                         | The guideline's own `message`, checked when the guidelines load.                                                                                                                               |
+| `ast`        | every rule                         | The guideline's own `message`, checked when the guidelines load.                                                                                                                               |
 
 At startup the review confirms that each bound guideline says its check's sentences word for word
 (whitespace, backticks and emphasis aside). A missing sentence is a configuration error: the run

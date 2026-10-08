@@ -50,6 +50,7 @@ export const CHECK_SENTENCES: Readonly<
   },
   // each guideline names its own sentence in its check's message
   pattern: {},
+  ast: {},
 };
 
 /** The sentence a check quotes for a shape it reports. */

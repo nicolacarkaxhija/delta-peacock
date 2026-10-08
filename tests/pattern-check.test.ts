@@ -198,8 +198,8 @@ describe("a declared pattern check that cannot run", () => {
     );
     expect(problem(capped(0))).toContain('"maxPerFile" must be a positive whole number');
     expect(problem(LOGGER.replace("  unless:", "  excuse:"))).toContain("unknown key(s) excuse");
-    expect(problem(LOGGER.replace("type: pattern", "type: ast"))).toContain(
-      '"type" must be pattern',
+    expect(problem(LOGGER.replace("type: pattern", "type: regex"))).toContain(
+      '"type" must be pattern or ast',
     );
     expect(problem(LOGGER.replace("files: ['cartridges/**/*.js']", "files: 3"))).toContain(
       '"files" must be a list of path globs',
