@@ -311,3 +311,46 @@ describe("the exclusions.model setting", () => {
     expect(ceiling.spent()).toBe(4);
   });
 });
+
+describe("exclusions in the review prompt", () => {
+  const NEVER = `Never report under this guideline: ${EXCLUSION}`;
+  const PLAIN = `---
+id: no-console
+severity: MINOR
+---
+# No console statements
+
+Use the logger instead.
+`;
+
+  it("carries each listed sentence once per guideline, not once per file", async () => {
+    const cwd = makeRepo();
+    write(cwd, "guidelines/guard.md", GUARD);
+    write(cwd, "guidelines/console.md", PLAIN);
+    commitAll(cwd, "rules");
+    git(cwd, "checkout", "-q", "-b", "feature");
+    for (const name of ["app", "cart", "basket"]) {
+      write(cwd, `src/${name}.js`, `function ${name}(item) {\n  return item.size;\n}\n`);
+    }
+    commitAll(cwd, "change");
+    const requests: ModelRequest[] = [];
+    const port: ModelPort = {
+      complete(request) {
+        requests.push(request);
+        return Promise.resolve({ text: JSON.stringify({ findings: [] }) });
+      },
+    };
+    await runCli(["review"], {
+      cwd,
+      env: {},
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: port,
+    });
+    expect(requests).toHaveLength(1);
+    const prompt = `${requests[0]?.system ?? ""}\n${requests[0]?.user ?? ""}`;
+    expect(prompt.split(NEVER)).toHaveLength(2);
+    expect(prompt).toContain(`${EXCLUSION}\n\n${NEVER}`);
+    expect(prompt).not.toMatch(/Never report under this guideline: Use the logger/);
+  });
+});

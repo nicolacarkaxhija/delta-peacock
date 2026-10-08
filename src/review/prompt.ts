@@ -19,7 +19,13 @@ export interface PromptOptions {
 
 /** Shared by every command that shows the corpus, so the block stays byte-identical. */
 export function renderGuideline(guideline: Guideline): string {
-  return `### ${guideline.id} (${guideline.severity}) ${guideline.title}\n${guideline.body}`;
+  // the listed exclusions sit next to the rule, so fewer findings need a verdict call
+  const never = (guideline.exclusions ?? []).map(
+    (sentence) => `Never report under this guideline: ${sentence}`,
+  );
+  return [`### ${guideline.id} (${guideline.severity}) ${guideline.title}`, guideline.body]
+    .concat(never.length > 0 ? ["", ...never] : [])
+    .join("\n");
 }
 
 /**

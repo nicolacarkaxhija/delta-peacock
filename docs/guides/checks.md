@@ -174,7 +174,10 @@ parameter is never a finding.
 
 Each entry must be a sentence the guideline says word for word (whitespace, backticks and
 emphasis aside); `guidelines lint` fails on one it does not say, and a review skips such a
-guideline with the same words. Every finding the model reports under the guideline is then held
+guideline with the same words. The review prompt carries each listed sentence right under its
+guideline as `Never report under this guideline: <sentence>`, once per guideline in a batch however
+many files the batch holds, so the model leaves most excluded cases out before any verdict call.
+Every finding the model reports under the guideline is then held
 against the list in one short call at temperature 0: the guideline, the listed sentences, the
 flagged line's text, the finding and the code around its line. The call must answer with JSON
 naming the one listed sentence that covers the line, copied exactly, or `none`. The finding is

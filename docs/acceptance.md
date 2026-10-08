@@ -45,7 +45,9 @@ from a clean checkout; a red line blocks it.
   under it is dropped only when the exclusion check names a listed sentence, and kept on `none`,
   an unlisted sentence (logged), an unreadable answer or a failed call; the verdict runs at
   temperature 0, once per guideline, line text and list in a run, and on `exclusions.model` when
-  set, priced at that model's rates. On its own: `pnpm exec vitest run tests/exclusions`.
+  set, priced at that model's rates; the review prompt carries each listed sentence once per
+  guideline as a `Never report under this guideline` line. On its own:
+  `pnpm exec vitest run tests/exclusions`.
 - `findings on changed lines`: a model finding whose span touches no added or edited line is
   dropped before the exclusion check and counted in the report, the log, the summary comment and
   the backtest, unless its guideline declares `scope: file`. On its own:
