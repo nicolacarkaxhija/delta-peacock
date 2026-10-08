@@ -9,6 +9,8 @@ export interface RenderableReview {
   droppedOutOfScope?: number;
   /** Violations whose structural claim (loop, module scope) the AST contradicted. */
   droppedStructural?: number;
+  /** Model findings on no added or edited line of the change. */
+  droppedOffChange?: number;
   adjustedLines: number;
   droppedMalformed?: number;
   /** Violations quoting a sentence their guideline does not contain. */
@@ -105,6 +107,9 @@ export function renderReview(review: RenderableReview): string {
       ? [
           `${String(review.droppedStructural ?? 0)} finding(s) dropped: structural claim contradicted by the AST`,
         ]
+      : []),
+    ...((review.droppedOffChange ?? 0) > 0
+      ? [`${String(review.droppedOffChange ?? 0)} finding(s) off the change`]
       : []),
     ...(review.adjustedLines > 0
       ? [`${String(review.adjustedLines)} finding(s) had no usable line and were pinned to line 1`]

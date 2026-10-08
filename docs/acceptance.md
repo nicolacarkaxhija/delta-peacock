@@ -44,6 +44,10 @@ from a clean checkout; a red line blocks it.
 - `exclusions`: a guideline's `exclusions` must be sentences it says word for word; a finding
   under it is dropped only when the exclusion check copies a listed case, and kept on any other
   answer, an unreadable one or a failed call. On its own: `pnpm exec vitest run tests/exclusions`.
+- `findings on changed lines`: a model finding whose span touches no added or edited line is
+  dropped before the exclusion check and counted in the report, the log, the summary comment and
+  the backtest, unless its guideline declares `scope: file`. On its own:
+  `pnpm exec vitest run tests/changed-lines tests/backtest.test.ts`.
 - `batch cost`: a change reviewed in batches sends no more input tokens than the same files
   reviewed as separate changes, each batch carries only its own files' context, the shared prefix
   carries a cache marker on Anthropic and on Anthropic models on Bedrock, and no cached token is

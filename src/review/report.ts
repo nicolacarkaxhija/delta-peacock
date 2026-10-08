@@ -60,6 +60,8 @@ export interface ReviewReport {
   droppedOutOfScopeFindings: number;
   /** Violations whose structural claim (loop, module scope) the AST contradicted (ADR 0008: deterministic, so it may gate). */
   droppedStructuralFindings: number;
+  /** Model findings on no added or edited line of the change; present when any were dropped. */
+  droppedOffChangeFindings?: number;
   adjustedLines: number;
   /** Findings the model returned in an unreadable shape (or a truncated tail). */
   droppedMalformedFindings: number;
@@ -136,6 +138,7 @@ export function buildReport(input: {
   droppedUncited: number;
   droppedOutOfScope?: number;
   droppedStructural?: number;
+  droppedOffChange?: number;
   adjustedLines: number;
   droppedMalformed?: number;
   droppedMisquoted?: number;
@@ -188,6 +191,9 @@ export function buildReport(input: {
     droppedUncitedFindings: input.droppedUncited,
     droppedOutOfScopeFindings: input.droppedOutOfScope ?? 0,
     droppedStructuralFindings: input.droppedStructural ?? 0,
+    ...((input.droppedOffChange ?? 0) > 0
+      ? { droppedOffChangeFindings: input.droppedOffChange }
+      : {}),
     adjustedLines: input.adjustedLines,
     droppedMalformedFindings: input.droppedMalformed ?? 0,
     ...((input.droppedMisquoted ?? 0) > 0

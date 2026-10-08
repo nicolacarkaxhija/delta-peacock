@@ -250,6 +250,8 @@ export interface SummaryInput {
   findings: readonly Finding[];
   proposals: readonly ProposedGuideline[];
   droppedUncited: number;
+  /** Model findings on no added or edited line of the change. */
+  droppedOffChange?: number;
   filtered: number;
   gate: GateDecision;
   /** Absent means reviewed. */
@@ -554,6 +556,9 @@ export function renderSummaryBody(
     ...(input.filtered > 0 ? [plural(input.filtered, "low-confidence finding")] : []),
     ...(input.droppedUncited > 0
       ? [`${plural(input.droppedUncited, "finding")} citing no guideline`]
+      : []),
+    ...((input.droppedOffChange ?? 0) > 0
+      ? [`${plural(input.droppedOffChange ?? 0, "finding")} off the change`]
       : []),
   ];
   if (unposted.length > 0) lines.push("", `_Not posted: ${unposted.join(", ")}._`);

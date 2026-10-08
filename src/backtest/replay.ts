@@ -29,6 +29,8 @@ export interface Replay {
   error?: string;
   /** Lines the run must print and did not. */
   problems: string[];
+  /** Model findings the review dropped for sitting on no added or edited line. */
+  offChange: number;
   /** Present when the run checked facts only: what it left to a person and did not review. */
   facts?: FactsReach;
 }
@@ -176,6 +178,7 @@ export async function replayCase(
     ...(report?.cost !== undefined ? { cost: report.cost.total } : {}),
     ...(error !== undefined ? { error } : {}),
     problems,
+    offChange: report?.droppedOffChangeFindings ?? 0,
     ...(report?.factsOnly !== undefined ? { facts: report.factsOnly } : {}),
   };
 }

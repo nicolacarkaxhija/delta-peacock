@@ -124,6 +124,33 @@ valid regex: ...`), and on an unknown key, a missing `message` or a `message` th
 not say; a review skips such a guideline with the same words. A binding under `review.checks`
 still wins over a declared pattern.
 
+## Findings on changed lines
+
+A review judges the change, not the file around it. A finding the model reports under a
+guideline stands only when its line, or a further line its quote spans, is one the change added or
+edited; a hunk context line does not count, nor does a line the change only removed lines around.
+Such a finding is dropped before the exclusion check and before anything is posted, recorded in
+the report's `rejectedCandidates` with the reason `off-change` and counted in
+`droppedOffChangeFindings`, in the log line `n finding(s) off the change` and in the summary
+comment's `Not posted: n findings off the change`.
+
+A rule about a whole file, such as "every script opens with the use strict directive", can be
+broken by a change that never touches the line it would flag. Such a guideline declares
+`scope: file` in its frontmatter, the word a pattern check already uses, and its findings may sit
+on any line of a changed file:
+
+```markdown
+---
+id: strict-mode-everywhere
+severity: MINOR
+scope: file
+---
+```
+
+`scope` is `line` (the default) or `file`; anything else skips the guideline with
+`"scope" must be line or file`. Checked findings, observations and a finding that sits on no line
+are not affected.
+
 ## Exclusions a guideline declares
 
 A guideline often names cases that are never a finding under it: a parameter, a value the

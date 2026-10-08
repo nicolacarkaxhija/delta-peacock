@@ -177,6 +177,10 @@ export function parseGuidelineContent(
   if (typeof check === "string") return { problem: `${displayPath}: ${check}` };
   const exclusions = readExclusions(record["exclusions"], { id: trimmedId, title, body });
   if (typeof exclusions === "string") return { problem: `${displayPath}: ${exclusions}` };
+  const scope = record["scope"];
+  if (scope !== undefined && scope !== "line" && scope !== "file") {
+    return { problem: `${displayPath}: "scope" must be line or file` };
+  }
   const guideline: Guideline = {
     id: trimmedId,
     severity: severity as Severity,
@@ -189,6 +193,7 @@ export function parseGuidelineContent(
     ...(structural !== undefined ? { structural } : {}),
     ...(check !== undefined ? { check } : {}),
     ...(exclusions.length > 0 ? { exclusions } : {}),
+    ...(scope === "file" ? { scope } : {}),
   };
   if (missingFields.length > 0) {
     notices.push(

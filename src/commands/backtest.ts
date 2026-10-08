@@ -77,8 +77,8 @@ function readBaseline(casesDir: string): Baseline | undefined {
 
 function formatTable(results: readonly CaseResult[]): string {
   const lines = [
-    "| case | expected | found | right | wrong | missed | drift | time | cost |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| case | expected | found | right | wrong | missed | off change | drift | time | cost |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const result of results) {
     const runs = result.runs;
@@ -86,7 +86,7 @@ function formatTable(results: readonly CaseResult[]): string {
       runs.reduce((sum, run) => sum + run.replay.milliseconds, 0) / runs.length / 1000;
     const cost = runs.reduce((sum, run) => sum + (run.replay.cost ?? 0), 0);
     lines.push(
-      `| ${result.name} | ${String(result.expected)} | ${perRepeat(runs, (run) => run.score.found)} | ${perRepeat(runs, (run) => run.score.right)} | ${perRepeat(runs, (run) => run.score.wrong.length)} | ${perRepeat(runs, (run) => run.score.missed.length)} | ${String(result.drift)} | ${seconds.toFixed(0)} s | ${cost.toFixed(4)} |`,
+      `| ${result.name} | ${String(result.expected)} | ${perRepeat(runs, (run) => run.score.found)} | ${perRepeat(runs, (run) => run.score.right)} | ${perRepeat(runs, (run) => run.score.wrong.length)} | ${perRepeat(runs, (run) => run.score.missed.length)} | ${perRepeat(runs, (run) => run.replay.offChange)} | ${String(result.drift)} | ${seconds.toFixed(0)} s | ${cost.toFixed(4)} |`,
     );
   }
   return `${lines.join("\n")}\n`;
@@ -328,13 +328,14 @@ export async function runBacktestCommand(
   const precision = ratio(right, found);
   const totalDrift = results.reduce((sum, result) => sum + result.drift, 0);
   const cost = runs.reduce((sum, run) => sum + (run.replay.cost ?? 0), 0);
+  const offChange = runs.reduce((sum, run) => sum + run.replay.offChange, 0);
   const baseline = readBaseline(casesDir);
   const complete = options.only === undefined;
   const failed = [...failures(results), ...regressions(results, recall, baseline, complete)];
 
   deps.out(formatTable(results));
   deps.out(
-    `precision ${pct(precision)}, recall ${pct(recall)} (worst of ${String(options.repeats)}), drift ${String(totalDrift)}, cost ${cost.toFixed(4)} USD${baseline !== undefined ? `, baseline recall ${pct(baseline.recall)} of ${baseline.version}` : ""}\n`,
+    `precision ${pct(precision)}, recall ${pct(recall)} (worst of ${String(options.repeats)}), drift ${String(totalDrift)}, ${String(offChange)} finding(s) off the change, cost ${cost.toFixed(4)} USD${baseline !== undefined ? `, baseline recall ${pct(baseline.recall)} of ${baseline.version}` : ""}\n`,
   );
   for (const line of failed) deps.out(`${line}\n`);
 
@@ -346,6 +347,7 @@ export async function runBacktestCommand(
     precision,
     recall,
     drift: totalDrift,
+    offChange,
     cost,
     passed: failed.length === 0,
     failures: failed,
@@ -356,6 +358,7 @@ export async function runBacktestCommand(
       runs: result.runs.map((run) => ({
         milliseconds: run.replay.milliseconds,
         cost: run.replay.cost,
+        offChange: run.replay.offChange,
         right: run.score.right,
         wrong: run.score.wrong,
         missed: run.score.missed,
