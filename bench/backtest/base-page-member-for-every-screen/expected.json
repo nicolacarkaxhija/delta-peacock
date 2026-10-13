@@ -1,0 +1,19 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "screens/base.ts",
+      "line": 11,
+      "endLine": 14,
+      "guidelineId": "base-page-stays-small",
+      "why": "three screens use the member; the guideline counts screens, not call sites"
+    },
+    {
+      "file": "screens/base.ts",
+      "line": 16,
+      "endLine": 19,
+      "guidelineId": "base-page-stays-small",
+      "why": "one caller, but it runs for every screen, so several screens need it"
+    }
+  ]
+}

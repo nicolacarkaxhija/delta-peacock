@@ -90,3 +90,8 @@ its worst repeat, precision, and each case's recall. The next run must reach bot
 ## Keeping cases out of this repository
 
 Cases hold a team's code. Keep them next to the team's own review notes, not here.
+
+[bench/backtest](../../bench/backtest) holds the exception: synthetic cases, written fresh, each
+rebuilding the shape of a finding a person judged wrong on a real pull request, with no line of
+that pull request in it. Each one runs one model call per review, so a release can run them all:
+`delta-peacock backtest --cases bench/backtest`.

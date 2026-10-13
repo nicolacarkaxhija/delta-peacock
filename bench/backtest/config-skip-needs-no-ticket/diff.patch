@@ -1,0 +1,20 @@
+diff --git a/tests/sharing.spec.ts b/tests/sharing.spec.ts
+index 5e40808..8cdedf1 100644
+--- a/tests/sharing.spec.ts
++++ b/tests/sharing.spec.ts
+@@ -1,13 +1,13 @@
+ import { expect, test } from './fixtures';
+ 
+ test('a shared note opens for a guest', async ({ notes, settings }) => {
+-  test.skip(settings.muted('sharingMuted'), 'tenant b drops the share link; muted until 2026-11-20');
++  test.skip(!settings.hasFeature('sharing'), 'sharing is not part of this tenant');
+   await notes.share('Buy milk');
+   await expect(notes.sharedBanner()).toBeVisible();
+ });
+ 
+ test('a shared note can be revoked', async ({ notes, settings }) => {
+-  test.skip(settings.muted('sharingMuted'), 'tenant b drops the share link; muted until 2026-11-20');
++  test.skip(!settings.hasFeature('sharing'), 'sharing is not part of this tenant');
+   await notes.share('Buy milk');
+   await notes.revokeShare('Buy milk');
+   await expect(notes.sharedBanner()).toBeHidden();

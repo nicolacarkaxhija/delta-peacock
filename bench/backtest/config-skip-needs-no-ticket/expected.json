@@ -1,0 +1,17 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "tests/sharing.spec.ts",
+      "line": 4,
+      "guidelineId": "known-failures-need-a-ticket",
+      "why": "a skip the configuration decides for a feature the tenant does not have needs no ticket, the guideline says so"
+    },
+    {
+      "file": "tests/sharing.spec.ts",
+      "line": 10,
+      "guidelineId": "known-failures-need-a-ticket",
+      "why": "same skip in the second test"
+    }
+  ]
+}

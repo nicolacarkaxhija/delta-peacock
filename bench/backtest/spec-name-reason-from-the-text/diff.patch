@@ -1,0 +1,17 @@
+diff --git a/tests/smoke/tenant-b.spec.ts b/tests/smoke/tenant-b.spec.ts
+new file mode 100644
+index 0000000..3265314
+--- /dev/null
++++ b/tests/smoke/tenant-b.spec.ts
+@@ -0,0 +1,11 @@
++import { expect, test } from '../fixtures';
++
++test('the footer links to the privacy notice', async ({ footer }) => {
++  await footer.open();
++  await expect(footer.privacyLink()).toHaveAttribute('href', '/privacy');
++});
++
++test('the footer links to the imprint', async ({ footer }) => {
++  await footer.open();
++  await expect(footer.imprintLink()).toHaveAttribute('href', '/imprint');
++});

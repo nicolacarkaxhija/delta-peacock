@@ -1,0 +1,18 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "tests/export.spec.ts",
+      "line": 10,
+      "endLine": 13,
+      "guidelineId": "known-failures-need-a-ticket",
+      "why": "the reason names the fault and already ends with until 2026-11-20, the date the setting expires"
+    },
+    {
+      "file": "tests/settings.ts",
+      "line": 6,
+      "guidelineId": "known-failures-need-a-ticket",
+      "why": "a dated mute on one tenant is the allowed second form"
+    }
+  ]
+}
