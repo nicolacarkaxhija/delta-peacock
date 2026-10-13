@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.1](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.0...delta-peacock-v0.9.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **packs:** let a skip the configuration decides pass without a ticket ([0c95933](https://github.com/nicolacarkaxhija/delta-peacock/commit/0c95933180cab90491831951d0bddbf2d792b9fa))
+* **review:** drop a finding that asks its line for text the line already holds ([2a4da25](https://github.com/nicolacarkaxhija/delta-peacock/commit/2a4da258b09541314b43750a3112f2b2accef734))
+* **review:** drop findings that ask for text the line holds, with backtest cases from judged findings ([4cbdb21](https://github.com/nicolacarkaxhija/delta-peacock/commit/4cbdb21c2d304bf620696aaabea57f233847fa64))
+
 ## [0.9.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.8.0...delta-peacock-v0.9.0) (2026-10-08)
 
 
