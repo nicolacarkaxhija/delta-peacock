@@ -1,0 +1,24 @@
+diff --git a/server/scripts/greeting.js b/server/scripts/greeting.js
+index 8b46fbb..6d43989 100644
+--- a/server/scripts/greeting.js
++++ b/server/scripts/greeting.js
+@@ -1,3 +1,18 @@
+ 'use strict';
+ 
+-module.exports = {};
++/**
++ * The greeting line for a customer.
++ * @param {Object} customer the signed in customer, or null for a guest
++ * @returns {string} the greeting, a generic one for a guest
++ */
++function greeting(customer) {
++    var text = 'Welcome';
++    if (customer) {
++        text = 'Welcome back';
++    }
++    let name = customer && customer.profile ? customer.profile.name : '';
++    const city = customer?.address?.city;
++    return name ? text + ', ' + name + (city ? ' from ' + city : '') : text;
++}
++
++module.exports = { greeting: greeting };

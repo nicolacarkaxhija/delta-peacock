@@ -25,6 +25,7 @@ import type { RuntimeDeps } from "../deps.js";
 import { changedFilesFromDiff, newLineTexts } from "../git/diff.js";
 import {
   dropCommentMoves,
+  dropAlreadyHeld,
   dropGoodExamples,
   dropUnfitTags,
   linesFromDiff,
@@ -222,7 +223,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
     for (const notice of checks?.notices ?? []) deps.err(`${notice}\n`);
     addTo(usage, config.model.id ?? config.model.provider, checks?.usage);
     const kept = [
-      ...dropGoodExamples(fitted, guidelinesById).kept,
+      ...dropAlreadyHeld(dropGoodExamples(fitted, guidelinesById).kept).kept,
       ...placeFindings(checks?.findings ?? [], linesOf),
     ];
     // score only what a live review would publish; it drops these findings too

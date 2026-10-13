@@ -1,0 +1,13 @@
+diff --git a/server/models/content.js b/server/models/content.js
+index 67d1ae9..d432dfb 100644
+--- a/server/models/content.js
++++ b/server/models/content.js
+@@ -10,6 +10,8 @@ var ContentStore = require('app/content/ContentStore');
+ function content(id) {
+     var asset = ContentStore.get(id);
+     if (!asset) {
++        require('app/system/Log').error('Content asset with id = ' + id + ' does not exist');
++        require('app/system/Log').info('Content asset with id = ' + id + ' does not exist');
+         return null;
+     }
+     return { id: asset.id, body: asset.body };

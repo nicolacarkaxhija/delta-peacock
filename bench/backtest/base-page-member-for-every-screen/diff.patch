@@ -1,0 +1,71 @@
+diff --git a/screens/base.ts b/screens/base.ts
+index e6bc1bb..ccd47c7 100644
+--- a/screens/base.ts
++++ b/screens/base.ts
+@@ -7,4 +7,14 @@ export class BaseScreen {
+   heading(): Locator {
+     return this.page.getByRole('heading', { level: 1 });
+   }
++
++  /** The editable body every screen renders under its heading. */
++  bodyContent(): Locator {
++    return this.page.getByTestId('body_content');
++  }
++
++  /** Waits until the requests a screen fires after load have answered. */
++  async waitForQuietNetwork(): Promise<void> {
++    await this.page.waitForLoadState('networkidle');
++  }
+ }
+diff --git a/tests/smoke/archive.spec.ts b/tests/smoke/archive.spec.ts
+new file mode 100644
+index 0000000..a68fd77
+--- /dev/null
++++ b/tests/smoke/archive.spec.ts
+@@ -0,0 +1,6 @@
++import { expect, test } from '../fixtures';
++
++test('the archive screen shows its body', async ({ archiveScreen }) => {
++  await archiveScreen.open();
++  await expect(archiveScreen.bodyContent()).toBeVisible();
++});
+diff --git a/tests/smoke/every-screen.spec.ts b/tests/smoke/every-screen.spec.ts
+new file mode 100644
+index 0000000..07bc6d1
+--- /dev/null
++++ b/tests/smoke/every-screen.spec.ts
+@@ -0,0 +1,10 @@
++import { expect, test } from '../fixtures';
++import { allScreens } from '../screens';
++
++for (const name of allScreens) {
++  test(`${name} loads without a console error`, async ({ app, consoleErrors }) => {
++    const screen = await app.open(name);
++    await screen.waitForQuietNetwork();
++    expect(consoleErrors()).toEqual([]);
++  });
++}
+diff --git a/tests/smoke/notes.spec.ts b/tests/smoke/notes.spec.ts
+new file mode 100644
+index 0000000..81931e0
+--- /dev/null
++++ b/tests/smoke/notes.spec.ts
+@@ -0,0 +1,6 @@
++import { expect, test } from '../fixtures';
++
++test('the notes screen shows its body', async ({ notesScreen }) => {
++  await notesScreen.open();
++  await expect(notesScreen.bodyContent()).toBeVisible();
++});
+diff --git a/tests/smoke/settings.spec.ts b/tests/smoke/settings.spec.ts
+new file mode 100644
+index 0000000..a787ac1
+--- /dev/null
++++ b/tests/smoke/settings.spec.ts
+@@ -0,0 +1,6 @@
++import { expect, test } from '../fixtures';
++
++test('the settings screen shows its body', async ({ settingsScreen }) => {
++  await settingsScreen.open();
++  await expect(settingsScreen.bodyContent()).toBeVisible();
++});

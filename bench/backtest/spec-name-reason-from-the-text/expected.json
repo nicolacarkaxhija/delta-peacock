@@ -1,0 +1,14 @@
+{
+  "findings": [
+    {
+      "file": "tests/smoke/tenant-b.spec.ts",
+      "line": 1,
+      "endLine": 11,
+      "guidelineId": "spec-names-say-what-they-cover",
+      "severity": "MINOR",
+      "mustMention": ["footer"],
+      "why": "the name says the tenant, not the footer it covers; the reason must come from the text, which never mentions tenants, and the severity is the guideline's MINOR"
+    }
+  ],
+  "noFinding": []
+}

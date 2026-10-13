@@ -63,6 +63,7 @@ import {
 import { declaredTagsBlock, readDeclaredTags, type DeclaredTags } from "./declared.js";
 import {
   dropCommentMoves,
+  dropAlreadyHeld,
   dropGoodExamples,
   dropUnfitTags,
   linesFromDiff,
@@ -397,12 +398,18 @@ export async function runReview(
       `${String(exemplary.dropped.length)} finding(s) dropped: the code matches the guideline's own Good example\n`,
     );
   }
+  const held = dropAlreadyHeld(exemplary.kept);
+  if (held.dropped.length > 0) {
+    deps.err(
+      `${String(held.dropped.length)} finding(s) dropped: the line already holds the text they ask for\n`,
+    );
+  }
   // checked findings sit on the line the check measured; only their suggestions are vetted
   const checked = vetSuggestions(placeFindings(checks?.findings ?? [], linesOfFile), {
     cwd: deps.cwd,
     ...(declared !== undefined ? { tags: declared } : {}),
   });
-  const relocated = dedupeFindings([...exemplary.kept, ...checked]);
+  const relocated = dedupeFindings([...held.kept, ...checked]);
   // deterministic and therefore allowed to drop outright (ADR 0008, unlike
   // calibration below): refutes a finding whose structural claim -- "this is
   // a loop", "this is top level" -- the AST itself contradicts. Reads source
@@ -424,6 +431,7 @@ export async function runReview(
       ...moved.dropped,
       ...fitted.dropped,
       ...exemplary.dropped,
+      ...held.dropped,
       ...structural.dropped,
     ],
   };

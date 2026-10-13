@@ -1,0 +1,28 @@
+diff --git a/tests/export.spec.ts b/tests/export.spec.ts
+index 74dfed3..fe3debd 100644
+--- a/tests/export.spec.ts
++++ b/tests/export.spec.ts
+@@ -5,3 +5,13 @@ test('an exported note keeps its title', async ({ notes }) => {
+   const file = await notes.export('Buy milk');
+   expect(file.title).toBe('Buy milk');
+ });
++
++test('an exported note keeps its emoji', async ({ notes, settings }) => {
++  test.skip(
++    settings.muted('exportMuted'),
++    'tenant b drops emoji on export; muted until 2026-11-20',
++  );
++  await notes.create('Buy milk 🥛');
++  const file = await notes.export('Buy milk 🥛');
++  expect(file.title).toBe('Buy milk 🥛');
++});
+diff --git a/tests/settings.ts b/tests/settings.ts
+index 77aad46..b2c6b2e 100644
+--- a/tests/settings.ts
++++ b/tests/settings.ts
+@@ -3,4 +3,5 @@ import { lapsesOn } from './mutes';
+ /** Per tenant switches; a mute lapses by itself on its date. */
+ export const mutes = {
+   'b.sharingMuted': lapsesOn('2026-11-06'),
++  'b.exportMuted': lapsesOn('2026-11-20'),
+ };

@@ -1,0 +1,27 @@
+{
+  "findings": [
+    {
+      "file": "server/scripts/pricing.js",
+      "line": 3,
+      "guidelineId": "one-log-per-module",
+      "severity": "MAJOR",
+      "why": "a second argument to getLog opens a log file, which the sentence forbids word for word"
+    },
+    {
+      "file": "server/scripts/pricing.js",
+      "line": 17,
+      "endLine": 23,
+      "guidelineId": "docs-match-signature",
+      "severity": "MINOR",
+      "why": "the doc comment names currentBasket while the function takes basket"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "server/scripts/pricing.js",
+      "line": 4,
+      "guidelineId": "one-log-per-module",
+      "why": "one plain category is the form the guideline asks for"
+    }
+  ]
+}

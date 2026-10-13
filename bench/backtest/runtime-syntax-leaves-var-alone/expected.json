@@ -1,0 +1,26 @@
+{
+  "findings": [
+    {
+      "file": "server/scripts/greeting.js",
+      "line": 14,
+      "guidelineId": "runtime-syntax",
+      "severity": "BLOCKER",
+      "why": "optional chaining crashes on the older engine"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "server/scripts/greeting.js",
+      "line": 9,
+      "endLine": 11,
+      "guidelineId": "runtime-syntax",
+      "why": "the team dropped its var rule as noise: a var that is reassigned below is right, and var is never a finding under the runtime rule"
+    },
+    {
+      "file": "server/scripts/greeting.js",
+      "line": 13,
+      "guidelineId": "runtime-syntax",
+      "why": "let runs on the engine; the guideline lists it as never a finding"
+    }
+  ]
+}

@@ -65,6 +65,9 @@ from a clean checkout; a red line blocks it.
   that answered, names the files no model reviewed and records the spend in `budget.stopped`; no
   estimate blocks a single model review before its first call. On its own:
   `pnpm exec vitest run tests/cost-ceiling tests/cost-guard`.
+- `already held`: a finding that asks its line to end with or hold a text the line already holds
+  is dropped before anything is posted, and the log says why. On its own:
+  `pnpm exec vitest run tests/already-held.test.ts`.
 - `linked references`: every commit, file and line, guideline and finding comment the reviewer
   writes is a link where the host can build its address and plain text where it cannot; a task
   text stays plain; comments and summaries an earlier version wrote are claimed and updated in
@@ -84,6 +87,8 @@ from a clean checkout; a red line blocks it.
 - `backtest`: every consumer case passes with zero wrong findings, zero drift and recall at or
   above the stored baseline. On its own: `delta-peacock backtest --cases <cases>`, see
   [backtest.md](guides/backtest.md).
+- `synthetic backtest`: every case in `bench/backtest` passes over three repeats with zero wrong
+  findings and zero drift. On its own: `delta-peacock backtest --cases bench/backtest`.
 - `backtest anchor window`: with `--anchor-window <lines>` a finding that many lines beside an
   expected span counts as right and goes to the nearest span; 0 keeps the exact span. On its own:
   `pnpm exec vitest run tests/backtest.test.ts`.

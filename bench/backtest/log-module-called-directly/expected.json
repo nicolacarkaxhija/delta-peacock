@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "server/models/content.js",
+      "line": 13,
+      "guidelineId": "one-log-per-module",
+      "severity": "MAJOR",
+      "why": "an error call on the Log module itself writes to the root log, which the guideline says cannot be filtered; judged valid on review"
+    },
+    {
+      "file": "server/models/content.js",
+      "line": 14,
+      "guidelineId": "one-log-per-module",
+      "severity": "MAJOR",
+      "why": "an info call on the Log module goes to the root log the same way; resolving it without a change is not backed by the text"
+    }
+  ],
+  "noFinding": []
+}

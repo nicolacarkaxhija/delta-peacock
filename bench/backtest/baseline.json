@@ -1,0 +1,30 @@
+{
+  "version": "0.9.0",
+  "at": "2026-10-13T18:01:49.176Z",
+  "repeats": 3,
+  "recall": 1,
+  "precision": 1,
+  "cases": {
+    "base-page-member-for-every-screen": {
+      "recall": 1
+    },
+    "config-skip-needs-no-ticket": {
+      "recall": 1
+    },
+    "log-module-called-directly": {
+      "recall": 1
+    },
+    "month-review-mechanical-rules": {
+      "recall": 1
+    },
+    "mute-reason-already-dated": {
+      "recall": 1
+    },
+    "runtime-syntax-leaves-var-alone": {
+      "recall": 1
+    },
+    "spec-name-reason-from-the-text": {
+      "recall": 1
+    }
+  }
+}
