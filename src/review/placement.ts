@@ -371,12 +371,46 @@ export function dropUnfitTags(
   return { kept, dropped };
 }
 
+/** "should end with 'x'", "must include `x`": the text a finding demands, and how. */
+const DEMAND =
+  /\b(?:should|must|needs? to|has to|have to)\s+(end|contain|include|name)s?\s+(?:with\s+)?(['"`])([^'"`\n]{3,}?)\2/gi;
+
+const flat = (text: string): string => text.replace(/\s+/g, " ").trim().toLowerCase();
+
+/** The quoted line without the string closers and punctuation that follow its text. */
+const textEnd = (line: string): string => flat(line).replace(/[\s'"`,;)\]}]+$/, "");
+
+/** True when every text the finding demands is already in its line, in the demanded place. */
+function demandsWhatItHolds(body: string, quote: string): boolean {
+  const demands = [...body.matchAll(DEMAND)];
+  if (demands.length === 0) return false;
+  const line = flat(quote);
+  return demands.every(([, how, , text]) => {
+    const wanted = flat(String(text));
+    return how?.toLowerCase() === "end" ? textEnd(quote).endsWith(wanted) : line.includes(wanted);
+  });
+}
+
 /** Drops a finding that asks its line for text the line already holds. */
 export function dropAlreadyHeld(findings: readonly Finding[]): {
   kept: Finding[];
   dropped: RejectedCandidate[];
 } {
-  return { kept: [...findings], dropped: [] };
+  const kept: Finding[] = [];
+  const dropped: RejectedCandidate[] = [];
+  for (const finding of findings) {
+    if (finding.quote !== undefined && demandsWhatItHolds(finding.body, finding.quote)) {
+      dropped.push({
+        reason: "already-held",
+        raw: JSON.stringify({ file: finding.file, line: finding.line, quote: finding.quote }),
+        ...(finding.kind === "violation" ? { guidelineId: finding.guidelineId } : {}),
+        title: finding.title,
+      });
+    } else {
+      kept.push(finding);
+    }
+  }
+  return { kept, dropped };
 }
 
 /**
