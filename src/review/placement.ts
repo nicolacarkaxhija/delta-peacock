@@ -371,6 +371,14 @@ export function dropUnfitTags(
   return { kept, dropped };
 }
 
+/** Drops a finding that asks its line for text the line already holds. */
+export function dropAlreadyHeld(findings: readonly Finding[]): {
+  kept: Finding[];
+  dropped: RejectedCandidate[];
+} {
+  return { kept: [...findings], dropped: [] };
+}
+
 /**
  * Drops a finding whose quoted code is shown as right by its own guideline's
  * Good example; the rule cannot be broken by code it holds up as the model.

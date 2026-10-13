@@ -58,6 +58,7 @@ export interface RejectedCandidate {
     | "out-of-scope"
     | "misquoted"
     | "good-example"
+    | "already-held"
     | "comment-move"
     | "tag-fit"
     | "checked"
