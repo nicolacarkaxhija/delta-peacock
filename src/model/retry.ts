@@ -1,5 +1,7 @@
-import type { ModelPort } from "./port.js";
-import { unavailability } from "./unavailable.js";
+import type { ModelPort, ModelUsage } from "./port.js";
+import { SpentError, spentOf } from "./spent.js";
+import { errorChain, unavailability } from "./unavailable.js";
+import { addUsage } from "./usage.js";
 
 /** Calls per request before the model counts as out of reach. */
 export const MODEL_ATTEMPTS = 3;
@@ -38,9 +40,29 @@ export function backoffMs(
   return baseMs * 2 ** (retry - 1) * (0.5 + random() / 2);
 }
 
+const SECONDS = /^\d+(?:\.\d+)?$/;
+
+/** A delay header value in milliseconds, or undefined when it names no wait. */
+function delayOf(headers: Record<string, unknown>, now: () => number): number | undefined {
+  const ms = Number(headers["retry-after-ms"]);
+  if (typeof headers["retry-after-ms"] === "string" && Number.isFinite(ms) && ms >= 0) return ms;
+  const after = headers["retry-after"];
+  if (typeof after !== "string") return undefined;
+  const delay = SECONDS.test(after.trim()) ? Number(after) * 1000 : Date.parse(after) - now();
+  return delay >= 0 ? delay : undefined;
+}
+
 /** The wait a provider asked for in a Retry-After header anywhere in the chain, capped. */
 export function retryAfterMs(error: unknown, now: () => number = Date.now): number | undefined {
-  void [error, now];
+  for (const link of errorChain(error)) {
+    const raw = link["responseHeaders"];
+    if (typeof raw !== "object" || raw === null) continue;
+    const headers = Object.fromEntries(
+      Object.entries(raw).map(([name, value]) => [name.toLowerCase(), value as unknown]),
+    );
+    const delay = delayOf(headers, now);
+    if (delay !== undefined) return Math.min(delay, RETRY_AFTER_CAP_MS);
+  }
   return undefined;
 }
 
@@ -49,24 +71,37 @@ const sleep = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
+const plus = (a: ModelUsage, b: ModelUsage | undefined): ModelUsage =>
+  b === undefined ? a : addUsage(a, b);
+
 /** The port asked again with backoff on an outage, up to its attempts. */
 export function withRetry(port: ModelPort, options: RetryOptions = {}): ModelPort {
   const attempts = options.attempts ?? MODEL_ATTEMPTS;
   const wait = options.wait ?? sleep;
   const random = options.random ?? Math.random;
+  const now = options.now ?? Date.now;
   return {
     complete: async (request) => {
+      // the tokens failed attempts spent, owed by the answer or the final failure
+      let spent: ModelUsage | undefined;
+      // a retry sends the whole request again, its tool loop included
       for (let attempt = 1; ; attempt += 1) {
         try {
-          return await port.complete(request);
+          const reply = await port.complete(request);
+          return spent === undefined ? reply : { ...reply, usage: plus(spent, reply.usage) };
         } catch (error) {
-          if (!retryable(error)) throw error;
-          if (attempt >= attempts) {
-            throw new Error(`${String(attempts)} attempts, the last: ${(error as Error).message}`, {
-              cause: error,
-            });
+          const own = spentOf(error);
+          if (!retryable(error)) {
+            throw spent === undefined ? error : new SpentError(error, plus(spent, own));
           }
-          await wait(backoffMs(attempt, random, options.baseMs));
+          spent = spent === undefined ? own : plus(spent, own);
+          if (attempt >= attempts) {
+            const message = `${String(attempts)} attempts, the last: ${(error as Error).message}`;
+            throw spent === undefined
+              ? new Error(message, { cause: error })
+              : new SpentError(error, spent, message);
+          }
+          await wait(retryAfterMs(error, now) ?? backoffMs(attempt, random, options.baseMs));
         }
       }
     },

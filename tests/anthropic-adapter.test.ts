@@ -1,5 +1,11 @@
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { tool } from "ai";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { createAnthropicPort } from "../src/model/anthropic.js";
+import type { ModelReply } from "../src/model/port.js";
 
 interface CapturedRequest {
   url: string;
@@ -72,6 +78,19 @@ describe("anthropic adapter contract", () => {
     ]);
   });
 
+  it("sends one cached system block when the stable prefix is the whole prompt", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fakeFetch: typeof globalThis.fetch = (_input, init) => {
+      bodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+      return Promise.resolve(cannedAnthropicResponse("{}"));
+    };
+    const port = createAnthropicPort({ apiKey: "k", modelId: "claude-test", fetch: fakeFetch });
+    await port.complete({ system: "guidelines\n", user: "u", stablePrefix: 10 });
+    expect(bodies[0]?.["system"]).toEqual([
+      { type: "text", text: "guidelines", cache_control: { type: "ephemeral" } },
+    ]);
+  });
+
   it("forwards context tools into the request body", async () => {
     const captured: CapturedRequest[] = [];
     const fakeFetch: typeof globalThis.fetch = (input, init) => {
@@ -130,5 +149,77 @@ describe("anthropic adapter contract", () => {
       fetch: failingFetch,
     });
     await expect(port.complete({ system: "s", user: "u" })).rejects.toThrow();
+  });
+});
+
+describe("a tool loop whose last step writes nothing", () => {
+  const step = (content: unknown[], stop: string): Response =>
+    new Response(
+      JSON.stringify({
+        id: "msg_test",
+        type: "message",
+        role: "assistant",
+        model: "claude-test",
+        content,
+        stop_reason: stop,
+        stop_sequence: null,
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  const replies = [
+    () =>
+      step(
+        [
+          { type: "text", text: "partial answer" },
+          { type: "tool_use", id: "call_1", name: "ping", input: {} },
+        ],
+        "tool_use",
+      ),
+    () => step([{ type: "text", text: " " }], "end_turn"),
+  ];
+  const run = async (): Promise<ModelReply> => {
+    let call = 0;
+    const port = createAnthropicPort({
+      apiKey: "k",
+      modelId: "claude-test",
+      fetch: () => {
+        const next = replies[call];
+        call += 1;
+        return Promise.resolve(next ? next() : step([], "end_turn"));
+      },
+    });
+    return port.complete({
+      system: "s",
+      user: "u",
+      tools: {
+        ping: tool({
+          description: "answers pong",
+          inputSchema: z.object({}),
+          execute: () => Promise.resolve("pong"),
+        }),
+      },
+    });
+  };
+
+  it("keeps the answer an earlier step wrote", async () => {
+    const reply = await run();
+    expect(reply.text).toContain("partial answer");
+    expect(reply.usage).toMatchObject({ inputTokens: 20, outputTokens: 10 });
+  });
+
+  it("dumps every step as one JSON line when asked to", async () => {
+    const target = path.join(mkdtempSync(path.join(tmpdir(), "dump-")), "replies.jsonl");
+    process.env["DELTA_PEACOCK_DUMP_REPLY"] = target;
+    try {
+      await run();
+    } finally {
+      Reflect.deleteProperty(process.env, "DELTA_PEACOCK_DUMP_REPLY");
+    }
+    const line = JSON.parse(readFileSync(target, "utf8").trim()) as {
+      steps: { toolCalls: string[]; text: string }[];
+    };
+    expect(line.steps.map((entry) => entry.toolCalls)).toEqual([["ping"], []]);
+    expect(line.steps[0]?.text).toBe("partial answer");
   });
 });

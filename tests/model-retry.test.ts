@@ -370,7 +370,7 @@ describe("a model call that fails after a finished step", () => {
       type: "message",
       role: "assistant",
       model: "claude-test",
-      content: [{ type: "tool_use", id: "toolu_1", name: "ping", input: {} }],
+      content: [{ type: "tool_use", id: "call_1", name: "ping", input: {} }],
       stop_reason: "tool_use",
       stop_sequence: null,
       usage: { input_tokens: 120, output_tokens: 34 },

@@ -364,8 +364,10 @@ the mode gives up.
 
 Every model request that meets a provider out of reach, a rate or quota limit or a timeout is
 asked again, up to three attempts in all, after a backoff that doubles with each retry and is
-jittered between half and all of it. A refused credential and any other refused request are never
-asked again. When the attempts run out, a review fails by default: it posts
+jittered between half and all of it, or after the wait the provider names in a Retry-After header,
+capped at a minute. A retry sends the whole request again, a tool loop included, and the tokens a
+failed attempt spent count toward the cost cap and the reported usage. A refused credential and any
+other refused request are never asked again. When the attempts run out, a review fails by default: it posts
 `The review could not complete: the model could not run (<cause>): <what the provider said>` as its
 summary, a `failure` status, and exits with code 1, so a facts only review never stands in for a
 full one unnoticed. `fallback.outage: fallback` (env `DELTA_PEACOCK_FALLBACK_OUTAGE`) instead lets

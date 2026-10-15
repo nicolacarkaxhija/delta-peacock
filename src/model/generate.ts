@@ -5,8 +5,10 @@ import {
   DEFAULT_MAX_TOOL_ROUNDS,
   type ModelReply,
   type ModelRequest,
+  type ModelUsage,
 } from "./port.js";
-import { normalizeUsage } from "./usage.js";
+import { SpentError } from "./spent.js";
+import { addUsage, normalizeUsage } from "./usage.js";
 
 /** Told to the model on the step after its last tool round. */
 export const FINAL_STEP =
@@ -97,6 +99,7 @@ export async function completeWith(
   marker?: CacheMarker,
 ): Promise<ModelReply> {
   const rounds = request.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
+  let spent: ModelUsage | undefined;
   const result = await generateText({
     model,
     system: systemOf(request, marker),
@@ -108,6 +111,11 @@ export async function completeWith(
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     // the port's retry policy owns retries, so the SDK makes one call
     maxRetries: 0,
+    // a call that fails mid tool loop still paid for the steps it finished
+    onStepEnd: (step) => {
+      const usage = normalizeUsage(step.usage);
+      spent = spent === undefined ? usage : addUsage(spent, usage);
+    },
     ...(request.tools
       ? {
           tools: request.tools,
@@ -130,6 +138,8 @@ export async function completeWith(
               : undefined,
         }
       : {}),
+  }).catch((error: unknown) => {
+    throw spent === undefined ? error : new SpentError(error, spent);
   });
   const toolCalls = result.steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
   dumpReply(result);

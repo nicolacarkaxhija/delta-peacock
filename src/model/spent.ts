@@ -1,4 +1,5 @@
 import type { ModelUsage } from "./port.js";
+import { errorChain } from "./unavailable.js";
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -16,6 +17,6 @@ export class SpentError extends Error {
 
 /** The tokens a failed model call spent, from the error or any error it wraps. */
 export function spentOf(error: unknown): ModelUsage | undefined {
-  void error;
-  return undefined;
+  const carrier = errorChain(error).find((link) => link instanceof SpentError);
+  return carrier?.spent;
 }
