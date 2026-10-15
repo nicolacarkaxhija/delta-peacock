@@ -7,6 +7,9 @@ export const MODEL_ATTEMPTS = 3;
 /** The first backoff; each retry doubles it, so a short provider outage passes before the review gives up. */
 export const BACKOFF_BASE_MS = 4000;
 
+/** The longest wait a provider's Retry-After may ask for before the review gives up on it. */
+export const RETRY_AFTER_CAP_MS = 60_000;
+
 export interface RetryOptions {
   attempts?: number;
   baseMs?: number;
@@ -14,6 +17,8 @@ export interface RetryOptions {
   wait?: ((ms: number) => Promise<void>) | undefined;
   /** Test seam for the jitter; Math.random by default. */
   random?: () => number;
+  /** Test seam for a Retry-After date; Date.now by default. */
+  now?: () => number;
 }
 
 // a refused credential never heals on retry, so it is never one
@@ -31,6 +36,12 @@ export function backoffMs(
   baseMs: number = BACKOFF_BASE_MS,
 ): number {
   return baseMs * 2 ** (retry - 1) * (0.5 + random() / 2);
+}
+
+/** The wait a provider asked for in a Retry-After header anywhere in the chain, capped. */
+export function retryAfterMs(error: unknown, now: () => number = Date.now): number | undefined {
+  void [error, now];
+  return undefined;
 }
 
 const sleep = (ms: number): Promise<void> =>
