@@ -30,6 +30,8 @@ export interface CliDeps {
   modelPortFor?: (member: ModelRef) => ModelPort;
   /** Injectable time for monthly-cap rollover; defaults to the system clock. */
   clock?: () => Date;
+  /** Injectable delay for the model retry's backoff; real timers by default. */
+  wait?: (ms: number) => Promise<void>;
   /** Line source for interactive commands; null means end of input. Tests inject it. */
   readLine?: () => Promise<string | null>;
   /** Embedding seam for the rag embeddings backend; real adapters otherwise. */

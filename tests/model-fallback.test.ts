@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { ConfigSchema } from "../src/config/schema.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
+import { MODEL_ATTEMPTS } from "../src/model/retry.js";
 import { unavailability } from "../src/model/unavailable.js";
 import type { ReviewReport } from "../src/review/report.js";
 import { evaluateGate } from "../src/domain/gate.js";
@@ -50,11 +51,16 @@ function config(
     id?: boolean;
     failOn?: string;
     fallback?: Record<string, string>;
+    /** fallback.outage; the mechanics below run on the explicit fallback, null leaves the key out. */
+    outage?: string | null;
     model?: string[];
     review?: string[];
   } = {},
 ): string {
-  const fallback = Object.entries(options.fallback ?? {});
+  const fallback = Object.entries({
+    ...(options.outage === null ? {} : { outage: options.outage ?? "fallback" }),
+    ...options.fallback,
+  });
   return [
     "model:",
     ...(options.model ?? [
@@ -204,6 +210,7 @@ async function review(
     },
     ...(port !== undefined ? { modelPort: port } : {}),
     scmPort: scm,
+    wait: () => Promise.resolve(),
   });
   let report: ReviewReport | undefined;
   try {
@@ -344,7 +351,10 @@ describe("a review whose model cannot run", () => {
   );
 
   it("falls back when no model is configured", async () => {
-    const { code, posted, report } = await review(scenario(config({ id: false })), undefined);
+    const { code, posted, report } = await review(
+      scenario(config({ id: false, outage: null })),
+      undefined,
+    );
     expect(code).toBe(0);
     expect(report?.factsOnly?.fallback).toBe("not-configured");
     expect(posted.status).toEqual([{ state: "success", description: APPROVAL }]);
@@ -354,7 +364,7 @@ describe("a review whose model cannot run", () => {
   });
 
   it("falls back when the provider credential is missing", async () => {
-    const { code, posted, err } = await review(scenario(), undefined);
+    const { code, posted, err } = await review(scenario(config({ outage: null })), undefined);
     expect(code).toBe(0);
     expect(err).toContain("model unavailable (not configured): ANTHROPIC_API_KEY is not set");
     expect(posted.status[0]?.state).toBe("success");
@@ -471,7 +481,7 @@ describe("fallback.credentialRefused", () => {
     ["with fallback", { credentialRefused: "fallback" }],
   ])("%s a refused credential falls back and names the reason", async (_, fallback) => {
     const { code, err, posted, report } = await review(
-      scenario(config({ fallback })),
+      scenario(config({ fallback, outage: null })),
       failing(keyRejected()),
     );
     expect(code).toBe(0);
@@ -694,8 +704,10 @@ describe("model.timeoutSeconds", () => {
   });
 
   it("falls back when the provider takes the request and never answers", async () => {
+    let requests = 0;
     const server = createServer(() => {
       // takes the request and never answers
+      requests += 1;
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const { port } = server.address() as AddressInfo;
@@ -714,10 +726,187 @@ describe("model.timeoutSeconds", () => {
       const { code, err } = await review(repo, undefined);
       expect(code).toBe(0);
       expect(err).toContain("model unavailable (timed out)");
+      expect(requests).toBe(MODEL_ATTEMPTS);
       expect(Date.now() - started).toBeLessThan(15_000);
     } finally {
       server.closeAllConnections();
       server.close();
+    }
+  });
+});
+
+const FAILED = "The review could not complete: ";
+
+describe("fallback.outage", () => {
+  it("defaults to fail", () => {
+    expect(ConfigSchema.parse({}).fallback.outage).toBe("fail");
+  });
+
+  it.each([
+    [
+      "by default",
+      "unreachable",
+      null,
+      connectionRefused(),
+      "the model provider could not be reached",
+    ],
+    [
+      "with fail",
+      "unreachable",
+      "fail",
+      connectionRefused(),
+      "the model provider could not be reached",
+    ],
+    [
+      "by default",
+      "limit",
+      null,
+      rateLimited(),
+      "the model provider answered with a rate or quota limit",
+    ],
+    ["by default", "timeout", null, timedOut(), "the model call timed out"],
+  ])(
+    "%s a model that cannot run fails the run and posts the reason (%s)",
+    async (_, _why, outage, error, reason) => {
+      const { code, err, posted } = await review(scenario(config({ outage })), failing(error));
+      expect(code).toBe(1);
+      expect(err).not.toContain("falling back to facts only");
+      expect(posted.inline).toEqual([]);
+      expect(posted.status[0]?.state).toBe("failure");
+      expect(posted.summary).toHaveLength(1);
+      expect(posted.summary[0]?.split("\n")[0]).toMatch(
+        new RegExp(`^${FAILED}the model could not run \\(${reason}\\): model call failed: `),
+      );
+    },
+  );
+
+  it("by default fails when only the judge cannot run", async () => {
+    const port = answering(undefined, () => Promise.reject(rateLimited()));
+    const { code, posted } = await review(scenario(config({ outage: null })), port);
+    expect(code).toBe(1);
+    expect(posted.status[0]?.state).toBe("failure");
+    expect(posted.summary[0]).toMatch(
+      /^The review could not complete: the model could not run \(the model provider answered with a rate or quota limit\): /,
+    );
+  });
+
+  it("by default fails when one batch cannot reach the model", async () => {
+    const repo = scenario(config({ outage: null, review: ["  maxFilesPerBatch: 1"] }));
+    write(repo, "src/other.ts", "export const other = (): void => {\n  console.log(1);\n};\n");
+    commitAll(repo, "another file");
+    const port = answering((user) =>
+      user.includes("+++ b/src/other.ts")
+        ? Promise.reject(connectionRefused())
+        : Promise.resolve(finding),
+    );
+    const { code, posted } = await review(repo, port);
+    expect(code).toBe(1);
+    expect(posted.status[0]?.state).toBe("failure");
+    expect(posted.summary[0]).toMatch(
+      /^The review could not complete: the model could not run \(the model provider could not be reached\): /,
+    );
+  });
+});
+
+/** Bedrock's answer when it cannot serve a request, as the provider sent it on a real review. */
+const UNSERVED = { message: "Bedrock is unable to process your request." };
+
+const converse = (text: string): string =>
+  JSON.stringify({
+    output: { message: { role: "assistant", content: [{ text }] } },
+    stopReason: "end_turn",
+    usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+  });
+
+/** A Bedrock endpoint that refuses the first requests it is told to, then answers. */
+async function bedrock(
+  unserved: number,
+): Promise<{ url: string; requests: () => number; close: () => void }> {
+  let requests = 0;
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk: Buffer) => {
+      body += chunk.toString();
+    });
+    request.on("end", () => {
+      requests += 1;
+      if (requests <= unserved) {
+        response.writeHead(503, {
+          "content-type": "application/json",
+          "x-amzn-errortype": "ServiceUnavailableException",
+        });
+        response.end(JSON.stringify(UNSERVED));
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        converse(
+          body.includes("delta-peacock's judge")
+            ? JSON.stringify({ verdict: "confirm", kind: "limit" })
+            : finding,
+        ),
+      );
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${String(port)}`,
+    requests: () => requests,
+    close: () => {
+      server.closeAllConnections();
+      server.close();
+    },
+  };
+}
+
+const AWS = {
+  AWS_REGION: "eu-central-1",
+  AWS_ACCESS_KEY_ID: "test-key-id",
+  AWS_SECRET_ACCESS_KEY: "test-secret",
+};
+
+const onBedrock = (url: string): string =>
+  config({
+    outage: null,
+    model: ["  provider: bedrock", "  id: eu.anthropic.claude-test", `  baseUrl: ${url}`],
+  });
+
+describe("a Bedrock model that cannot serve the request", () => {
+  it("is asked again with backoff, then the run fails with the provider's reason", async () => {
+    const provider = await bedrock(Number.MAX_SAFE_INTEGER);
+    try {
+      const { code, err, posted } = await review(scenario(onBedrock(provider.url)), undefined, AWS);
+      expect(provider.requests()).toBe(MODEL_ATTEMPTS);
+      expect(code).toBe(1);
+      expect(err).not.toContain("facts only");
+      expect(posted.status[0]?.state).toBe("failure");
+      expect(posted.summary[0]?.split("\n")[0]).toBe(
+        `${FAILED}the model could not run (the model provider could not be reached): model call failed: ${String(MODEL_ATTEMPTS)} attempts, the last: Bedrock is unable to process your request.`,
+      );
+    } finally {
+      provider.close();
+    }
+  });
+
+  it("reviews in full when it answers within the attempts", async () => {
+    const provider = await bedrock(MODEL_ATTEMPTS - 1);
+    try {
+      const { code, posted, report } = await review(
+        scenario(onBedrock(provider.url)),
+        undefined,
+        AWS,
+      );
+      expect(code).toBe(0);
+      expect(report?.factsOnly).toBeUndefined();
+      expect(report?.findings.map((one) => `${one.file}:${String(one.line)}`).sort()).toEqual([
+        "src/app.ts:1",
+        "src/app.ts:3",
+        "src/app.ts:5",
+      ]);
+      expect(posted.status[0]?.state).toBe("success");
+    } finally {
+      provider.close();
     }
   });
 });
