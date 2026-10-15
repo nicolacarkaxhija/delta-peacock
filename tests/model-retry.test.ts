@@ -8,7 +8,7 @@ import {
   retryable,
   withRetry,
 } from "../src/model/retry.js";
-import { unavailability } from "../src/model/unavailable.js";
+import { ModelUnavailableError, unavailability } from "../src/model/unavailable.js";
 
 const apiError = (statusCode: number | undefined, message: string, cause?: unknown): APICallError =>
   new APICallError({
@@ -70,6 +70,8 @@ describe("which failures the model retry tries again", () => {
     ["a throttled request (429)", throttled()],
     ["a refused connection", connectionRefused()],
     ["a timeout", timedOut()],
+    ["an outage already classed", new ModelUnavailableError("unreachable", "model call failed")],
+    ["a bare transport failure", { code: "ECONNRESET" }],
   ])("retries %s", (_, error) => {
     expect(retryable(error)).toBe(true);
   });

@@ -16,6 +16,15 @@ export class ModelUnavailableError extends ToolError {
   }
 }
 
+/** Whether a model that cannot run for this reason leaves the review to facts only, or fails it. */
+export function fallsBack(why: ModelUnavailability, fallback: Config["fallback"]): boolean {
+  if (why === "credential-refused") return fallback.credentialRefused === "fallback";
+  if (why === "unreachable" || why === "limit" || why === "timeout") {
+    return fallback.outage === "fallback";
+  }
+  return true;
+}
+
 const LIMIT = /rate.?limit|quota|throttled|throttling|too many (?:requests|tokens)|credit balance/i;
 const REFUSED_KEY =
   /invalid (?:x-)?api.?key|incorrect api key|security token included in the request is invalid/i;

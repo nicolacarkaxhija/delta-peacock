@@ -58,6 +58,7 @@
     "dotdirs",
     "elif",
     "ensembled",
+    "errortype",
     "esac",
     "esbuild",
     "ETIMEDOUT",

@@ -5,6 +5,7 @@ import { createAnthropicPort } from "./anthropic.js";
 import { createBedrockPort } from "./bedrock.js";
 import { createOpenAiishPort } from "./openaiish.js";
 import type { ModelPort } from "./port.js";
+import { withRetry, type RetryOptions } from "./retry.js";
 import { ModelUnavailableError } from "./unavailable.js";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -53,7 +54,11 @@ export function refuseWithoutModel(config: Pick<Config, "model">, command: strin
   }
 }
 
-export function buildModelPort(config: Config, credentials: Credentials): ModelPort {
+export function buildModelPort(
+  config: Config,
+  credentials: Credentials,
+  retry?: RetryOptions,
+): ModelPort {
   const provider = config.model.provider;
   if (provider === "none") {
     throw new ToolError("model.provider is none: no model is built and none is called");
@@ -73,15 +78,21 @@ export function buildModelPort(config: Config, credentials: Credentials): ModelP
     },
     credentials,
     config.model.timeoutSeconds,
+    retry,
   );
 }
 
-/** The same wiring for ensemble members and judges: always provider plus model. */
+/** The same wiring for ensemble members and judges: always provider plus model, asked again on an outage. */
 export function buildModelPortFor(
   ref: ModelRef,
   credentials: Credentials,
   timeoutSeconds?: number,
+  retry?: RetryOptions,
 ): ModelPort {
+  return withRetry(adapterFor(ref, credentials, timeoutSeconds), retry);
+}
+
+function adapterFor(ref: ModelRef, credentials: Credentials, timeoutSeconds?: number): ModelPort {
   const modelId = ref.id;
   const timed = timeoutSeconds !== undefined ? { fetch: timedFetch(timeoutSeconds) } : {};
   switch (ref.provider) {
