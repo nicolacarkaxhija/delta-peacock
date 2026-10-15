@@ -244,6 +244,14 @@
             "fallback",
             "fail"
           ]
+        },
+        "outage": {
+          "default": "fail",
+          "type": "string",
+          "enum": [
+            "fallback",
+            "fail"
+          ]
         }
       },
       "additionalProperties": false

@@ -243,8 +243,11 @@ and a config that turns on calibration, an ensemble or embeddings fails validati
 decides and what it leaves to a person is in the
 [checks guide](docs/guides/checks.md#facts-only-with-no-model).
 
-A configured model that cannot run (not configured, unreachable, a rate or quota limit, a
-timeout, a refused credential) makes the review fall back to the same facts only mode on its own.
+A model request that meets an unreachable provider, a rate or quota limit or a timeout is asked
+again, up to three attempts with a jittered exponential backoff. If the model still cannot run,
+the review fails with exit code 1 and posts the reason as its summary; `fallback.outage: fallback`
+lets it check facts only instead. A configured model that cannot run for another reason (not
+configured, a refused credential) makes the review fall back to the same facts only mode on its own.
 The step still passes, unless a fact finding fails the gate; the summary says that merging needs a
 person's approval, and so does a `success` status. `fallback.gate`, `fallback.status` and
 `fallback.credentialRefused` change that. Findings the model gave before it stopped stand, and

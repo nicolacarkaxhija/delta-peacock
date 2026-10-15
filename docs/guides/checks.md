@@ -362,8 +362,21 @@ the mode gives up.
 
 ## When the model cannot run
 
-A review with a model configured falls back to facts only, with no change to the pipeline, when
-the model cannot run:
+Every model request that meets a provider out of reach, a rate or quota limit or a timeout is asked
+again, up to three attempts in all, after a backoff that doubles with each retry and is jittered
+between half and all of it, or after the wait the provider names in a Retry-After header, capped at
+a minute. A retry sends the whole request again, a tool loop included, and the tokens a failed
+attempt spent count toward the cost cap and the reported usage. A refused credential and any other
+refused request are never asked again. When the attempts run out, a review fails by default: it
+posts `The review could not complete: the model could not run (<cause>): <what the provider said>`
+as its summary, a `failure` status, and exits with code 1, so a facts only review never stands in
+for a full one unnoticed. `fallback.outage: fallback` (env `DELTA_PEACOCK_FALLBACK_OUTAGE`) instead
+lets those three causes fall back to facts only, as the other causes below always do unless their
+own key says otherwise. `model.provider: none` asks for facts only from the start.
+
+A review falls back to facts only, with no change to the pipeline, when the model cannot run for
+one of these causes; the provider unreachable, a rate or quota limit and a timeout fall back only
+with `fallback.outage: fallback`:
 
 | Cause                    | What counts                                                                                                    | The summary says                                       | The status says       |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------- |
@@ -427,6 +440,7 @@ recommended one.
 | `fallback.gate`              | `facts`    | `pass`: no fact fails the step; the findings stay in the summary, a model's still gate |
 | `fallback.status`            | `success`  | `pending`: the status never reads as a pass (Bitbucket `INPROGRESS`, a card `PENDING`) |
 | `fallback.credentialRefused` | `fallback` | `fail`: a refused credential fails the run with exit code 1, as any other error        |
+| `fallback.outage`            | `fail`     | `fallback`: an unreachable provider, a limit or a timeout falls back to facts only     |
 
 With `fallback.gate: facts` a fact finding that reaches `gate.failOn` fails the step with exit
 code 2 and a `failure` status that reads `No model (unreachable), facts only: 1 finding, 1 left to
@@ -446,6 +460,7 @@ fallback:
   gate: facts
   status: success
   credentialRefused: fallback
+  outage: fail
 ```
 
 ## The sentence each check quotes

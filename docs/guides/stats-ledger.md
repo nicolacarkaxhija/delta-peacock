@@ -46,9 +46,11 @@ cost:
   rateInputPer1M: 3
   rateOutputPer1M: 15
   rates:
-    claude-haiku-4-5:
-      rateInputPer1M: 1
-      rateOutputPer1M: 5
+    claude-haiku-5-5:
+      rateInputPer1M: 0.11
+      rateOutputPer1M: 0.55
+      rateCacheReadPer1M: 0.011
+      rateCacheWritePer1M: 0.1375
 ```
 
 A field missing from an entry is unpriced (zero); it never falls back to the flat key, which may belong to another model. `DELTA_PEACOCK_COST_RATES` takes the map as JSON.

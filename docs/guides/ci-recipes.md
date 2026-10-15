@@ -51,7 +51,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DELTA_PEACOCK_MODEL_ID: claude-haiku-4-5-20251001
+          DELTA_PEACOCK_MODEL_ID: claude-haiku-5-5
           DELTA_PEACOCK_SCM_PROVIDER: github
           DELTA_PEACOCK_SCM_REPOSITORY: ${{ github.repository }}
           DELTA_PEACOCK_SCM_PULL_REQUEST: ${{ github.event.pull_request.number }}

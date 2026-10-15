@@ -16,6 +16,15 @@ export class ModelUnavailableError extends ToolError {
   }
 }
 
+/** Whether a model that cannot run for this reason leaves the review to facts only, or fails it. */
+export function fallsBack(why: ModelUnavailability, fallback: Config["fallback"]): boolean {
+  if (why === "credential-refused") return fallback.credentialRefused === "fallback";
+  if (why === "unreachable" || why === "limit" || why === "timeout") {
+    return fallback.outage === "fallback";
+  }
+  return true;
+}
+
 const LIMIT = /rate.?limit|quota|throttled|throttling|too many (?:requests|tokens)|credit balance/i;
 const REFUSED_KEY =
   /invalid (?:x-)?api.?key|incorrect api key|security token included in the request is invalid/i;
@@ -47,19 +56,14 @@ interface Link {
 }
 
 /** The error and every error it wraps: its cause, and a retry's attempts. */
-function chain(error: unknown): Link[] {
-  const links: Link[] = [];
+export function errorChain(error: unknown): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [];
   const seen = new Set<unknown>();
   const visit = (value: unknown, depth: number): void => {
     if (typeof value !== "object" || value === null || seen.has(value) || depth > MAX_DEPTH) return;
     seen.add(value);
     const record = value as Record<string, unknown>;
-    links.push({
-      name: typeof record["name"] === "string" ? record["name"] : "",
-      message: typeof record["message"] === "string" ? record["message"] : "",
-      code: typeof record["code"] === "string" ? record["code"] : "",
-      statusCode: typeof record["statusCode"] === "number" ? record["statusCode"] : undefined,
-    });
+    records.push(record);
     visit(record["cause"], depth + 1);
     visit(record["lastError"], depth + 1);
     if (Array.isArray(record["errors"])) {
@@ -67,7 +71,16 @@ function chain(error: unknown): Link[] {
     }
   };
   visit(error, 0);
-  return links;
+  return records;
+}
+
+function chain(error: unknown): Link[] {
+  return errorChain(error).map((record) => ({
+    name: typeof record["name"] === "string" ? record["name"] : "",
+    message: typeof record["message"] === "string" ? record["message"] : "",
+    code: typeof record["code"] === "string" ? record["code"] : "",
+    statusCode: typeof record["statusCode"] === "number" ? record["statusCode"] : undefined,
+  }));
 }
 
 /** How a failed model call means the model cannot run, or undefined for any other failure. */

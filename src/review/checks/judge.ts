@@ -233,7 +233,7 @@ export async function settle(
     } catch (error) {
       failure = (error as Error).message.replace(/\n[\s\S]*/, "");
       unavailable = unavailability(error, credentialRefused);
-      // the SDK already retried; a second attempt would only pay its retries again
+      // the port already retried; a second attempt would only pay its retries again
       if (unavailable !== undefined) break;
     }
   }

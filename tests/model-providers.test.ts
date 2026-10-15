@@ -312,7 +312,7 @@ describe("agentic tool budget (captured Haiku reply, a real Bitbucket pull reque
       region: "eu-central-1",
       accessKeyId: "k",
       secretAccessKey: "s",
-      modelId: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+      modelId: "eu.anthropic.claude-haiku-5-5",
       fetch,
     });
     const reply = await port.complete({
@@ -343,7 +343,7 @@ describe("agentic tool budget (captured Haiku reply, a real Bitbucket pull reque
       region: "eu-central-1",
       accessKeyId: "k",
       secretAccessKey: "s",
-      modelId: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+      modelId: "eu.anthropic.claude-haiku-5-5",
       fetch,
     });
     const reply = await port.complete({

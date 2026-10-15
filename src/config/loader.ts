@@ -43,6 +43,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_FALLBACK_GATE: "fallback.gate",
   DELTA_PEACOCK_FALLBACK_STATUS: "fallback.status",
   DELTA_PEACOCK_FALLBACK_CREDENTIAL_REFUSED: "fallback.credentialRefused",
+  DELTA_PEACOCK_FALLBACK_OUTAGE: "fallback.outage",
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",
   DELTA_PEACOCK_OUTPUT_CODE_QUALITY_PATH: "output.codeQualityPath",

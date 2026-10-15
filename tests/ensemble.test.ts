@@ -3,7 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/index.js";
 import type { ModelRef } from "../src/model/build.js";
-import type { ModelPort } from "../src/model/port.js";
+import type { ModelPort, ModelUsage } from "../src/model/port.js";
+import { SpentError } from "../src/model/spent.js";
 import type { ReviewReport } from "../src/review/report.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
@@ -38,6 +39,8 @@ const MEMBERS = JSON.stringify([
 interface ScriptedMember {
   text?: string;
   fail?: string;
+  /** Tokens the failed call spent before it failed. */
+  spent?: ModelUsage;
   delayMs?: number;
 }
 
@@ -53,7 +56,10 @@ function portsFor(
         await new Promise((resolve) => setTimeout(resolve, entry.delayMs));
       }
       log.push(`end:${member.id}`);
-      if (entry?.fail !== undefined) throw new Error(entry.fail);
+      if (entry?.fail !== undefined) {
+        const failure = new Error(entry.fail);
+        throw entry.spent === undefined ? failure : new SpentError(failure, entry.spent);
+      }
       return {
         text: entry?.text ?? '{"findings": []}',
         usage: { inputTokens: 10, outputTokens: 5 },
@@ -154,6 +160,19 @@ describe("union mode", () => {
     expect(stderr).toContain("member-b failed: socket hang up");
     const report = JSON.parse(readFileSync(path.join(repo, "p.json"), "utf8")) as ReviewReport;
     expect(report.ensemble?.members.find((member) => member.id === "member-b")?.ok).toBe(false);
+  });
+
+  it("counts the tokens a failed member spent", async () => {
+    const repo = makeScenario();
+    const script = {
+      "member-a": { text: JSON.stringify({ findings: [findingAt(1, "Console call")] }) },
+      "member-b": { fail: "socket hang up", spent: { inputTokens: 7, outputTokens: 2 } },
+    };
+    await reviewEnsemble(repo, {}, portsFor(script), "--report", "p.json");
+    const report = JSON.parse(readFileSync(path.join(repo, "p.json"), "utf8")) as ReviewReport;
+    const failed = report.ensemble?.members.find((member) => member.id === "member-b");
+    expect(failed?.usage).toMatchObject({ inputTokens: 7, outputTokens: 2 });
+    expect(report.usage).toMatchObject({ inputTokens: 17, outputTokens: 7 });
   });
 
   it("treats an unparseable member answer as a member failure", async () => {

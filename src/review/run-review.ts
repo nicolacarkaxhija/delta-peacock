@@ -39,10 +39,12 @@ import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../co
 import { addUsage } from "../model/usage.js";
 import { buildModelPortFor } from "../model/build.js";
 import {
+  fallsBack as fallsBackOn,
   ModelUnavailableError,
   unavailability,
   type ModelUnavailability,
 } from "../model/unavailable.js";
+import type { RetryOptions } from "../model/retry.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { planBatches, planBudget } from "./budget.js";
@@ -71,7 +73,13 @@ import {
   vetSuggestions,
 } from "./placement.js";
 import { runGit } from "../git/git.js";
-import { factsLine, fallbackReason, NOT_REVIEWED, type FactsScope } from "../scm/comment-format.js";
+import {
+  factsLine,
+  fallbackReason,
+  NOT_REVIEWED,
+  unavailableReason,
+  type FactsScope,
+} from "../scm/comment-format.js";
 import { buildScmPort } from "../scm/build.js";
 import { codeInsightsEnabled, isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
@@ -264,7 +272,12 @@ export async function runReview(
       ? modelPort()
       : (verdictPort ??= metered(
           deps.modelPortFor?.(verdictRef) ??
-            buildModelPortFor(verdictRef, deps.credentials, config.model.timeoutSeconds),
+            buildModelPortFor(
+              verdictRef,
+              deps.credentials,
+              config.model.timeoutSeconds,
+              retryOf(deps),
+            ),
           ceiling,
           ratesFor(config.cost, verdictRef.id),
         ));
@@ -277,8 +290,7 @@ export async function runReview(
   // what a model reviewed before it could not run; unset when it reviewed nothing
   let modelReviewed: "part" | "all" | undefined;
   // fallback.credentialRefused fail: a refused credential fails the run as before
-  const fallsBack = (why: ModelUnavailability): boolean =>
-    why !== "credential-refused" || config.fallback.credentialRefused === "fallback";
+  const fallsBack = (why: ModelUnavailability): boolean => fallsBackOn(why, config.fallback);
   if (blocked !== undefined) fallback = { why: "cost-cap", detail: blocked.reasons.join("; ") };
   try {
     if (allChecked && !factsOnly && blocked === undefined) {
@@ -366,6 +378,11 @@ export async function runReview(
       : undefined;
   for (const notice of checks?.notices ?? []) deps.err(`${notice}\n`);
   if (fallback === undefined && checks?.unavailable !== undefined) {
+    if (!fallsBack(checks.unavailable.why)) {
+      const error = new ModelUnavailableError(checks.unavailable.why, checks.unavailable.detail);
+      await publishFailure(deps, config, failureReason(error));
+      throw error;
+    }
     fallback = checks.unavailable;
     // the open review answered; only the judge could not run
     if (!allChecked) modelReviewed = "all";
@@ -1075,7 +1092,7 @@ function reviewPort(deps: ReviewDeps, config: Config): ModelPort {
     throw new ToolError("model.provider is none: no model is built and none is called");
   }
   return withResponseCache(
-    deps.modelPort ?? buildModelPort(config, deps.credentials),
+    deps.modelPort ?? buildModelPort(config, deps.credentials, retryOf(deps)),
     config,
     deps.cwd,
     () => deps.clock?.() ?? new Date(),
@@ -1293,8 +1310,8 @@ async function finalizeFindings(
     const ref = config.calibration.model;
     const calibrationPort = ref
       ? (deps.modelPortFor?.(ref) ??
-        buildModelPortFor(ref, deps.credentials, config.model.timeoutSeconds))
-      : (deps.modelPort ?? buildModelPort(config, deps.credentials));
+        buildModelPortFor(ref, deps.credentials, config.model.timeoutSeconds, retryOf(deps)))
+      : (deps.modelPort ?? buildModelPort(config, deps.credentials, retryOf(deps)));
     const outcome = await calibrate(calibrationPort, kept, diffText);
     for (const notice of outcome.notices) deps.err(`${notice}\n`);
     // the gate reads exactly these findings next; calibration only annotated them
@@ -1430,10 +1447,18 @@ async function publishFailure(deps: ReviewDeps, config: Config, reason: string):
 /** The first line of a failure, readable on a pull request. */
 function failureReason(error: ToolError): string {
   const first = String(error.message.split("\n")[0]);
+  if (error instanceof ModelUnavailableError) {
+    return `the model could not run (${unavailableReason(error.why)}): ${first}`;
+  }
   if (/held no JSON|not valid JSON|failed to parse|expected shape/.test(error.message)) {
     return "the model's reply held no readable findings, twice";
   }
   return first;
+}
+
+/** The retry's backoff on the injected delay, when a test gives one. */
+function retryOf(deps: ReviewDeps): RetryOptions {
+  return { wait: deps.wait };
 }
 
 /** A review whose every applicable guideline is checked makes no open call. */

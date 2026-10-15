@@ -1,4 +1,5 @@
 import type { ModelPort, ModelUsage } from "../model/port.js";
+import { spentOf } from "../model/spent.js";
 import { ModelUnavailableError } from "../model/unavailable.js";
 import { computeCost, type CostRates } from "../model/usage.js";
 
@@ -6,7 +7,7 @@ import { computeCost, type CostRates } from "../model/usage.js";
 export interface SpendCeiling {
   /** USD the review may spend; Infinity when no cap applies. */
   readonly limit: number;
-  /** USD spent so far, priced from the replies' actual usage. */
+  /** USD spent so far, priced from the actual usage of replies and failed calls. */
   spent(): number;
   /** Prices usage at the review's rates unless a call on another model brings its own. */
   add(usage: ModelUsage, rates?: CostRates): void;
@@ -33,12 +34,16 @@ export function ceilingReason(ceiling: SpendCeiling): string {
   return `the running cost ${usd(ceiling.spent())} USD reached the cap of ${usd(ceiling.limit)} USD`;
 }
 
-/** Counts every paid reply and refuses the next call once the cap is reached; calls in flight finish. */
+/** Counts every paid reply and failed call, and refuses the next call once the cap is reached; calls in flight finish. */
 export function metered(port: ModelPort, ceiling: SpendCeiling, rates?: CostRates): ModelPort {
   return {
     async complete(request) {
       if (ceiling.reached()) throw new ModelUnavailableError("cost-cap", ceilingReason(ceiling));
-      const reply = await port.complete(request);
+      const reply = await port.complete(request).catch((error: unknown) => {
+        const spent = spentOf(error);
+        if (spent !== undefined) ceiling.add(spent, rates);
+        throw error;
+      });
       if (reply.usage !== undefined && reply.cached !== true) ceiling.add(reply.usage, rates);
       return reply;
     },

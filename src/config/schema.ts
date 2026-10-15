@@ -90,6 +90,8 @@ const FallbackSchema = z.strictObject({
   status: z.enum(["success", "pending"]).default("success"),
   /** fallback: a refused credential (401, 403, a rejected key) falls back like an outage; fail: the run fails. */
   credentialRefused: z.enum(["fallback", "fail"]).default("fallback"),
+  /** fail: a provider out of reach, a rate or quota limit or a timeout fails the run after the retries; fallback: the review checks facts only. */
+  outage: z.enum(["fallback", "fail"]).default("fail"),
 });
 
 export const OutputSchema = z.strictObject({

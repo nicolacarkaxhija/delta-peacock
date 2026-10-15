@@ -331,6 +331,11 @@ const FALLBACK_APPROVAL = {
   all: "Judge could not run: needs a person's approval",
 } as const;
 
+/** The reason a summary gives for a model that could not run. */
+export function unavailableReason(why: ModelUnavailability): string {
+  return FALLBACK_REASONS[why].long;
+}
+
 /** The short reason a log line and a status give for a model that could not run. */
 export function fallbackReason(why: ModelUnavailability): string {
   return FALLBACK_REASONS[why].short;
