@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.2](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.1...delta-peacock-v0.9.2) (2026-10-15)
+
+
+### Bug Fixes
+
+* **model:** count failed attempts toward the cost cap and honour Retry-After ([ade9268](https://github.com/nicolacarkaxhija/delta-peacock/commit/ade9268b579a967cdd9bbc88bf3a478424341f58))
+* **model:** ignore an empty Retry-After and count a failed ensemble member's tokens ([595c1be](https://github.com/nicolacarkaxhija/delta-peacock/commit/595c1be252da6b500488007ae3cbd807c9aecc71))
+* **model:** pass the retry delay to ensemble members and name the fail default in the docs ([04ec8fa](https://github.com/nicolacarkaxhija/delta-peacock/commit/04ec8fa8b24c9ec047fedaaa9dd7bb7e134458ff))
+* **model:** retry an unreachable model three times, then fail the review with the reason ([f27d611](https://github.com/nicolacarkaxhija/delta-peacock/commit/f27d611b74855a8d49c6d26fe872c063e9b68645))
+* **model:** retry an unreachable model, then fail the review with the reason ([1d5c8e8](https://github.com/nicolacarkaxhija/delta-peacock/commit/1d5c8e8a14af39f7437445ce86a3f72068cc11bb))
+
 ## [0.9.1](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.0...delta-peacock-v0.9.1) (2026-10-13)
 
 
