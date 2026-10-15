@@ -205,6 +205,8 @@ describe("the wait a provider asks for", () => {
     ["a word", { "retry-after": "soon" }],
     ["negative seconds", { "retry-after": "-5" }],
     ["negative milliseconds", { "retry-after-ms": "-1" }],
+    ["empty milliseconds", { "retry-after-ms": "" }],
+    ["blank milliseconds", { "retry-after-ms": "  " }],
     ["a date already past", { "retry-after": "Wed, 14 Oct 2026 09:59:00 GMT" }],
   ])("ignores %s", (_, headers) => {
     expect(retryAfterMs(asking(headers), now)).toBeUndefined();
