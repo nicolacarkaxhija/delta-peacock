@@ -784,6 +784,7 @@ describe("fallback.outage", () => {
     const port = answering(undefined, () => Promise.reject(rateLimited()));
     const { code, posted } = await review(scenario(config({ outage: null })), port);
     expect(code).toBe(1);
+    expect(posted.summary).toHaveLength(1);
     expect(posted.status[0]?.state).toBe("failure");
     expect(posted.summary[0]).toMatch(
       /^The review could not complete: the model could not run \(the model provider answered with a rate or quota limit\): /,
@@ -801,6 +802,7 @@ describe("fallback.outage", () => {
     );
     const { code, posted } = await review(repo, port);
     expect(code).toBe(1);
+    expect(posted.summary).toHaveLength(1);
     expect(posted.status[0]?.state).toBe("failure");
     expect(posted.summary[0]).toMatch(
       /^The review could not complete: the model could not run \(the model provider could not be reached\): /,

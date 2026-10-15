@@ -1457,8 +1457,8 @@ function failureReason(error: ToolError): string {
 }
 
 /** The retry's backoff on the injected delay, when a test gives one. */
-function retryOf(deps: ReviewDeps): RetryOptions | undefined {
-  return deps.wait !== undefined ? { wait: deps.wait } : undefined;
+function retryOf(deps: ReviewDeps): RetryOptions {
+  return { wait: deps.wait };
 }
 
 /** A review whose every applicable guideline is checked makes no open call. */

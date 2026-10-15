@@ -11,7 +11,7 @@ export interface RetryOptions {
   attempts?: number;
   baseMs?: number;
   /** Test seam for the backoff; real timers by default. */
-  wait?: (ms: number) => Promise<void>;
+  wait?: ((ms: number) => Promise<void>) | undefined;
   /** Test seam for the jitter; Math.random by default. */
   random?: () => number;
 }

@@ -373,7 +373,8 @@ those three causes fall back to facts only, as the other causes below always do 
 key says otherwise. `model.provider: none` asks for facts only from the start.
 
 A review falls back to facts only, with no change to the pipeline, when the model cannot run for
-one of these causes:
+one of these causes; the provider unreachable, a rate or quota limit and a timeout fall back only
+with `fallback.outage: fallback`:
 
 | Cause                    | What counts                                                                                                    | The summary says                                       | The status says       |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------- |

@@ -39,8 +39,8 @@ from a clean checkout; a red line blocks it.
   reason as its summary, a `failure` status and exits 1, a Bedrock 503 replayed on a local
   endpoint included. On its own: `pnpm exec vitest run tests/model-retry tests/model-fallback`.
 - `model fallback`: a review whose model is not configured or refused its credential, or with
-  `fallback.outage: fallback` is unreachable, rate or quota limited or timed out, checks facts only, exits 0 unless a fact finding fails the
-  gate, and posts a status and a summary that ask for a person's approval; `fallback.gate`,
+  `fallback.outage: fallback` is unreachable, rate or quota limited or timed out, checks facts
+  only, exits 0 unless a fact finding fails the gate, and posts a status and a summary that ask for a person's approval; `fallback.gate`,
   `fallback.status` and `fallback.credentialRefused` each behave as documented in both values; a
   fallback leaves earlier comments as they are, keeps the answered batches, asks the judge once
   per run and times a silent provider out after `model.timeoutSeconds`; a review with a working

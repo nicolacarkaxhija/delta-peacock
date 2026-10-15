@@ -23,7 +23,10 @@ export interface EnsembleResult {
 }
 
 function portFor(deps: RuntimeDeps, member: ModelRef): ModelPort {
-  return deps.modelPortFor?.(member) ?? buildModelPortFor(member, deps.credentials);
+  return (
+    deps.modelPortFor?.(member) ??
+    buildModelPortFor(member, deps.credentials, undefined, { wait: deps.wait })
+  );
 }
 
 /** First occurrence of each fingerprint wins; order follows member order. */
