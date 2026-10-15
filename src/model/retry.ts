@@ -9,7 +9,7 @@ export const MODEL_ATTEMPTS = 3;
 /** The first backoff; each retry doubles it, so a short provider outage passes before the review gives up. */
 export const BACKOFF_BASE_MS = 4000;
 
-/** The longest wait a provider's Retry-After may ask for before the review gives up on it. */
+/** The longest wait honoured from a provider's Retry-After. */
 export const RETRY_AFTER_CAP_MS = 60_000;
 
 export interface RetryOptions {
@@ -40,15 +40,15 @@ export function backoffMs(
   return baseMs * 2 ** (retry - 1) * (0.5 + random() / 2);
 }
 
-const SECONDS = /^\d+(?:\.\d+)?$/;
+const DECIMAL = /^\d+(?:\.\d+)?$/;
 
 /** A delay header value in milliseconds, or undefined when it names no wait. */
 function delayOf(headers: Record<string, unknown>, now: () => number): number | undefined {
-  const ms = Number(headers["retry-after-ms"]);
-  if (typeof headers["retry-after-ms"] === "string" && Number.isFinite(ms) && ms >= 0) return ms;
+  const ms = headers["retry-after-ms"];
+  if (typeof ms === "string" && DECIMAL.test(ms.trim())) return Number(ms);
   const after = headers["retry-after"];
   if (typeof after !== "string") return undefined;
-  const delay = SECONDS.test(after.trim()) ? Number(after) * 1000 : Date.parse(after) - now();
+  const delay = DECIMAL.test(after.trim()) ? Number(after) * 1000 : Date.parse(after) - now();
   return delay >= 0 ? delay : undefined;
 }
 

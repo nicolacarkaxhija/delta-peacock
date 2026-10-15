@@ -362,17 +362,17 @@ the mode gives up.
 
 ## When the model cannot run
 
-Every model request that meets a provider out of reach, a rate or quota limit or a timeout is
-asked again, up to three attempts in all, after a backoff that doubles with each retry and is
-jittered between half and all of it, or after the wait the provider names in a Retry-After header,
-capped at a minute. A retry sends the whole request again, a tool loop included, and the tokens a
-failed attempt spent count toward the cost cap and the reported usage. A refused credential and any
-other refused request are never asked again. When the attempts run out, a review fails by default: it posts
-`The review could not complete: the model could not run (<cause>): <what the provider said>` as its
-summary, a `failure` status, and exits with code 1, so a facts only review never stands in for a
-full one unnoticed. `fallback.outage: fallback` (env `DELTA_PEACOCK_FALLBACK_OUTAGE`) instead lets
-those three causes fall back to facts only, as the other causes below always do unless their own
-key says otherwise. `model.provider: none` asks for facts only from the start.
+Every model request that meets a provider out of reach, a rate or quota limit or a timeout is asked
+again, up to three attempts in all, after a backoff that doubles with each retry and is jittered
+between half and all of it, or after the wait the provider names in a Retry-After header, capped at
+a minute. A retry sends the whole request again, a tool loop included, and the tokens a failed
+attempt spent count toward the cost cap and the reported usage. A refused credential and any other
+refused request are never asked again. When the attempts run out, a review fails by default: it
+posts `The review could not complete: the model could not run (<cause>): <what the provider said>`
+as its summary, a `failure` status, and exits with code 1, so a facts only review never stands in
+for a full one unnoticed. `fallback.outage: fallback` (env `DELTA_PEACOCK_FALLBACK_OUTAGE`) instead
+lets those three causes fall back to facts only, as the other causes below always do unless their
+own key says otherwise. `model.provider: none` asks for facts only from the start.
 
 A review falls back to facts only, with no change to the pipeline, when the model cannot run for
 one of these causes; the provider unreachable, a rate or quota limit and a timeout fall back only

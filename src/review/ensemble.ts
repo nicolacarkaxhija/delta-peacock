@@ -4,6 +4,7 @@ import { fingerprintOf, type Finding } from "../domain/finding.js";
 import { ToolError } from "../errors.js";
 import { buildModelPortFor, type ModelRef } from "../model/build.js";
 import type { ModelPort, ModelRequest, ModelUsage } from "../model/port.js";
+import { spentOf } from "../model/spent.js";
 import { addUsage } from "../model/usage.js";
 import { parseReviewResponse, type ParseOptions, type ParsedReview } from "./parse.js";
 
@@ -97,7 +98,15 @@ export async function runEnsemble(
     if (outcome.status === "rejected") {
       const message =
         outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-      members.push({ provider: ref.provider, id: ref.id, ok: false, error: message });
+      const spent = spentOf(outcome.reason);
+      if (spent) usage = addUsage(usage, spent);
+      members.push({
+        provider: ref.provider,
+        id: ref.id,
+        ok: false,
+        ...(spent ? { usage: spent } : {}),
+        error: message,
+      });
       notices.push(`ensemble member ${ref.id} failed: ${message}`);
       continue;
     }
