@@ -67,6 +67,7 @@ The repository ships curated starter packs under [`packs/`](../../packs). Seed a
 | [`typescript`](../../packs/typescript) | Escaping the type system, exhaustive union switches, floating promises, named numbers, natural comments, swallowed errors, unused exports.                        |
 | [`playwright`](../../packs/playwright) | Web first assertions, locators in page objects, explained CSS selectors, no inline waits, one behavior per test, known failures, skips, data rows, declared tags. |
 | [`commits`](../../packs/commits)       | Conventional subjects, one behavior per change, change texts that match the diff.                                                                                 |
+| [`sfra`](../../packs/sfra)             | SFRA cartridges, site data and mocha specs: layering and overrides, feature flags, search and availability, templates, locale files, spec scope.                  |
 
 These are a floor, not a policy: fork one, cut what does not fit, and keep the rest under your own id namespace. Community packs are welcome by pull request; add a row here and make sure `pack lint` passes.
 
