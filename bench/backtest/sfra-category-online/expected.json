@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "meta/site-data/catalogs/shop-storefront/catalog.xml",
+      "line": 6,
+      "endLine": 11,
+      "guidelineId": "new-category-ships-closed",
+      "severity": "MAJOR",
+      "why": "the new campaign category ships online and in the menu"
+    }
+  ],
+  "noFinding": []
+}

@@ -1,0 +1,20 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/categories.js b/cartridges/app_shop_core/cartridge/models/categories.js
+index 7e07a61..32fd25a 100644
+--- a/cartridges/app_shop_core/cartridge/models/categories.js
++++ b/cartridges/app_shop_core/cartridge/models/categories.js
+@@ -1,7 +1,14 @@
+ 'use strict';
+ 
++var stockHelpers = require('*/cartridge/scripts/helpers/stockHelpers');
++
+ function CategoriesModel(items) {
+-    this.categories = items.map(function (c) { return { id: c.ID, name: c.displayName }; });
++    this.categories = items.filter(function (c) {
++        if (c.ID === 'gift-pack-landing') {
++            return stockHelpers.hasStock(c);
++        }
++        return true;
++    }).map(function (c) { return { id: c.ID, name: c.displayName }; });
+ }
+ 
+ module.exports = CategoriesModel;

@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js",
+      "line": 1,
+      "endLine": 10,
+      "guidelineId": "reuse-storefront-visibility-rules",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

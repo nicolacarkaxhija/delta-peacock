@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/order/orderItems.js",
+      "line": 3,
+      "endLine": 16,
+      "guidelineId": "churn-hides-the-change",
+      "severity": "MINOR",
+      "why": "the var to const rewrite buries the one added argument"
+    }
+  ],
+  "noFinding": []
+}

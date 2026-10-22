@@ -1,0 +1,21 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/order.js b/cartridges/app_shop_core/cartridge/models/order.js
+new file mode 100644
+index 0000000..a8d0e77
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/models/order.js
+@@ -0,0 +1,15 @@
++'use strict';
++
++var WidgetsOrder = require('app_shop_widgets/cartridge/models/order');
++
++function readGiftWrap(container) {
++    return container.custom.giftWrap === true;
++}
++
++function OrderModel(container, options) {
++    var order = new WidgetsOrder(container, options);
++    order.giftWrap = readGiftWrap(container);
++    return order;
++}
++
++module.exports = OrderModel;

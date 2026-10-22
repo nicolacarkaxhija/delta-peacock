@@ -1,6 +1,6 @@
 {
-  "version": "0.9.0",
-  "at": "2026-10-13T18:01:49.176Z",
+  "version": "0.9.2",
+  "at": "2026-10-22T20:14:56.479Z",
   "repeats": 3,
   "recall": 1,
   "precision": 1,
@@ -21,6 +21,186 @@
       "recall": 1
     },
     "runtime-syntax-leaves-var-alone": {
+      "recall": 1
+    },
+    "sfra-bundle-only": {
+      "recall": 1
+    },
+    "sfra-bundle-only-compliant": {
+      "recall": 1
+    },
+    "sfra-campaign-id-in-model": {
+      "recall": 1
+    },
+    "sfra-campaign-id-in-model-compliant": {
+      "recall": 1
+    },
+    "sfra-category-online": {
+      "recall": 1
+    },
+    "sfra-category-online-compliant": {
+      "recall": 1
+    },
+    "sfra-definition-reused-later-compliant": {
+      "recall": 1
+    },
+    "sfra-draft-locale-file": {
+      "recall": 1
+    },
+    "sfra-draft-locale-file-compliant": {
+      "recall": 1
+    },
+    "sfra-flag-without-setter": {
+      "recall": 1
+    },
+    "sfra-flag-without-setter-compliant": {
+      "recall": 1
+    },
+    "sfra-form-in-included-form": {
+      "recall": 1
+    },
+    "sfra-form-in-included-form-compliant": {
+      "recall": 1
+    },
+    "sfra-formatter-wrong-format": {
+      "recall": 1
+    },
+    "sfra-formatter-wrong-format-compliant": {
+      "recall": 1
+    },
+    "sfra-getter-throws": {
+      "recall": 1
+    },
+    "sfra-getter-throws-compliant": {
+      "recall": 1
+    },
+    "sfra-hand-built-search": {
+      "recall": 1
+    },
+    "sfra-hand-built-search-compliant": {
+      "recall": 1
+    },
+    "sfra-landing-drops-schema": {
+      "recall": 1
+    },
+    "sfra-landing-drops-schema-compliant": {
+      "recall": 1
+    },
+    "sfra-mail-still-lists-items": {
+      "recall": 1
+    },
+    "sfra-mail-still-lists-items-compliant": {
+      "recall": 1
+    },
+    "sfra-markup-without-hooks": {
+      "recall": 1
+    },
+    "sfra-markup-without-hooks-compliant": {
+      "recall": 1
+    },
+    "sfra-missing-image": {
+      "recall": 1
+    },
+    "sfra-missing-image-compliant": {
+      "recall": 1
+    },
+    "sfra-new-work-on-every-view": {
+      "recall": 1
+    },
+    "sfra-new-work-on-every-view-compliant": {
+      "recall": 1
+    },
+    "sfra-no-double-execution": {
+      "recall": 1
+    },
+    "sfra-no-double-execution-compliant": {
+      "recall": 1
+    },
+    "sfra-raw-gender": {
+      "recall": 1
+    },
+    "sfra-raw-gender-compliant": {
+      "recall": 1
+    },
+    "sfra-remove-dialog-wishlist": {
+      "recall": 1
+    },
+    "sfra-remove-dialog-wishlist-compliant": {
+      "recall": 1
+    },
+    "sfra-rule-keys-differ": {
+      "recall": 1
+    },
+    "sfra-rule-keys-differ-compliant": {
+      "recall": 1
+    },
+    "sfra-search-per-card": {
+      "recall": 1
+    },
+    "sfra-search-per-card-compliant": {
+      "recall": 1
+    },
+    "sfra-second-group": {
+      "recall": 1
+    },
+    "sfra-second-group-compliant": {
+      "recall": 1
+    },
+    "sfra-size-outside-flag": {
+      "recall": 1
+    },
+    "sfra-size-outside-flag-compliant": {
+      "recall": 1
+    },
+    "sfra-spec-fixture-format": {
+      "recall": 1
+    },
+    "sfra-spec-fixture-format-compliant": {
+      "recall": 1
+    },
+    "sfra-spec-retests-base": {
+      "recall": 1
+    },
+    "sfra-spec-retests-base-compliant": {
+      "recall": 1
+    },
+    "sfra-template-sets-status": {
+      "recall": 1
+    },
+    "sfra-template-sets-status-compliant": {
+      "recall": 1
+    },
+    "sfra-total-before-init": {
+      "recall": 1
+    },
+    "sfra-total-before-init-compliant": {
+      "recall": 1
+    },
+    "sfra-trusts-hit-count": {
+      "recall": 1
+    },
+    "sfra-trusts-hit-count-compliant": {
+      "recall": 1
+    },
+    "sfra-unmeasured-payload-claim-compliant": {
+      "recall": 1
+    },
+    "sfra-unused-mock": {
+      "recall": 1
+    },
+    "sfra-unused-mock-compliant": {
+      "recall": 1
+    },
+    "sfra-unused-parameter": {
+      "recall": 1
+    },
+    "sfra-unused-parameter-compliant": {
+      "recall": 1
+    },
+    "sfra-var-to-const-churn": {
+      "recall": 1
+    },
+    "sfra-var-to-const-churn-compliant": {
       "recall": 1
     },
     "spec-name-reason-from-the-text": {

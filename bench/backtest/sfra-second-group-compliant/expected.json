@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "meta/site-data/meta/system-objecttype-extensions.xml",
+      "line": 1,
+      "endLine": 16,
+      "guidelineId": "one-source-one-group",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/default/rendering/category/packLanding.isml",
+      "line": 1,
+      "endLine": 3,
+      "guidelineId": "shared-landing-keeps-integrations",
+      "severity": "MINOR",
+      "why": "the new landing omits the structured data and content slot includes every sibling landing has"
+    }
+  ],
+  "noFinding": []
+}

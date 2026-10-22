@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js",
+      "line": 7,
+      "endLine": 8,
+      "guidelineId": "gate-new-work-on-the-flag",
+      "severity": "MINOR",
+      "why": "the size work runs for every bundle while only gift packs show it"
+    }
+  ],
+  "noFinding": []
+}

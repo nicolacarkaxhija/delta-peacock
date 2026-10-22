@@ -1,0 +1,30 @@
+diff --git a/meta/site-data/meta/system-objecttype-extensions.xml b/meta/site-data/meta/system-objecttype-extensions.xml
+index eaa6e7c..bc3faa8 100644
+--- a/meta/site-data/meta/system-objecttype-extensions.xml
++++ b/meta/site-data/meta/system-objecttype-extensions.xml
+@@ -1,6 +1,24 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <metadata xmlns="http://www.demandware.com/xml/impex/metadata/2006-10-31">
+     <type-extension type-id="Product">
+-        <custom-attribute-definitions/>
++        <custom-attribute-definitions>
++            <attribute-definition attribute-id="isGiftPack">
++                <display-name xml:lang="x-default">Is gift pack</display-name>
++                <type>boolean</type>
++            </attribute-definition>
++            <attribute-definition attribute-id="giftPackType">
++                <display-name xml:lang="x-default">Gift pack type</display-name>
++                <type>enum-of-string</type>
++                <value-definitions><value-definition><value>giftpack</value></value-definition></value-definitions>
++            </attribute-definition>
++        </custom-attribute-definitions>
++        <group-definitions>
++            <attribute-group group-id="Bundles">
++                <attribute attribute-id="isGiftPack"/>
++            </attribute-group>
++            <attribute-group group-id="GiftPack">
++                <attribute attribute-id="giftPackType"/>
++            </attribute-group>
++        </group-definitions>
+     </type-extension>
+ </metadata>

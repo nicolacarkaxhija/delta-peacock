@@ -1,0 +1,19 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/order.js b/cartridges/app_shop_core/cartridge/models/order.js
+new file mode 100644
+index 0000000..c06baea
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/models/order.js
+@@ -0,0 +1,13 @@
++'use strict';
++
++var WidgetsOrder = require('app_shop_widgets/cartridge/models/order');
++var decorators = require('*/cartridge/models/order/decorators/index');
++
++function OrderModel(container, options) {
++    var order = new WidgetsOrder(container, options);
++    decorators.apply(order, container);
++    order.channel = options.channel;
++    return order;
++}
++
++module.exports = OrderModel;

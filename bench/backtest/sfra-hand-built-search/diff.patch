@@ -1,0 +1,19 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+new file mode 100644
+index 0000000..6a175bf
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+@@ -0,0 +1,13 @@
++'use strict';
++
++var ProductSearchModel = require('dw/catalog/ProductSearchModel');
++
++/** Whether the tile for a category has anything to show. */
++function hasProducts(categoryId) {
++    var search = new ProductSearchModel();
++    search.setCategoryID(categoryId);
++    search.search();
++    return search.count > 0;
++}
++
++module.exports = { hasProducts: hasProducts };

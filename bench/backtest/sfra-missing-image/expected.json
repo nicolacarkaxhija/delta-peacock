@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "meta/site-data/catalogs/shop-storefront/catalog.xml",
+      "line": 8,
+      "endLine": 8,
+      "guidelineId": "delta-assets-exist",
+      "severity": "MINOR",
+      "why": "the category references images the change does not ship"
+    }
+  ],
+  "noFinding": []
+}

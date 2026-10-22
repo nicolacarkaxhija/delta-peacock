@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "test/unit/app_shop_core/models/productLineItem/decorators/packSize.js",
+      "line": 1,
+      "endLine": 18,
+      "guidelineId": "spec-covers-absent-values-with-real-fixtures",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

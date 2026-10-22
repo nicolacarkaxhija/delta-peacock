@@ -1,0 +1,1 @@
+<div class="pack">${lineItem.isGiftPack}</div>

@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml",
+      "line": 4,
+      "endLine": 4,
+      "guidelineId": "test-hooks-on-new-markup",
+      "severity": "MINOR",
+      "why": "the new visible lines carry no test hook"
+    }
+  ],
+  "noFinding": []
+}

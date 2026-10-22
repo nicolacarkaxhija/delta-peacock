@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "test/unit/app_shop_core/models/productLineItem/decorators/packAttributes.js",
+      "line": 1,
+      "endLine": 7,
+      "guidelineId": "no-unused-mock-entry",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

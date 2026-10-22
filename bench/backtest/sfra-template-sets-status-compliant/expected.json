@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/default/rendering/category/packLanding.isml",
+      "line": 1,
+      "endLine": 4,
+      "guidelineId": "no-status-or-business-rules-in-isml",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

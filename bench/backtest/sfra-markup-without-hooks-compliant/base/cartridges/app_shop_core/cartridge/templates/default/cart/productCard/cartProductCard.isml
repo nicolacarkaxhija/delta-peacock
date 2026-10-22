@@ -1,0 +1,3 @@
+<div class="card" data-testid="cart-card">
+    <span class="card__name" data-testid="cart-card-name">${lineItem.productName}</span>
+</div>

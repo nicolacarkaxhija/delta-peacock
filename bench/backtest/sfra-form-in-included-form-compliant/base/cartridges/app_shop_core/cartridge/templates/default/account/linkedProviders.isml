@@ -1,0 +1,5 @@
+<div class="linked-providers">
+    <form action="${URLUtils.url('Login-Unlink')}" method="post">
+        <button type="submit">${Resource.msg('button.unlink', 'login', null)}</button>
+    </form>
+</div>

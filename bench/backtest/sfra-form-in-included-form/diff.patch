@@ -1,0 +1,10 @@
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml b/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml
+index ca76a5b..ffbef15 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml
+@@ -1,4 +1,5 @@
+ <form id="profile" action="${URLUtils.url('Account-SaveProfile')}" method="post">
+     <input name="firstName"/>
++    <isinclude template="account/linkedProviders"/>
+     <button type="submit">Save</button>
+ </form>

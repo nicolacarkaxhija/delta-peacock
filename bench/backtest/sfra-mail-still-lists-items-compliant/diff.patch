@@ -1,0 +1,21 @@
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
+index 4db348e..a5ca9b8 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
+@@ -1,3 +1,5 @@
+ <div class="card">
+-    <isinclude template="cart/productCard/bundledItems"/>
++    <isif condition="${!lineItem.isGiftPack}">
++        <isinclude template="cart/productCard/bundledItems"/>
++    </isif>
+ </div>
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/checkout/confirmation/confirmationEmail/orderItem.isml b/cartridges/app_shop_core/cartridge/templates/default/checkout/confirmation/confirmationEmail/orderItem.isml
+index 0fa011f..24a538f 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/checkout/confirmation/confirmationEmail/orderItem.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/checkout/confirmation/confirmationEmail/orderItem.isml
+@@ -1,4 +1,4 @@
+ <tr>
+     <td>${lineItem.productName}</td>
+-    <td><isinclude template="cart/productCard/bundledItems"/></td>
++    <td><isif condition="${!lineItem.isGiftPack}"><isinclude template="cart/productCard/bundledItems"/></isif></td>
+ </tr>

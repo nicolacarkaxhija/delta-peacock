@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "test/unit/app_shop_core/models/productLineItem/decorators/packSize.js",
+      "line": 7,
+      "endLine": 12,
+      "guidelineId": "spec-covers-absent-values-with-real-fixtures",
+      "severity": "MINOR",
+      "why": "one case asserts three properties, the fixture size is not the EU;UK format the decorator documents, and no case covers the absent flag"
+    }
+  ],
+  "noFinding": []
+}

@@ -1,0 +1,17 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/categories.js b/cartridges/app_shop_core/cartridge/models/categories.js
+index 7e07a61..7337930 100644
+--- a/cartridges/app_shop_core/cartridge/models/categories.js
++++ b/cartridges/app_shop_core/cartridge/models/categories.js
+@@ -1,7 +1,11 @@
+ 'use strict';
+ 
++var categoryHelpers = require('*/cartridge/scripts/helpers/categoryHelpers');
++
+ function CategoriesModel(items) {
+-    this.categories = items.map(function (c) { return { id: c.ID, name: c.displayName }; });
++    this.categories = items.filter(function (c) {
++        return !categoryHelpers.isSoldOutTileLanding(c);
++    }).map(function (c) { return { id: c.ID, name: c.displayName }; });
+ }
+ 
+ module.exports = CategoriesModel;

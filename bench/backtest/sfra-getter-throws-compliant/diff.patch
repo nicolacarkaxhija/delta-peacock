@@ -1,0 +1,18 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/tile.js b/cartridges/app_shop_core/cartridge/models/tile.js
+index 4cf48c4..7a45e2d 100644
+--- a/cartridges/app_shop_core/cartridge/models/tile.js
++++ b/cartridges/app_shop_core/cartridge/models/tile.js
+@@ -1,7 +1,13 @@
+ 'use strict';
+ 
++var Logger = require('dw/system/Logger').getLogger('tiles', 'tiles');
++
+ function TileModel(category) {
+     this.id = category.ID;
++    this.title = category.displayName || '';
++    if (!this.title) {
++        Logger.error('category {0} has no display name', category.ID);
++    }
+ }
+ 
+ module.exports = TileModel;

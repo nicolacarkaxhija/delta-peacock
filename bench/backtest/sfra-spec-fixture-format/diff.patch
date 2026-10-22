@@ -1,0 +1,20 @@
+diff --git a/test/unit/app_shop_core/models/productLineItem/decorators/packSize.js b/test/unit/app_shop_core/models/productLineItem/decorators/packSize.js
+new file mode 100644
+index 0000000..046775b
+--- /dev/null
++++ b/test/unit/app_shop_core/models/productLineItem/decorators/packSize.js
+@@ -0,0 +1,14 @@
++'use strict';
++
++const { expect } = require('chai');
++const decorate = require('../../../../../../cartridges/app_shop_core/cartridge/models/productLineItem/decorators/packSize');
++
++describe('packSize decorator', function () {
++    it('decorates the pack', function () {
++        const line = {};
++        decorate(line, { custom: { isGiftPack: true, sizeName: 'EU', gender: 'women' } });
++        expect(line.size).to.equal('EU');
++        expect(line.gender).to.equal('women');
++        expect(Object.keys(line)).to.have.length(2);
++    });
++});

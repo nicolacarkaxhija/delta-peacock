@@ -1,0 +1,10 @@
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/rendering/category/packLanding.isml b/cartridges/app_shop_core/cartridge/templates/default/rendering/category/packLanding.isml
+new file mode 100644
+index 0000000..d7738ab
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/templates/default/rendering/category/packLanding.isml
+@@ -0,0 +1,4 @@
++<isdecorate template="common/layout/page">
++    <div class="landing landing--pack">${pdict.category.name}</div>
++    <isinclude template="rendering/category/packTiles"/>
++</isdecorate>

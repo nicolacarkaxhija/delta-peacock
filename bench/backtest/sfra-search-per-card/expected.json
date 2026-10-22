@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js",
+      "line": 8,
+      "endLine": 8,
+      "guidelineId": "no-search-loop-per-item",
+      "severity": "MINOR",
+      "why": "one search runs per card"
+    }
+  ],
+  "noFinding": []
+}

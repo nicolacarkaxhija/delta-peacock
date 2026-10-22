@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "test/unit/app_shop_widgets/models/totals.js",
+      "line": 1,
+      "endLine": 26,
+      "guidelineId": "test-the-change-not-the-layers",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

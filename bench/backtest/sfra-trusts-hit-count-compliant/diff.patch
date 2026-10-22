@@ -1,0 +1,20 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+new file mode 100644
+index 0000000..63e6da0
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+@@ -0,0 +1,14 @@
++'use strict';
++
++var searchHelpers = require('*/cartridge/scripts/search/searchHelpers');
++
++/** Whether any product of the category can be bought. */
++function isPurchasable(categoryId) {
++    var hits = searchHelpers.createVisibleSearch(categoryId).productSearchHits;
++    while (hits.hasNext()) {
++        if (hits.next().product.availabilityModel.isOrderable()) return true;
++    }
++    return false;
++}
++
++module.exports = { isPurchasable: isPurchasable };

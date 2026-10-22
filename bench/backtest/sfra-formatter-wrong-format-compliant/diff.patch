@@ -1,0 +1,51 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/packSize.js b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/packSize.js
+new file mode 100644
+index 0000000..8eac3b1
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/packSize.js
+@@ -0,0 +1,10 @@
++'use strict';
++
++var jpSizeFormatter = require('*/cartridge/scripts/formatters/jpSizeFormatter');
++var sizeTables = require('*/cartridge/scripts/formatters/sizeTables');
++
++module.exports = function (line, product) {
++    // sizeName is EU;UK, the formatter expects JP;EU
++    var eu = product.custom.sizeName.split(';')[0];
++    line.size = jpSizeFormatter(sizeTables.euToJp(eu) + ';' + eu);
++};
+diff --git a/cartridges/app_shop_core/cartridge/scripts/formatters/jpSizeFormatter.js b/cartridges/app_shop_core/cartridge/scripts/formatters/jpSizeFormatter.js
+new file mode 100644
+index 0000000..b76fa3d
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/scripts/formatters/jpSizeFormatter.js
+@@ -0,0 +1,12 @@
++'use strict';
++
++/**
++ * Formats a Japanese size label.
++ * @param {string} size - "JP;EU", for example "25;39"
++ */
++function jpSizeFormatter(size) {
++    var parts = size.split(';');
++    return parts[0] + ' cm (EU ' + parts[1] + ')';
++}
++
++module.exports = jpSizeFormatter;
+diff --git a/meta/site-data/meta/system-objecttype-extensions.xml b/meta/site-data/meta/system-objecttype-extensions.xml
+new file mode 100644
+index 0000000..4560b87
+--- /dev/null
++++ b/meta/site-data/meta/system-objecttype-extensions.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<metadata xmlns="http://www.demandware.com/xml/impex/metadata/2006-10-31">
++    <type-extension type-id="Product">
++        <custom-attribute-definitions>
++            <attribute-definition attribute-id="sizeName">
++                <description xml:lang="x-default">EU;UK size pair, for example 39;5.5</description>
++                <type>string</type>
++            </attribute-definition>
++        </custom-attribute-definitions>
++    </type-extension>
++</metadata>

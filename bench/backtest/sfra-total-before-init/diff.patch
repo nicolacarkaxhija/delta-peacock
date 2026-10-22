@@ -1,0 +1,16 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/orderTotals.js b/cartridges/app_shop_core/cartridge/models/orderTotals.js
+index 404df24..8c0efb0 100644
+--- a/cartridges/app_shop_core/cartridge/models/orderTotals.js
++++ b/cartridges/app_shop_core/cartridge/models/orderTotals.js
+@@ -1,7 +1,11 @@
+ 'use strict';
+ 
+ function OrderTotals(container) {
++    this.totalQuantity += container.giftCertificateLineItems.length;
+     this.totalQuantity = 0;
++    container.productLineItems.toArray().forEach(function (item) {
++        this.totalQuantity += item.quantityValue;
++    }, this);
+ }
+ 
+ module.exports = OrderTotals;

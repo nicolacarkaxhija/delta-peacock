@@ -1,0 +1,13 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/order/orderItems.js b/cartridges/app_shop_core/cartridge/scripts/order/orderItems.js
+index 9f6edc5..00aabcf 100644
+--- a/cartridges/app_shop_core/cartridge/scripts/order/orderItems.js
++++ b/cartridges/app_shop_core/cartridge/scripts/order/orderItems.js
+@@ -8,7 +8,7 @@ function buildItems(container, options) {
+     var view = options.containerView;
+     var count = items.length;
+     var hasGiftCards = container.giftCertificateLineItems.length > 0;
+-    var model = new ProductLineItemsModel(container.productLineItems, view);
++    var model = new ProductLineItemsModel(container.productLineItems, view, container);
+     var total = count;
+     return { model: model, total: total, hasGiftCards: hasGiftCards };
+ }

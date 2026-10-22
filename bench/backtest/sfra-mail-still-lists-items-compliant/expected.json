@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/default/checkout/confirmation/confirmationEmail/orderItem.isml",
+      "line": 1,
+      "endLine": 4,
+      "guidelineId": "all-surfaces-branch-on-the-flag",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

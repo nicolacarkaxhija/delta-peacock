@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/resources/pack.properties",
+      "line": 1,
+      "endLine": 1,
+      "guidelineId": "no-unreviewed-copy-in-locale-files",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

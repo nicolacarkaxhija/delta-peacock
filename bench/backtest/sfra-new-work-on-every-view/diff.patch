@@ -1,0 +1,19 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/order.js b/cartridges/app_shop_core/cartridge/models/order.js
+index c8403c4..8d6aed1 100644
+--- a/cartridges/app_shop_core/cartridge/models/order.js
++++ b/cartridges/app_shop_core/cartridge/models/order.js
+@@ -5,6 +5,7 @@ var shippingHelpers = require('*/cartridge/scripts/checkout/shippingHelpers');
+ /** containerView is "orderList" for account history rows and "order" for the detail page. */
+ function OrderModel(container, options) {
+     this.orderNo = container.orderNo;
++    this.shipping = shippingHelpers.getShippingModels(container, null, options.containerView);
+     if (options.containerView === 'order') {
+         this.billing = container.billingAddress;
+     }
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/account/order/details.isml b/cartridges/app_shop_core/cartridge/templates/default/account/order/details.isml
+index 7919d26..ef0a9b4 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/account/order/details.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/account/order/details.isml
+@@ -1 +1,2 @@
+ <div class="order-detail">${pdict.order.orderNo}</div>
++<isinclude template="account/order/shippingSummary"/>

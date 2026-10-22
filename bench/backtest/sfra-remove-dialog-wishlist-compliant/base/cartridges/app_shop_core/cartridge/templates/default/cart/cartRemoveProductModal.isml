@@ -1,0 +1,4 @@
+<div class="modal">
+    <button class="remove">${Resource.msg('button.remove', 'cart', null)}</button>
+    <button class="move-to-wishlist">${Resource.msg('button.move.wishlist', 'cart', null)}</button>
+</div>

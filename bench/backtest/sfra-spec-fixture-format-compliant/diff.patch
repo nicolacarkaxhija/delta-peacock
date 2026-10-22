@@ -1,0 +1,24 @@
+diff --git a/test/unit/app_shop_core/models/productLineItem/decorators/packSize.js b/test/unit/app_shop_core/models/productLineItem/decorators/packSize.js
+new file mode 100644
+index 0000000..4bd2a5b
+--- /dev/null
++++ b/test/unit/app_shop_core/models/productLineItem/decorators/packSize.js
+@@ -0,0 +1,18 @@
++'use strict';
++
++const { expect } = require('chai');
++const decorate = require('../../../../../../cartridges/app_shop_core/cartridge/models/productLineItem/decorators/packSize');
++
++describe('packSize decorator', function () {
++    it('sets the EU size of a pack', function () {
++        const line = {};
++        decorate(line, { custom: { isGiftPack: true, sizeName: '39;5.5' } });
++        expect(line.size).to.equal('39');
++    });
++
++    it('leaves the size unset without the flag', function () {
++        const line = {};
++        decorate(line, { custom: { isGiftPack: undefined, sizeName: '39;5.5' } });
++        expect(line.size).to.be.undefined;
++    });
++});

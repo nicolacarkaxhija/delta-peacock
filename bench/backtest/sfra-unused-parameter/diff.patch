@@ -1,0 +1,15 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+index 83da61c..025f920 100644
+--- a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+@@ -1,7 +1,8 @@
+ 'use strict';
+ 
+-function hasPurchasable(cards) {
+-    return cards.some(function (card) { return card.purchasable; });
++function hasPurchasable(cards, maxChecked) {
++    var limit = maxChecked || cards.length;
++    return cards.slice(0, limit).some(function (card) { return card.purchasable; });
+ }
+ 
+ module.exports = { hasPurchasable: hasPurchasable };

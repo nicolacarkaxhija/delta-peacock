@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/categories.js",
+      "line": 7,
+      "endLine": 7,
+      "guidelineId": "models-stay-generic",
+      "severity": "MAJOR",
+      "why": "the shared categories model compares against one campaign category id"
+    }
+  ],
+  "noFinding": []
+}

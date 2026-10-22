@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/helpers/packHelpers.js",
+      "line": 5,
+      "endLine": 5,
+      "guidelineId": "bundle-checks-its-components",
+      "severity": "MAJOR",
+      "why": "the bundle check ignores its bundled products"
+    }
+  ],
+  "noFinding": []
+}

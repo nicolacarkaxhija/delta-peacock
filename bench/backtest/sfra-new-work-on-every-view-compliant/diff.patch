@@ -1,0 +1,12 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/order.js b/cartridges/app_shop_core/cartridge/models/order.js
+index 90c4ebe..c1cf649 100644
+--- a/cartridges/app_shop_core/cartridge/models/order.js
++++ b/cartridges/app_shop_core/cartridge/models/order.js
+@@ -6,6 +6,7 @@ function OrderModel(container, options) {
+     this.orderNo = container.orderNo;
+     if (options.containerView === 'order') {
+         this.billing = container.billingAddress;
++        this.shipping = shippingHelpers.getShippingModels(container, null, options.containerView);
+     }
+ }
+ 

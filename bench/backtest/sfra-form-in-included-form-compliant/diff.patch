@@ -1,0 +1,9 @@
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml b/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml
+index ca76a5b..6b9b2bf 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/account/profile.isml
+@@ -2,3 +2,4 @@
+     <input name="firstName"/>
+     <button type="submit">Save</button>
+ </form>
++<isinclude template="account/linkedProviders"/>

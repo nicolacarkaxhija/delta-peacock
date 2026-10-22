@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/resources/pack_ja.properties",
+      "line": 1,
+      "endLine": 1,
+      "guidelineId": "no-unreviewed-copy-in-locale-files",
+      "severity": "MINOR",
+      "why": "the Japanese file repeats the English default text"
+    }
+  ],
+  "noFinding": []
+}

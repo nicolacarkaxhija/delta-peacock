@@ -1,0 +1,19 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/category.js b/cartridges/app_shop_core/cartridge/models/category.js
+index 440c02a..859fd22 100644
+--- a/cartridges/app_shop_core/cartridge/models/category.js
++++ b/cartridges/app_shop_core/cartridge/models/category.js
+@@ -1,8 +1,14 @@
+ 'use strict';
+ 
++var defineLazyProperty = require('*/cartridge/scripts/util/defineLazyProperty');
++
+ function CategoryModel(category) {
+     this.id = category.ID;
+     this.name = category.displayName;
++    // non-enumerable, so the refinement JSON never carries it
++    defineLazyProperty(this, 'description', function () {
++        return category.description || '';
++    });
+ }
+ 
+ module.exports = CategoryModel;

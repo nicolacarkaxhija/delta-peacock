@@ -1,0 +1,28 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
+new file mode 100644
+index 0000000..050e868
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
+@@ -0,0 +1,5 @@
++'use strict';
++
++module.exports = function (line, product) {
++    line.isGiftPack = !!product.custom.isGiftPack;
++};
+diff --git a/meta/site-data/meta/system-objecttype-extensions.xml b/meta/site-data/meta/system-objecttype-extensions.xml
+index eaa6e7c..420410c 100644
+--- a/meta/site-data/meta/system-objecttype-extensions.xml
++++ b/meta/site-data/meta/system-objecttype-extensions.xml
+@@ -1,6 +1,11 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <metadata xmlns="http://www.demandware.com/xml/impex/metadata/2006-10-31">
+     <type-extension type-id="Product">
+-        <custom-attribute-definitions/>
++        <custom-attribute-definitions>
++            <attribute-definition attribute-id="isGiftPack">
++                <display-name xml:lang="x-default">Is gift pack</display-name>
++                <type>boolean</type>
++            </attribute-definition>
++        </custom-attribute-definitions>
+     </type-extension>
+ </metadata>

@@ -1,0 +1,13 @@
+diff --git a/meta/site-data/catalogs/shop-storefront/catalog.xml b/meta/site-data/catalogs/shop-storefront/catalog.xml
+index 419a032..9aa9201 100644
+--- a/meta/site-data/catalogs/shop-storefront/catalog.xml
++++ b/meta/site-data/catalogs/shop-storefront/catalog.xml
+@@ -3,4 +3,8 @@
+     <category category-id="root">
+         <online-flag>true</online-flag>
+     </category>
++    <category category-id="pack-landing">
++        <online-flag>false</online-flag>
++        <image/>
++    </category>
+ </catalog>

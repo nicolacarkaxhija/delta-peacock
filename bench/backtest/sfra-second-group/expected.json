@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "meta/site-data/meta/system-objecttype-extensions.xml",
+      "line": 9,
+      "endLine": 19,
+      "guidelineId": "one-source-one-group",
+      "severity": "MINOR",
+      "why": "a second attribute and group model the same gift pack fact without a stated reason"
+    }
+  ],
+  "noFinding": []
+}
