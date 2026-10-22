@@ -1,5 +1,5 @@
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
-import { completeWith, type CacheMarker } from "./generate.js";
+import { omitsTemperature, completeWith, type CacheMarker } from "./generate.js";
 import type { ModelPort } from "./port.js";
 
 /** Caches the system prompt's stable prefix, the guidelines every batch shares. */
@@ -11,6 +11,8 @@ export interface BedrockPortOptions {
   secretAccessKey: string;
   sessionToken?: string;
   modelId: string;
+  /** Model id fragments that must not receive a temperature; defaults to the built-in list. */
+  omitTemperatureFor?: readonly string[];
   /** Test seam; also useful for VPC endpoints. */
   baseUrl?: string;
   fetch?: typeof globalThis.fetch;
@@ -28,6 +30,12 @@ export function createBedrockPort(options: BedrockPortOptions): ModelPort {
   // only Anthropic models take a cache point on Bedrock's system prompt here
   const cache = options.modelId.includes("anthropic.") ? CACHE : undefined;
   return {
-    complete: (request) => completeWith(provider(options.modelId), request, cache),
+    complete: (request) =>
+      completeWith(
+        provider(options.modelId),
+        request,
+        cache,
+        omitsTemperature(options.modelId, options.omitTemperatureFor),
+      ),
   };
 }

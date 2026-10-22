@@ -14,6 +14,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_MODEL_ID: "model.id",
   DELTA_PEACOCK_MODEL_BASE_URL: "model.baseUrl",
   DELTA_PEACOCK_MODEL_TIMEOUT_SECONDS: "model.timeoutSeconds",
+  DELTA_PEACOCK_MODEL_OMIT_TEMPERATURE_FOR: "model.omitTemperatureFor",
   DELTA_PEACOCK_REVIEW_TARGET: "review.target",
   DELTA_PEACOCK_REVIEW_GUIDELINES_DIR: "review.guidelinesDir",
   DELTA_PEACOCK_REVIEW_GUIDELINES_REF: "review.guidelinesRef",
@@ -98,6 +99,7 @@ const ARRAY_PATHS = new Set([
   "review.exclude",
   "review.packs",
   "context.providers",
+  "model.omitTemperatureFor",
 ]);
 const NUMBER_PATHS = new Set([
   "model.timeoutSeconds",

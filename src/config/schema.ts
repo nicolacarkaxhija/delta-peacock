@@ -14,6 +14,8 @@ export const ModelSchema = z.strictObject({
   baseUrl: z.url().optional(),
   /** One request's time before it counts as timed out: long enough for 4000 output tokens at 67 a second. */
   timeoutSeconds: z.number().positive().default(60),
+  /** Model id fragments that reject a temperature; the parameter is left out for these. */
+  omitTemperatureFor: z.array(z.string().min(1)).default(["haiku-5-5"]),
 });
 
 export const ReviewSchema = z.strictObject({
@@ -109,6 +111,8 @@ export const ModelRefSchema = z.strictObject({
   provider: z.enum(MODEL_PROVIDERS),
   id: z.string().min(1),
   baseUrl: z.url().optional(),
+  /** Overrides the default list of ids that reject a temperature. */
+  omitTemperatureFor: z.array(z.string().min(1)).optional(),
 });
 
 export const EnsembleSchema = z.strictObject({
