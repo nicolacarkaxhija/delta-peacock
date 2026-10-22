@@ -38,6 +38,7 @@ export interface ModelRef {
   provider: "anthropic" | "bedrock" | "openrouter" | "openai-compatible";
   id: string;
   baseUrl?: string | undefined;
+  omitTemperatureFor?: readonly string[] | undefined;
 }
 
 /** True when the config names no model: a review checks facts only. */
@@ -75,6 +76,7 @@ export function buildModelPort(
       provider,
       id: modelId,
       ...(config.model.baseUrl !== undefined ? { baseUrl: config.model.baseUrl } : {}),
+      omitTemperatureFor: config.model.omitTemperatureFor,
     },
     credentials,
     config.model.timeoutSeconds,
@@ -94,6 +96,8 @@ export function buildModelPortFor(
 
 function adapterFor(ref: ModelRef, credentials: Credentials, timeoutSeconds?: number): ModelPort {
   const modelId = ref.id;
+  const omit =
+    ref.omitTemperatureFor !== undefined ? { omitTemperatureFor: ref.omitTemperatureFor } : {};
   const timed = timeoutSeconds !== undefined ? { fetch: timedFetch(timeoutSeconds) } : {};
   switch (ref.provider) {
     case "anthropic":
@@ -101,6 +105,7 @@ function adapterFor(ref: ModelRef, credentials: Credentials, timeoutSeconds?: nu
         apiKey: requiredCredential(credentials, "ANTHROPIC_API_KEY", "anthropic"),
         modelId,
         ...timed,
+        ...omit,
       });
     case "openrouter":
       return createOpenAiishPort({
@@ -108,6 +113,7 @@ function adapterFor(ref: ModelRef, credentials: Credentials, timeoutSeconds?: nu
         modelId,
         baseUrl: ref.baseUrl ?? OPENROUTER_BASE_URL,
         ...timed,
+        ...omit,
       });
     case "openai-compatible": {
       // the schema's cross-field rules guarantee the base url is present for
@@ -120,6 +126,7 @@ function adapterFor(ref: ModelRef, credentials: Credentials, timeoutSeconds?: nu
         modelId,
         baseUrl,
         ...timed,
+        ...omit,
       });
     }
     case "bedrock":
@@ -133,6 +140,7 @@ function adapterFor(ref: ModelRef, credentials: Credentials, timeoutSeconds?: nu
         modelId,
         ...(ref.baseUrl !== undefined ? { baseUrl: ref.baseUrl } : {}),
         ...timed,
+        ...omit,
       });
   }
 }

@@ -30,6 +30,16 @@
           "default": 60,
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "omitTemperatureFor": {
+          "default": [
+            "haiku-5-5"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
       "additionalProperties": false

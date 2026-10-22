@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { completeWith } from "./generate.js";
+import { omitsTemperature, completeWith } from "./generate.js";
 import type { ModelPort } from "./port.js";
 
 /**
@@ -9,6 +9,8 @@ import type { ModelPort } from "./port.js";
 export interface OpenAiishPortOptions {
   apiKey: string;
   modelId: string;
+  /** Model id fragments that must not receive a temperature; defaults to the built-in list. */
+  omitTemperatureFor?: readonly string[];
   baseUrl: string;
   fetch?: typeof globalThis.fetch;
 }
@@ -20,6 +22,12 @@ export function createOpenAiishPort(options: OpenAiishPortOptions): ModelPort {
     ...(options.fetch ? { fetch: options.fetch } : {}),
   });
   return {
-    complete: (request) => completeWith(provider.chat(options.modelId), request),
+    complete: (request) =>
+      completeWith(
+        provider.chat(options.modelId),
+        request,
+        undefined,
+        omitsTemperature(options.modelId, options.omitTemperatureFor),
+      ),
   };
 }

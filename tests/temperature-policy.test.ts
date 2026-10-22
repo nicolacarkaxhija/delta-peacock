@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ModelSchema } from "../src/config/schema.js";
 import { buildModelPortFor } from "../src/model/build.js";
 import { createBedrockPort } from "../src/model/bedrock.js";
@@ -56,7 +56,9 @@ describe("temperature policy", () => {
   });
 
   it("omits it even when the request asks for one", async () => {
-    expect(await sentTemperature("eu.anthropic.claude-haiku-5-5", { temperature: 0.3 })).toBeUndefined();
+    expect(
+      await sentTemperature("eu.anthropic.claude-haiku-5-5", { temperature: 0.3 }),
+    ).toBeUndefined();
   });
 
   it("still pins other models to zero", async () => {
@@ -64,15 +66,21 @@ describe("temperature policy", () => {
   });
 
   it("honors a configured list", async () => {
-    expect(await sentTemperature("anthropic.claude-test", { omitTemperatureFor: ["claude-test"] })).toBeUndefined();
+    expect(
+      await sentTemperature("anthropic.claude-test", { omitTemperatureFor: ["claude-test"] }),
+    ).toBeUndefined();
   });
 
   it("sends temperature for haiku 5.5 when the list is emptied", async () => {
-    expect(await sentTemperature("eu.anthropic.claude-haiku-5-5", { omitTemperatureFor: [] })).toBe(0);
+    expect(await sentTemperature("eu.anthropic.claude-haiku-5-5", { omitTemperatureFor: [] })).toBe(
+      0,
+    );
   });
 
   it("matches ids case-insensitively as substrings", () => {
-    expect(omitsTemperature("EU.Anthropic.Claude-Haiku-5-5-v1:0", DEFAULT_OMIT_TEMPERATURE_FOR)).toBe(true);
+    expect(
+      omitsTemperature("EU.Anthropic.Claude-Haiku-5-5-v1:0", DEFAULT_OMIT_TEMPERATURE_FOR),
+    ).toBe(true);
     expect(omitsTemperature("claude-sonnet-4-5", DEFAULT_OMIT_TEMPERATURE_FOR)).toBe(false);
   });
 
@@ -83,12 +91,18 @@ describe("temperature policy", () => {
 
   it("passes the list through the port builder", async () => {
     const { bodies, fetch } = capture();
-    const credentials = { AWS_REGION: "eu-central-1", AWS_ACCESS_KEY_ID: "a", AWS_SECRET_ACCESS_KEY: "b" };
+    const credentials = {
+      AWS_REGION: "eu-central-1",
+      AWS_ACCESS_KEY_ID: "a",
+      AWS_SECRET_ACCESS_KEY: "b",
+    };
+    vi.stubGlobal("fetch", fetch);
     const port = buildModelPortFor(
-      { provider: "bedrock", id: "anthropic.claude-test", omitTemperatureFor: ["claude-test"], fetch },
+      { provider: "bedrock", id: "anthropic.claude-test", omitTemperatureFor: ["claude-test"] },
       credentials,
     );
     await port.complete({ system: "s", user: "u" });
+    vi.unstubAllGlobals();
     const inference = bodies[0]?.["inferenceConfig"] as Record<string, unknown>;
     expect(inference["temperature"]).toBeUndefined();
   });

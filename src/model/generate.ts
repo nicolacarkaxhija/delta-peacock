@@ -89,6 +89,18 @@ function systemOf(
   ];
 }
 
+/** Model ids (substring match) that reject a sampling temperature; Haiku 5.5 accepts only its default. */
+export const DEFAULT_OMIT_TEMPERATURE_FOR: readonly string[] = ["haiku-5-5"];
+
+/** True when the model id matches an entry of the list (default list when unset), ignoring case. */
+export function omitsTemperature(
+  modelId: string,
+  patterns: readonly string[] = DEFAULT_OMIT_TEMPERATURE_FOR,
+): boolean {
+  const id = modelId.toLowerCase();
+  return patterns.some((pattern) => id.includes(pattern.toLowerCase()));
+}
+
 /**
  * The one place a request meets the AI SDK: every adapter delegates here, so
  * tool wiring, bounds and usage mapping cannot drift between providers.
@@ -97,6 +109,7 @@ export async function completeWith(
   model: LanguageModel,
   request: ModelRequest,
   marker?: CacheMarker,
+  omitTemperature = false,
 ): Promise<ModelReply> {
   const rounds = request.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   let spent: ModelUsage | undefined;
@@ -105,8 +118,9 @@ export async function completeWith(
     system: systemOf(request, marker),
     prompt: request.user,
     // pinned low by default: two fresh reviews of one diff should agree, so the
-    // gate outcome does not swing on sampling noise the caller never asked for
-    temperature: request.temperature ?? 0,
+    // gate outcome does not swing on sampling noise the caller never asked for;
+    // models on the omit list reject the parameter, so it is not sent at all
+    ...(omitTemperature ? {} : { temperature: request.temperature ?? 0 }),
     // bound the reply so runaway output cannot outrun the cost estimate
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     // the port's retry policy owns retries, so the SDK makes one call
