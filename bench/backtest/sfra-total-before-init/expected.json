@@ -6,7 +6,7 @@
       "endLine": 5,
       "guidelineId": "no-order-dependent-arithmetic",
       "severity": "MINOR",
-      "why": "the total is incremented before it is initialised"
+      "why": "the total is incremented before it is initialized"
     }
   ],
   "noFinding": []

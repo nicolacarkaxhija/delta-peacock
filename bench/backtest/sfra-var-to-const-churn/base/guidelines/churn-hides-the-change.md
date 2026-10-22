@@ -7,9 +7,9 @@ paths:
 tags: [judged]
 ---
 
-# Rewrites stay out of a behaviour change
+# Rewrites stay out of a behavior change
 
-A change keeps unrelated rewrites (var to const, reformatting) out of the diff so the real change is reviewable. Flag a diff where most changed lines only rewrite declarations or formatting around a small behaviour change.
+A change keeps unrelated rewrites (var to const, reformatting) out of the diff so the real change is reviewable. Flag a diff where most changed lines only rewrite declarations or formatting around a small behavior change.
 
 ## Bad
 

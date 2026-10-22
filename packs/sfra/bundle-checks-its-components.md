@@ -9,7 +9,7 @@ tags: [judged]
 
 # A bundle is purchasable only when its components are
 
-A purchasability rule for a bundle also requires each bundled product to be online and orderable for its bundled quantity. Flag a bundle check that reads only the bundle itself.
+A rule that decides whether a bundle can be bought also requires each bundled product to be online and orderable for its bundled quantity. Flag a bundle check that reads only the bundle itself.
 
 ## Bad
 

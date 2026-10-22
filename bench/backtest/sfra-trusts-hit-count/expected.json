@@ -6,7 +6,7 @@
       "endLine": 11,
       "guidelineId": "index-then-availability",
       "severity": "MAJOR",
-      "why": "the hit count decides purchasability and a bundle hit reads its first represented product"
+      "why": "the hit count decides whether the tile can be bought and a bundle hit reads its first represented product"
     }
   ],
   "noFinding": []

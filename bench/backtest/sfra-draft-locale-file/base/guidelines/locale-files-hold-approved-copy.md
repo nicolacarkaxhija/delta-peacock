@@ -1,5 +1,5 @@
 ---
-id: no-unreviewed-copy-in-locale-files
+id: locale-files-hold-approved-copy
 severity: MINOR
 paths:
   - "cartridges/**/*.properties"

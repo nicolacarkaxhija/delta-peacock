@@ -10,12 +10,12 @@ tags: [judged]
 
 # A spec tests what the change adds
 
-A spec asserts the behaviour the change adds, not behaviour owned by the base cartridge or another layer. Flag a new case whose assertion only holds because of code the change did not touch.
+A spec asserts the behavior the change adds, not behavior owned by the base cartridge or another layer. Flag a new case whose assertion only holds because of code the change did not touch.
 
 ## Bad
 
 ```javascript
-it('adds gift certificates to the total', function () { /* base model behaviour */ });
+it('adds gift certificates to the total', function () { /* base model behavior */ });
 ```
 
 ## Good
