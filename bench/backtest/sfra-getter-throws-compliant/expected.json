@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/tile.js",
+      "line": 1,
+      "endLine": 13,
+      "guidelineId": "missing-content-logs-and-renders",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

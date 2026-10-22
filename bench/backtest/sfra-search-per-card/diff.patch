@@ -1,0 +1,18 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+index 8b46fbb..fb11839 100644
+--- a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+@@ -1,3 +1,12 @@
+ 'use strict';
+ 
+-module.exports = {};
++var searchHelpers = require('*/cartridge/scripts/search/searchHelpers');
++
++/** Cards whose category still has products. */
++function visibleCards(cards) {
++    return cards.filter(function (card) {
++        return searchHelpers.createVisibleSearch(card.categoryId).count > 0;
++    });
++}
++
++module.exports = { visibleCards: visibleCards };

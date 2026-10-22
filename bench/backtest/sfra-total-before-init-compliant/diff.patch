@@ -1,0 +1,17 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/orderTotals.js b/cartridges/app_shop_core/cartridge/models/orderTotals.js
+index 404df24..2bd79bd 100644
+--- a/cartridges/app_shop_core/cartridge/models/orderTotals.js
++++ b/cartridges/app_shop_core/cartridge/models/orderTotals.js
+@@ -1,7 +1,11 @@
+ 'use strict';
+ 
++function sumQuantities(items) {
++    return items.toArray().reduce(function (sum, item) { return sum + item.quantityValue; }, 0);
++}
++
+ function OrderTotals(container) {
+-    this.totalQuantity = 0;
++    this.totalQuantity = sumQuantities(container.productLineItems) + container.giftCertificateLineItems.length;
+ }
+ 
+ module.exports = OrderTotals;

@@ -1,0 +1,23 @@
+diff --git a/meta/site-data/meta/system-objecttype-extensions.xml b/meta/site-data/meta/system-objecttype-extensions.xml
+index eaa6e7c..2abea8a 100644
+--- a/meta/site-data/meta/system-objecttype-extensions.xml
++++ b/meta/site-data/meta/system-objecttype-extensions.xml
+@@ -1,6 +1,17 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <metadata xmlns="http://www.demandware.com/xml/impex/metadata/2006-10-31">
+     <type-extension type-id="Product">
+-        <custom-attribute-definitions/>
++        <custom-attribute-definitions>
++            <!-- defined here once; the landing change reads the same attribute -->
++            <attribute-definition attribute-id="isGiftPack">
++                <display-name xml:lang="x-default">Is gift pack</display-name>
++                <type>boolean</type>
++            </attribute-definition>
++        </custom-attribute-definitions>
++        <group-definitions>
++            <attribute-group group-id="GiftPack">
++                <attribute attribute-id="isGiftPack"/>
++            </attribute-group>
++        </group-definitions>
+     </type-extension>
+ </metadata>

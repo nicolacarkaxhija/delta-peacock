@@ -1,0 +1,19 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
+index 050e868..80cf811 100644
+--- a/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
++++ b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
+@@ -2,4 +2,5 @@
+ 
+ module.exports = function (line, product) {
+     line.isGiftPack = !!product.custom.isGiftPack;
++    line.gender = product.custom.gender;
+ };
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/packLine.isml b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/packLine.isml
+index 775939b..9b13cc4 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/packLine.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/packLine.isml
+@@ -1 +1,3 @@
+-<div class="pack">${lineItem.isGiftPack}</div>
++<div class="pack">
++    <span class="pack__gender">${lineItem.gender}</span>
++</div>

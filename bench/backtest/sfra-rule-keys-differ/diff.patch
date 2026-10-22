@@ -1,0 +1,41 @@
+diff --git a/meta/site-data/catalogs/shop-storefront/catalog.xml b/meta/site-data/catalogs/shop-storefront/catalog.xml
+new file mode 100644
+index 0000000..3807463
+--- /dev/null
++++ b/meta/site-data/catalogs/shop-storefront/catalog.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<catalog xmlns="http://www.demandware.com/xml/impex/catalog/2006-10-31" catalog-id="shop-storefront">
++    <category category-id="pack-landing">
++        <online-flag>false</online-flag>
++        <category-assignment-rule>
++            <condition attribute-id="packModel" operator="is-equal">
++                <value>classic</value>
++            </condition>
++            <condition attribute-id="packType" operator="is-equal">
++                <value>giftpack</value>
++            </condition>
++        </category-assignment-rule>
++    </category>
++</catalog>
+diff --git a/meta/site-data/meta/system-objecttype-extensions.xml b/meta/site-data/meta/system-objecttype-extensions.xml
+index eaa6e7c..7464832 100644
+--- a/meta/site-data/meta/system-objecttype-extensions.xml
++++ b/meta/site-data/meta/system-objecttype-extensions.xml
+@@ -1,6 +1,15 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <metadata xmlns="http://www.demandware.com/xml/impex/metadata/2006-10-31">
+     <type-extension type-id="Product">
+-        <custom-attribute-definitions/>
++        <custom-attribute-definitions>
++            <attribute-definition attribute-id="packModel">
++                <type>string</type>
++                <localizable-flag>true</localizable-flag>
++            </attribute-definition>
++            <attribute-definition attribute-id="packType">
++                <type>string</type>
++                <localizable-flag>false</localizable-flag>
++            </attribute-definition>
++        </custom-attribute-definitions>
+     </type-extension>
+ </metadata>

@@ -1,0 +1,3 @@
+<isloop items="${lineItem.bundledProductLineItems}" var="item">
+    <div class="bundled-item">${item.productName}</div>
+</isloop>

@@ -1,0 +1,11 @@
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
+index 0fe2663..5c085ca 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
+@@ -1,3 +1,6 @@
+ <div class="card" data-testid="cart-card">
+     <span class="card__name" data-testid="cart-card-name">${lineItem.productName}</span>
++    <isif condition="${lineItem.isGiftPack}">
++        <div class="pack__size" data-testid="pack-size">${lineItem.size}</div>
++    </isif>
+ </div>

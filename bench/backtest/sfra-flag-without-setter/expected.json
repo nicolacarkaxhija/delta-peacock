@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "meta/site-data/meta/system-objecttype-extensions.xml",
+      "line": 5,
+      "endLine": 8,
+      "guidelineId": "flag-has-a-setter",
+      "severity": "MAJOR",
+      "why": "the new flag changes what shoppers see and nothing in the change says what sets it"
+    }
+  ],
+  "noFinding": []
+}

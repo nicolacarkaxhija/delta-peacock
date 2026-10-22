@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js",
+      "line": 7,
+      "endLine": 9,
+      "guidelineId": "reuse-storefront-visibility-rules",
+      "severity": "MAJOR",
+      "why": "the hand built search skips the visibility refinements the shared builder applies"
+    }
+  ],
+  "noFinding": []
+}

@@ -1,0 +1,21 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+new file mode 100644
+index 0000000..f3a0ca2
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+@@ -0,0 +1,15 @@
++'use strict';
++
++var searchHelpers = require('*/cartridge/scripts/search/searchHelpers');
++
++/** Whether any product of the category can be bought, and the price to show. */
++function tileState(categoryId) {
++    var search = searchHelpers.createVisibleSearch(categoryId);
++    var hit = search.productSearchHits.next();
++    return {
++        purchasable: search.count > 0,
++        price: hit && hit.firstRepresentedProduct.priceModel.price
++    };
++}
++
++module.exports = { tileState: tileState };

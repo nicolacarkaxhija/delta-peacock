@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/helpers/packHelpers.js",
+      "line": 1,
+      "endLine": 14,
+      "guidelineId": "bundle-checks-its-components",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

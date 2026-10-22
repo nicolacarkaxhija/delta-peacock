@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "meta/site-data/meta/system-objecttype-extensions.xml",
+      "line": 1,
+      "endLine": 17,
+      "guidelineId": "one-source-one-group",
+      "why": "a single definition that a later change reuses is not a duplicate"
+    }
+  ]
+}

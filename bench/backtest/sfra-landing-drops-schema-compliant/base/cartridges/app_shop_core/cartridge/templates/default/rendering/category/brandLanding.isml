@@ -1,0 +1,5 @@
+<isdecorate template="common/layout/page">
+    <isinclude template="search/structuredData"/>
+    <isinclude template="components/contentSlot"/>
+    <div class="landing landing--brand">${pdict.category.name}</div>
+</isdecorate>

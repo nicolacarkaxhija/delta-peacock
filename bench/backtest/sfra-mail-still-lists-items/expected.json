@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml",
+      "line": 2,
+      "endLine": 4,
+      "guidelineId": "all-surfaces-branch-on-the-flag",
+      "severity": "MAJOR",
+      "why": "the cart card hides bundled items for packs while the order mail template still lists them"
+    }
+  ],
+  "noFinding": []
+}

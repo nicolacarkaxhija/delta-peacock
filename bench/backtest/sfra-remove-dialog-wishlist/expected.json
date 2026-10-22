@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml",
+      "line": 2,
+      "endLine": 4,
+      "guidelineId": "excluded-action-in-every-template",
+      "severity": "MAJOR",
+      "why": "the card hides the wishlist action for packs while the remove dialog still offers it"
+    }
+  ],
+  "noFinding": []
+}

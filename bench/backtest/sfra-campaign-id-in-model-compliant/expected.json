@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/categories.js",
+      "line": 1,
+      "endLine": 11,
+      "guidelineId": "models-stay-generic",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js",
+      "line": 3,
+      "endLine": 4,
+      "guidelineId": "no-dead-parameters-or-styles",
+      "severity": "MINOR",
+      "why": "no caller passes maxChecked"
+    }
+  ],
+  "noFinding": []
+}

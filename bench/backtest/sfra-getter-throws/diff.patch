@@ -1,0 +1,19 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/tile.js b/cartridges/app_shop_core/cartridge/models/tile.js
+index 4cf48c4..73eef96 100644
+--- a/cartridges/app_shop_core/cartridge/models/tile.js
++++ b/cartridges/app_shop_core/cartridge/models/tile.js
+@@ -2,6 +2,14 @@
+ 
+ function TileModel(category) {
+     this.id = category.ID;
++    Object.defineProperty(this, 'title', {
++        get: function () {
++            if (!category.displayName) {
++                throw new TypeError('category ' + category.ID + ' has no display name');
++            }
++            return category.displayName;
++        }
++    });
+ }
+ 
+ module.exports = TileModel;

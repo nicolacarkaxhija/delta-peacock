@@ -1,0 +1,25 @@
+diff --git a/test/mocks/packMocks.js b/test/mocks/packMocks.js
+index 7df603b..b8eaecb 100644
+--- a/test/mocks/packMocks.js
++++ b/test/mocks/packMocks.js
+@@ -3,5 +3,6 @@
+ const sinon = require('sinon');
+ 
+ module.exports = {
+-    stubPackSize: sinon.stub()
++    stubPackSize: sinon.stub(),
++    stubPackAttributes: sinon.stub()
+ };
+diff --git a/test/unit/app_shop_core/models/productLineItem/decorators/packAttributes.js b/test/unit/app_shop_core/models/productLineItem/decorators/packAttributes.js
+new file mode 100644
+index 0000000..d983d7e
+--- /dev/null
++++ b/test/unit/app_shop_core/models/productLineItem/decorators/packAttributes.js
+@@ -0,0 +1,7 @@
++'use strict';
++
++const { stubPackAttributes } = require('../../../../../mocks/packMocks');
++
++describe('packAttributes', function () {
++    it('reads the attributes', function () { stubPackAttributes(); });
++});

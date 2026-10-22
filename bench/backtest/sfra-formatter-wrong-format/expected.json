@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/productLineItem/decorators/packSize.js",
+      "line": 6,
+      "endLine": 6,
+      "guidelineId": "formatter-input-matches-data",
+      "severity": "MAJOR",
+      "why": "the formatter documents JP;EU and receives the EU;UK attribute unconverted"
+    }
+  ],
+  "noFinding": []
+}

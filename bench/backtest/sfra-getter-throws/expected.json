@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/tile.js",
+      "line": 8,
+      "endLine": 8,
+      "guidelineId": "missing-content-logs-and-renders",
+      "severity": "MAJOR",
+      "why": "a missing display name throws inside a getter the template reads"
+    }
+  ],
+  "noFinding": []
+}

@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js",
+      "line": 1,
+      "endLine": 5,
+      "guidelineId": "flag-has-a-setter",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

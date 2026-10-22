@@ -1,0 +1,16 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+new file mode 100644
+index 0000000..d4e894d
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+@@ -0,0 +1,10 @@
++'use strict';
++
++var searchHelpers = require('*/cartridge/scripts/search/searchHelpers');
++
++/** Whether the tile for a category has anything to show. */
++function hasProducts(categoryId) {
++    return searchHelpers.createVisibleSearch(categoryId).count > 0;
++}
++
++module.exports = { hasProducts: hasProducts };

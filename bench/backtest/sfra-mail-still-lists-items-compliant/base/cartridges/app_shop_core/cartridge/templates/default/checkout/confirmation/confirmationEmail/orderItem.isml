@@ -1,0 +1,4 @@
+<tr>
+    <td>${lineItem.productName}</td>
+    <td><isinclude template="cart/productCard/bundledItems"/></td>
+</tr>

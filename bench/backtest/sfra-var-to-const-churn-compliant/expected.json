@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/order/orderItems.js",
+      "line": 1,
+      "endLine": 16,
+      "guidelineId": "churn-hides-the-change",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

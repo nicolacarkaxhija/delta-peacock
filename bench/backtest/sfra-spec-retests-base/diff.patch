@@ -1,0 +1,53 @@
+diff --git a/cartridges/app_shop_widgets/cartridge/models/totals.js b/cartridges/app_shop_widgets/cartridge/models/totals.js
+new file mode 100644
+index 0000000..e283e72
+--- /dev/null
++++ b/cartridges/app_shop_widgets/cartridge/models/totals.js
+@@ -0,0 +1,10 @@
++'use strict';
++
++var base = require('app_storefront_base/cartridge/models/totals');
++
++function TotalsModel(container, options) {
++    base.call(this, container);
++    this.lineItems = options.buildLineItems(container);
++}
++
++module.exports = TotalsModel;
+diff --git a/test/unit/app_shop_widgets/models/totals.js b/test/unit/app_shop_widgets/models/totals.js
+new file mode 100644
+index 0000000..49fce1d
+--- /dev/null
++++ b/test/unit/app_shop_widgets/models/totals.js
+@@ -0,0 +1,31 @@
++'use strict';
++
++const { expect } = require('chai');
++const sinon = require('sinon');
++const proxyquire = require('proxyquire').noCallThru();
++
++let TotalsModel;
++let buildLineItems;
++
++describe('app_shop_widgets totals', function () {
++    before(function () {
++        TotalsModel = proxyquire('../../../../cartridges/app_shop_widgets/cartridge/models/totals', {
++            'app_storefront_base/cartridge/models/totals': function () {}
++        });
++    });
++
++    beforeEach(function () {
++        buildLineItems = sinon.stub().returns([]);
++    });
++
++    it('adds the gift certificate total', function () {
++        const model = new TotalsModel({ totalGrossPrice: { value: 10 }, giftCertificateTotalPrice: { value: 5 } }, { buildLineItems });
++        expect(model.giftCertificateTotal).to.equal(5);
++    });
++
++    it('passes the container to the line item builder', function () {
++        const c = { totalGrossPrice: { value: 10 }, giftCertificateTotalPrice: { value: 5 } };
++        new TotalsModel(c, { buildLineItems });
++        expect(buildLineItems.calledWith(c)).to.be.true;
++    });
++});

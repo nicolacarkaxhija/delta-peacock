@@ -1,0 +1,4 @@
+<form id="profile" action="${URLUtils.url('Account-SaveProfile')}" method="post">
+    <input name="firstName"/>
+    <button type="submit">Save</button>
+</form>

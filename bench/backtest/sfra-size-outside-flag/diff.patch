@@ -1,0 +1,14 @@
+diff --git a/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
+index 050e868..a0b49ff 100644
+--- a/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
++++ b/cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js
+@@ -1,5 +1,9 @@
+ 'use strict';
+ 
++var sizeFormatter = require('*/cartridge/scripts/formatters/size');
++
+ module.exports = function (line, product) {
+     line.isGiftPack = !!product.custom.isGiftPack;
++    line.size = sizeFormatter.format(product.custom.sizeName);
++    line.sizeLabel = sizeFormatter.label(product.custom.sizeName);
+ };

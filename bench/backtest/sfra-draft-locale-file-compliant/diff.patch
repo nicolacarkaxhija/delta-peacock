@@ -1,0 +1,7 @@
+diff --git a/cartridges/app_shop_core/cartridge/templates/resources/pack.properties b/cartridges/app_shop_core/cartridge/templates/resources/pack.properties
+new file mode 100644
+index 0000000..e92f99e
+--- /dev/null
++++ b/cartridges/app_shop_core/cartridge/templates/resources/pack.properties
+@@ -0,0 +1 @@
++pack.title=Gift pack

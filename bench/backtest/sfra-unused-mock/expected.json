@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "test/mocks/packMocks.js",
+      "line": 7,
+      "endLine": 7,
+      "guidelineId": "no-unused-mock-entry",
+      "severity": "MINOR",
+      "why": "no spec reads the new shared mock entry; the only new spec builds its own stub"
+    }
+  ],
+  "noFinding": []
+}

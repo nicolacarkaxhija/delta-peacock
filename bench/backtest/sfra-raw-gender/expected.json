@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/productLineItem/decorators/pack.js",
+      "line": 5,
+      "endLine": 5,
+      "guidelineId": "translated-display-values",
+      "severity": "MINOR",
+      "why": "the raw gender value is printed to shoppers without a resource key"
+    }
+  ],
+  "noFinding": []
+}

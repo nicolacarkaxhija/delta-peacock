@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/order.js",
+      "line": 8,
+      "endLine": 8,
+      "guidelineId": "no-double-execution",
+      "severity": "MAJOR",
+      "why": "the widgets model already applies the decorators, so the custom layer runs them twice"
+    }
+  ],
+  "noFinding": []
+}

@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/category.js",
+      "line": 1,
+      "endLine": 14,
+      "guidelineId": "keep-change-in-ticket-scope",
+      "why": "a non-enumerable lazy field adds no payload; claiming a cost needs evidence the diff does not hold"
+    }
+  ]
+}

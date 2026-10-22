@@ -1,0 +1,3 @@
+<div class="card">
+    <button class="add-to-wishlist" data-pid="${lineItem.id}">${Resource.msg('button.wishlist', 'cart', null)}</button>
+</div>

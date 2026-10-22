@@ -1,0 +1,3 @@
+<isdecorate template="common/layout/page">
+    <div class="landing">${pdict.category.name}</div>
+</isdecorate>

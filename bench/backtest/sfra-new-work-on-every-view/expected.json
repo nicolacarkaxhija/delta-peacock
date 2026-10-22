@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/order.js",
+      "line": 8,
+      "endLine": 8,
+      "guidelineId": "keep-change-in-ticket-scope",
+      "severity": "MAJOR",
+      "why": "shipping models are now built for every history row although only the detail page renders them"
+    }
+  ],
+  "noFinding": []
+}

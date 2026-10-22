@@ -1,0 +1,28 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/landingHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/landingHelpers.js
+index 2012b52..3f5a194 100644
+--- a/cartridges/app_shop_core/cartridge/scripts/helpers/landingHelpers.js
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/landingHelpers.js
+@@ -3,7 +3,7 @@
+ var tileHelpers = require('*/cartridge/scripts/helpers/tileHelpers');
+ 
+ function showTiles(cards) {
+-    return tileHelpers.hasPurchasable(cards);
++    return tileHelpers.hasPurchasable(cards, 12);
+ }
+ 
+ module.exports = { showTiles: showTiles };
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+index 83da61c..025f920 100644
+--- a/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js
+@@ -1,7 +1,8 @@
+ 'use strict';
+ 
+-function hasPurchasable(cards) {
+-    return cards.some(function (card) { return card.purchasable; });
++function hasPurchasable(cards, maxChecked) {
++    var limit = maxChecked || cards.length;
++    return cards.slice(0, limit).some(function (card) { return card.purchasable; });
+ }
+ 
+ module.exports = { hasPurchasable: hasPurchasable };

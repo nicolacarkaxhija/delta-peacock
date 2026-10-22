@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/templates/default/account/profile.isml",
+      "line": 3,
+      "endLine": 3,
+      "guidelineId": "no-form-inside-included-form",
+      "severity": "MAJOR",
+      "why": "the included template holds a form and now sits inside the profile form"
+    }
+  ],
+  "noFinding": []
+}

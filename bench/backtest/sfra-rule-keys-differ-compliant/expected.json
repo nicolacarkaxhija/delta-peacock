@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "meta/site-data/catalogs/shop-storefront/catalog.xml",
+      "line": 1,
+      "endLine": 14,
+      "guidelineId": "rule-key-attributes-share-flags",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

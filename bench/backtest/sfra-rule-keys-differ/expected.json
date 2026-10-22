@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "meta/site-data/meta/system-objecttype-extensions.xml",
+      "line": 5,
+      "endLine": 11,
+      "guidelineId": "rule-key-attributes-share-flags",
+      "severity": "MINOR",
+      "why": "both attributes key the same assignment rule but differ in localizable-flag"
+    }
+  ],
+  "noFinding": []
+}

@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "test/unit/app_shop_widgets/models/totals.js",
+      "line": 21,
+      "endLine": 23,
+      "guidelineId": "test-the-change-not-the-layers",
+      "severity": "MAJOR",
+      "why": "the gift certificate total comes from the base model the change does not touch"
+    }
+  ],
+  "noFinding": []
+}

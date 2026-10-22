@@ -1,0 +1,11 @@
+diff --git a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
+index 99e9af9..249390a 100644
+--- a/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
++++ b/cartridges/app_shop_core/cartridge/templates/default/cart/productCard/cartProductCard.isml
+@@ -1,3 +1,5 @@
+ <div class="card">
+-    <button class="add-to-wishlist" data-pid="${lineItem.id}">${Resource.msg('button.wishlist', 'cart', null)}</button>
++    <isif condition="${!lineItem.isGiftPack}">
++        <button class="add-to-wishlist" data-pid="${lineItem.id}">${Resource.msg('button.wishlist', 'cart', null)}</button>
++    </isif>
+ </div>

@@ -1,0 +1,12 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/models/order.js",
+      "line": 1,
+      "endLine": 15,
+      "guidelineId": "no-double-execution",
+      "why": "compliant counterpart of the positive case; the change follows the guideline"
+    }
+  ]
+}

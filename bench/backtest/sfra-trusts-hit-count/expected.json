@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/helpers/tileHelpers.js",
+      "line": 10,
+      "endLine": 11,
+      "guidelineId": "index-then-availability",
+      "severity": "MAJOR",
+      "why": "the hit count decides whether the tile can be bought and a bundle hit reads its first represented product"
+    }
+  ],
+  "noFinding": []
+}

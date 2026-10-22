@@ -1,0 +1,20 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/helpers/packHelpers.js b/cartridges/app_shop_core/cartridge/scripts/helpers/packHelpers.js
+index 8b46fbb..94ce8d3 100644
+--- a/cartridges/app_shop_core/cartridge/scripts/helpers/packHelpers.js
++++ b/cartridges/app_shop_core/cartridge/scripts/helpers/packHelpers.js
+@@ -1,3 +1,14 @@
+ 'use strict';
+ 
+-module.exports = {};
++function isOrderable(product, quantity) {
++    return product.online && product.availabilityModel.isOrderable(quantity);
++}
++
++/** Whether a gift pack bundle can be bought. */
++function isPackPurchasable(bundle) {
++    return isOrderable(bundle, 1) && bundle.bundledProducts.toArray().every(function (product) {
++        return isOrderable(product, bundle.getBundledProductQuantity(product).value);
++    });
++}
++
++module.exports = { isPackPurchasable: isPackPurchasable };
