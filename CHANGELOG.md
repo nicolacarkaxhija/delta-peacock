@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.2...delta-peacock-v0.9.3) (2026-10-22)
+
+
+### Bug Fixes
+
+* **model:** omit temperature for models that reject it ([#28](https://github.com/nicolacarkaxhija/delta-peacock/issues/28)) ([326f404](https://github.com/nicolacarkaxhija/delta-peacock/commit/326f404b4fa191ea69bc8cff1085e5b5ac2a8c06))
+
 ## [0.9.2](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.1...delta-peacock-v0.9.2) (2026-10-15)
 
 
