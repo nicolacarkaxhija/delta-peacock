@@ -111,6 +111,8 @@ export const ModelRefSchema = z.strictObject({
   provider: z.enum(MODEL_PROVIDERS),
   id: z.string().min(1),
   baseUrl: z.url().optional(),
+  /** Overrides the default list of ids that reject a temperature. */
+  omitTemperatureFor: z.array(z.string().min(1)).optional(),
 });
 
 export const EnsembleSchema = z.strictObject({

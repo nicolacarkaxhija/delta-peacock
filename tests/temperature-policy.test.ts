@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ModelSchema } from "../src/config/schema.js";
+import { ModelRefSchema, ModelSchema } from "../src/config/schema.js";
 import { buildModelPortFor } from "../src/model/build.js";
 import { createBedrockPort } from "../src/model/bedrock.js";
 import { DEFAULT_OMIT_TEMPERATURE_FOR, omitsTemperature } from "../src/model/generate.js";
@@ -87,6 +87,14 @@ describe("temperature policy", () => {
   it("defaults the config list to haiku 5.5 and accepts an override", () => {
     expect(ModelSchema.parse({}).omitTemperatureFor).toEqual(["haiku-5-5"]);
     expect(ModelSchema.parse({ omitTemperatureFor: ["x"] }).omitTemperatureFor).toEqual(["x"]);
+  });
+
+  it("lets an ensemble member carry its own list", () => {
+    const ref = ModelRefSchema.parse({ provider: "bedrock", id: "m", omitTemperatureFor: ["m"] });
+    expect(ref.omitTemperatureFor).toEqual(["m"]);
+    expect(
+      ModelRefSchema.parse({ provider: "bedrock", id: "m" }).omitTemperatureFor,
+    ).toBeUndefined();
   });
 
   it("passes the list through the port builder", async () => {

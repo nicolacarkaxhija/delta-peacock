@@ -557,6 +557,13 @@
               "baseUrl": {
                 "type": "string",
                 "format": "uri"
+              },
+              "omitTemperatureFor": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             },
             "required": [
@@ -593,6 +600,13 @@
             "baseUrl": {
               "type": "string",
               "format": "uri"
+            },
+            "omitTemperatureFor": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "required": [
@@ -631,6 +645,13 @@
             "baseUrl": {
               "type": "string",
               "format": "uri"
+            },
+            "omitTemperatureFor": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "required": [
@@ -665,6 +686,13 @@
             "baseUrl": {
               "type": "string",
               "format": "uri"
+            },
+            "omitTemperatureFor": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "required": [
