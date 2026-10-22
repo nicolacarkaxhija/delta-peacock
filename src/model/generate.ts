@@ -117,9 +117,7 @@ export async function completeWith(
     model,
     system: systemOf(request, marker),
     prompt: request.user,
-    // pinned low by default: two fresh reviews of one diff should agree, so the
-    // gate outcome does not swing on sampling noise the caller never asked for;
-    // models on the omit list reject the parameter, so it is not sent at all
+    // pinned low so two reviews of one diff agree; models on the omit list reject it, so it is not sent
     ...(omitTemperature ? {} : { temperature: request.temperature ?? 0 }),
     // bound the reply so runaway output cannot outrun the cost estimate
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
