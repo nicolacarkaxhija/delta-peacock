@@ -207,6 +207,49 @@ export interface DiffRequest {
   maxDiffBytes: number;
 }
 
+/** What a change touches and what the include and exclude globs left out of its review. */
+export interface ChangeScope {
+  /** Every file the change touches, before the globs. */
+  changed: number;
+  /** Files no include glob matched. */
+  outsideInclude: number;
+  /** Files an exclude glob left out, under the first glob each matched, most files first. */
+  excluded: readonly { glob: string; files: number }[];
+  /** In scope files the last reviewed commit already covered: unchanged since. */
+  alreadyReviewed?: { files: number; commit: string };
+}
+
+/** The scope of the changed files under the globs; reviewed lists the files an incremental diff still holds. */
+export function scopeOfFiles(
+  files: readonly string[],
+  include: readonly string[],
+  exclude: readonly string[],
+  incremental?: { commit: string; reviewed: readonly string[] },
+): ChangeScope {
+  const isIncluded = include.length === 0 ? () => true : picomatch([...include]);
+  const matchers = exclude.map((glob) => ({ glob, matches: picomatch(glob) }));
+  const excluded = new Map<string, number>();
+  let outsideInclude = 0;
+  const inScope: string[] = [];
+  for (const file of files) {
+    const glob = matchers.find(({ matches }) => matches(file))?.glob;
+    if (glob !== undefined) excluded.set(glob, (excluded.get(glob) ?? 0) + 1);
+    else if (!isIncluded(file)) outsideInclude += 1;
+    else inScope.push(file);
+  }
+  const scope: ChangeScope = {
+    changed: files.length,
+    outsideInclude,
+    excluded: [...excluded]
+      .map(([glob, count]) => ({ glob, files: count }))
+      .sort((a, b) => b.files - a.files || a.glob.localeCompare(b.glob)),
+  };
+  if (incremental === undefined) return scope;
+  const reviewed = new Set(incremental.reviewed);
+  const covered = inScope.filter((file) => !reviewed.has(file)).length;
+  return { ...scope, alreadyReviewed: { files: covered, commit: incremental.commit } };
+}
+
 export interface AcquiredDiff {
   text: string;
   mode: "incremental" | "full";
@@ -214,6 +257,8 @@ export interface AcquiredDiff {
   notices: string[];
   /** Set when the review must not proceed; the text is empty then. */
   skipped?: "too-large";
+  /** What the change touches and what the globs left out. */
+  scope: ChangeScope;
 }
 
 /** The index against HEAD: what a pre-commit hook is about to commit. */
@@ -223,10 +268,18 @@ export function stagedDiff(
 ): AcquiredDiff {
   const raw = runGit(cwd, ["diff", "--cached"]);
   const text = filterDiffByPath(raw, request.include, request.exclude);
+  const scope = scopeOfFiles(changedFilesFromDiff(raw), request.include, request.exclude);
   if (Buffer.byteLength(text, "utf8") > request.maxDiffBytes) {
-    return { text: "", mode: "full", targetRef: "the index", notices: [], skipped: "too-large" };
+    return {
+      text: "",
+      mode: "full",
+      targetRef: "the index",
+      notices: [],
+      skipped: "too-large",
+      scope,
+    };
   }
-  return { text, mode: "full", targetRef: "the index", notices: [] };
+  return { text, mode: "full", targetRef: "the index", notices: [], scope };
 }
 
 /** New-file line numbers to their text, per file: what the review anchored on. */
@@ -299,6 +352,8 @@ export function acquireDiff(
 
   let mode: "incremental" | "full" = "full";
   let text: string;
+  // the whole branch, so files the anchor covered still count as changed
+  let since: { commit: string; branchFiles: string[] } | undefined;
   try {
     if (anchor !== undefined) {
       if (!refExists(cwd, anchor) || !isAncestorOfHead(cwd, anchor)) {
@@ -317,6 +372,7 @@ export function acquireDiff(
         mode = "incremental";
         notices.push(`incremental review of changes since ${anchor.slice(0, 12)}`);
         text = runGit(cwd, ["diff", "--no-color", `${anchor}..HEAD`, "--"]);
+        since = { commit: anchor, branchFiles: changedFilesFromDiff(mergeBaseDiff(cwd, ref)) };
       }
     } else {
       text = mergeBaseDiff(cwd, ref);
@@ -329,14 +385,21 @@ export function acquireDiff(
     throw new LocalDiffUnavailableError(error instanceof Error ? error.message : String(error));
   }
 
+  const scope =
+    since === undefined
+      ? scopeOfFiles(changedFilesFromDiff(text), request.include, request.exclude)
+      : scopeOfFiles(since.branchFiles, request.include, request.exclude, {
+          commit: since.commit,
+          reviewed: changedFilesFromDiff(text),
+        });
   text = filterDiffByPath(text, request.include, request.exclude);
 
   if (Buffer.byteLength(text, "utf8") > request.maxDiffBytes) {
     notices.push(
       `diff is ${String(Buffer.byteLength(text, "utf8"))} bytes, over the ${String(request.maxDiffBytes)} byte ceiling`,
     );
-    return { text: "", mode, targetRef: ref, notices, skipped: "too-large" };
+    return { text: "", mode, targetRef: ref, notices, skipped: "too-large", scope };
   }
 
-  return { text, mode, targetRef: ref, notices };
+  return { text, mode, targetRef: ref, notices, scope };
 }

@@ -3,6 +3,7 @@ import type { Config } from "../config/schema.js";
 import { fingerprintFrom, fingerprintOf, type Finding } from "../domain/finding.js";
 import {
   blockedLine,
+  commitText,
   DEFAULT_PRESENTATION,
   guidelineLine,
   guidelineUrl,
@@ -13,6 +14,7 @@ import {
   renderCommentBody,
   isSummaryBody,
   renderSummaryBody,
+  renderSummaryLine,
   severityCounts,
   severityWord,
   stateLine,
@@ -263,16 +265,6 @@ export const RESOLVED_PREFIX = "Resolved in ";
 /** A comment the reviewer already turned into a resolution trace. */
 export function isResolvedTrace(body: string): boolean {
   return body.split("\n").some((line) => line.startsWith(RESOLVED_PREFIX));
-}
-
-/** Twelve hex digits of a commit hash: unique in any repository this size, short enough for a line. */
-const SHORT_HASH_LENGTH = 12;
-
-/** A commit as readers see it: the short hash, linked where the host can. */
-function commitText(sha: string, presentation: Pick<Presentation, "commitLink">): string {
-  const short = sha.slice(0, SHORT_HASH_LENGTH);
-  const url = presentation.commitLink?.(sha);
-  return url === undefined ? `\`${short}\`` : `[${short}](${url})`;
 }
 
 /** The finding's heading kept and linked, the rest replaced by where it was resolved. */
@@ -595,7 +587,6 @@ async function upsertSummary(
   scm: ScmPort,
   presentation: Presentation,
   body: string,
-  createIfMissing: boolean,
 ): Promise<void> {
   // the marker also finds a pre 0.1.5 summary, so an upgrade replaces it in place
   const candidates = (await scm.listSummaryComments()).filter(
@@ -605,7 +596,7 @@ async function upsertSummary(
   );
   const [summary, ...extra] = await ownComments(scm, presentation, candidates);
   if (summary === undefined) {
-    if (createIfMissing) await scm.createSummaryComment(body);
+    await scm.createSummaryComment(body);
     return;
   }
   if (summary.body !== body) await scm.updateSummaryComment(summary.id, body);
@@ -645,15 +636,13 @@ export async function publishReview(
     commitStatus: boolean;
     comments?: boolean;
     codeInsights?: boolean;
-    /** Post a summary comment on a clean run even where an Insights card carries the result. */
+    /** Post the whole summary on a clean run even where an Insights card carries the result, not just its line. */
     summaryWhenClean?: boolean;
     presentation?: PresentationSettings;
     /** One pull request task per posted finding, where the host has tasks. */
     tasks?: boolean;
     /** A file's line at the reviewed commit; tasks resolve once it changed. */
     lineTextOf?: (file: string, line: number) => string | undefined;
-    /** The reviewed commit, full hash: named on the comment of a finding it resolved, and where file links point. */
-    reviewedCommit?: string;
     /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
     dryRun: boolean;
   },
@@ -726,7 +715,7 @@ export async function publishReview(
         summaryInput = { ...input, factsOnly: { ...input.factsOnly, notRejudged: named } };
       }
     }
-    // a clean card carries a clean result, but never a facts only one, which must say so
+    // a clean card carries a clean result, so the comment keeps only the line saying the run happened
     const cardCarries = input.codeInsights === true && scm.publishInsights !== undefined;
     const quiet =
       input.findings.length === 0 &&
@@ -734,7 +723,8 @@ export async function publishReview(
       cardCarries &&
       input.summaryWhenClean !== true &&
       input.factsOnly === undefined;
-    await upsertSummary(scm, presentation, renderSummaryBody(summaryInput, presentation), !quiet);
+    const render = quiet ? renderSummaryLine : renderSummaryBody;
+    await upsertSummary(scm, presentation, render(summaryInput, presentation));
   }
   if (input.commitStatus) {
     await scm.postStatus(

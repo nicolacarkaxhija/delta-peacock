@@ -1,6 +1,7 @@
 import { DEFAULT_DISPLAY_NAME, type Config } from "../config/schema.js";
 import { fingerprintFrom, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
+import type { ChangeScope } from "../git/diff.js";
 import { meetsThreshold, SEVERITIES, type Severity } from "../domain/severity.js";
 import type { ModelUnavailability } from "../model/unavailable.js";
 
@@ -251,6 +252,8 @@ export const NOT_REVIEWED = {
 } as const;
 
 export const NO_ISSUES = "No issues found in this change.";
+const NO_ISSUES_LEAD = "No issues found in this change";
+const NOTHING_LEAD = "Nothing to review in this change";
 const FAILED_LEAD = "The review could not complete: ";
 const CAPPED_LEAD = "The review was skipped: ";
 const COUNT_LEAD = /^\d+ findings?: [a-z0-9, ]+$/;
@@ -264,7 +267,9 @@ export function isSummaryBody(body: string, presentation: Presentation): boolean
   const first = String(body.split("\n")[0]);
   return (
     first === summaryHeading(presentation) ||
-    first === NO_ISSUES ||
+    first.startsWith(NO_ISSUES_LEAD) ||
+    first.startsWith(`${NOTHING_LEAD}:`) ||
+    first.startsWith(`${NOTHING_LEAD} at `) ||
     first.startsWith(FAILED_LEAD) ||
     first.startsWith(CAPPED_LEAD) ||
     first.startsWith(FACTS_LEAD) ||
@@ -289,6 +294,10 @@ export interface SummaryInput {
   changedFiles?: number;
   /** Set when no model ran: what the facts only review left out. */
   factsOnly?: FactsScope;
+  /** What the change touches and what the globs left out; a clean summary counts it. */
+  scope?: ChangeScope;
+  /** The reviewed commit, full hash: named on a clean summary and on the comment of a finding it resolved, and where file links point. */
+  reviewedCommit?: string;
 }
 
 /** What a run with no model left out: candidates for a person, guidelines no check owns. */
@@ -534,8 +543,67 @@ function listItem(finding: Finding, presentation: Presentation): string {
   return `${head}: ${linkTickets(text, presentation)}`;
 }
 
+/** Twelve hex digits of a commit hash: unique in any repository this size, short enough for a line. */
+const SHORT_HASH_LENGTH = 12;
+
+/** A commit as readers see it: the short hash, linked where the host can. */
+export function commitText(sha: string, presentation: Pick<Presentation, "commitLink">): string {
+  const short = sha.slice(0, SHORT_HASH_LENGTH);
+  const url = presentation.commitLink?.(sha);
+  return url === undefined ? `\`${short}\`` : `[${short}](${url})`;
+}
+
+/** Not reviewed for a reason the scope explains; the other reasons keep their own line. */
+const SCOPED_REASONS: readonly string[] = [NOT_REVIEWED.nothingInScope, NOT_REVIEWED.noneApply];
+
+/**
+ * The one line a run without findings leaves: which commit, what changed, what
+ * the globs left out and why the rest needed nothing. Undefined for any other run.
+ */
+function cleanLine(input: SummaryInput, presentation: Presentation): string | undefined {
+  const { scope, outcome = { kind: "reviewed" } } = input;
+  if (scope === undefined || input.findings.length > 0 || input.factsOnly !== undefined) {
+    return undefined;
+  }
+  const reviewed = outcome.kind === "reviewed";
+  if (!reviewed && !(outcome.kind === "not-reviewed" && SCOPED_REASONS.includes(outcome.line))) {
+    return undefined;
+  }
+  const lead = reviewed ? NO_ISSUES_LEAD : NOTHING_LEAD;
+  const at =
+    input.reviewedCommit === undefined
+      ? ""
+      : ` at ${commitText(input.reviewedCommit, presentation)}`;
+  const excluded = [
+    ...scope.excluded.map(({ glob, files }) => `${String(files)} \`${glob}\``),
+    ...(scope.outsideInclude > 0
+      ? [`${String(scope.outsideInclude)} not under \`review.include\``]
+      : []),
+  ];
+  const outside = scope.excluded.reduce((sum, { files }) => sum + files, scope.outsideInclude);
+  const covered = scope.alreadyReviewed?.files ?? 0;
+  const rest = scope.changed - outside - covered;
+  const clauses = [
+    ...(scope.changed > 0 ? [plural(scope.changed, "changed file")] : []),
+    ...(outside > 0
+      ? [`${String(outside)} outside the guideline scope (${excluded.join(", ")})`]
+      : []),
+    ...(scope.alreadyReviewed !== undefined && covered > 0
+      ? [
+          `${String(covered)} already reviewed at ${commitText(scope.alreadyReviewed.commit, presentation)}`,
+        ]
+      : []),
+    ...(rest > 0
+      ? [reviewed ? "0 findings on the rest" : `${String(rest)} with no applicable guideline`]
+      : []),
+  ];
+  return `${lead}${at}: ${clauses.length === 0 ? "no file changed" : clauses.join(", ")}.`;
+}
+
 /** The summary's first line; guideline ids in it link where they can. */
 function summaryStateLine(input: SummaryInput, presentation: Presentation): string {
+  const clean = cleanLine(input, presentation);
+  if (clean !== undefined) return clean;
   const reviewed = (input.outcome?.kind ?? "reviewed") === "reviewed";
   if (!reviewed || input.factsOnly === undefined) return stateLine(input, presentation);
   const linked = (text: string, url: string | undefined) =>
@@ -544,6 +612,12 @@ function summaryStateLine(input: SummaryInput, presentation: Presentation): stri
     guideline: (guidelineId) => linked(guidelineId, guidelineUrl(guidelineId, presentation)),
     file: (path) => linked(path, presentation.reviewedFileLink?.(path)),
   });
+}
+
+/** The summary as its first line alone, for a clean run whose card carries the rest. */
+export function renderSummaryLine(input: SummaryInput, presentation: Presentation): string {
+  const line = summaryStateLine(input, presentation);
+  return presentation.markers ? `${line}\n\n${SUMMARY_MARKER}` : line;
 }
 
 export function renderSummaryBody(

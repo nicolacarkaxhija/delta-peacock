@@ -172,8 +172,10 @@ describe("bitbucket presentation", () => {
       expect(stderr).toContain("1 resolved");
       expect(summaries(fake)).toHaveLength(1);
       expect(summaries(fake)[0]?.id).toBe(50);
-      // clean: no new summary on Bitbucket, but one of ours already there turns clean
-      expect(summaries(fake)[0]?.content.raw).toBe("No issues found in this change.");
+      // clean: one of ours already there turns into the one clean line
+      expect(summaries(fake)[0]?.content.raw).toMatch(
+        /^No issues found in this change at \[[0-9a-f]{12}\]\([^)]+\): 1 changed file, 0 findings on the rest\.$/,
+      );
 
       fake.comments.push({
         id: 52,

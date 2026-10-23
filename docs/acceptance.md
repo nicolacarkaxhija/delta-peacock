@@ -73,6 +73,12 @@ from a clean checkout; a red line blocks it.
 - `already held`: a finding that asks its line to end with or hold a text the line already holds
   is dropped before anything is posted, and the log says why. On its own:
   `pnpm exec vitest run tests/already-held.test.ts`.
+- `clean run line`: a run that finds nothing or has nothing to review leaves one line on the
+  summary comment, created when missing and edited in place on every later push, naming the
+  reviewed commit, the changed files, the files each include or exclude glob left out, the files an
+  earlier review already covered and its commit; the commit status and the Insights card stay as
+  they were. On its own:
+  `pnpm exec vitest run tests/scm-render tests/review-root-causes tests/diff-hardening`.
 - `linked references`: every commit, file and line, guideline and finding comment the reviewer
   writes is a link where the host can build its address and plain text where it cannot; a task
   text stays plain; comments and summaries an earlier version wrote are claimed and updated in

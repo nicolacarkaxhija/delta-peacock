@@ -154,7 +154,7 @@ describe("publishing to github", () => {
       const fifth = await reviewAgainst(fake, repo, clean);
       expect(fifth.stderr).toContain("0 created, 0 updated, 0 resolved, 0 unchanged");
       expect(fake.issueComments).toHaveLength(1);
-      expect(fake.issueComments[0]?.body).toContain("No issues found in this change.");
+      expect(fake.issueComments[0]?.body).toContain("No issues found in this change at [");
     } finally {
       await fake.close();
     }

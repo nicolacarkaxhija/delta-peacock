@@ -3,6 +3,7 @@ import {
   acquireDiff,
   filterDiffByPath,
   resolveTargetRef,
+  stagedDiff,
   type DiffRequest,
 } from "../src/git/diff.js";
 import { cloneRepo, commitAll, git, headSha, makeRepo, write } from "./helpers/git.js";
@@ -306,5 +307,86 @@ describe("path filtering and the size ceiling", () => {
     expect(acquired.skipped).toBe("too-large");
     expect(acquired.text).toBe("");
     expect(acquired.notices.join("\n")).toContain("ceiling");
+  });
+});
+
+describe("the scope of a change", () => {
+  it("counts every changed file and the glob that left each one out", () => {
+    const repo = makeRepo();
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/real.js", "real\n");
+    write(repo, "src/data.xml", "<a/>\n");
+    write(repo, "vendor/lib.xml", "<b/>\n");
+    write(repo, "notes.txt", "notes\n");
+    commitAll(repo, "mixed");
+    const acquired = acquireDiff(
+      repo,
+      request({ include: ["src/**", "vendor/**"], exclude: ["vendor/**", "**/*.xml"] }),
+    );
+    expect(acquired).toMatchObject({
+      scope: {
+        changed: 4,
+        outsideInclude: 1,
+        excluded: [
+          { glob: "**/*.xml", files: 1 },
+          { glob: "vendor/**", files: 1 },
+        ],
+      },
+    });
+    expect(acquired).not.toHaveProperty("scope.alreadyReviewed");
+  });
+
+  it("orders the globs by how many files each left out", () => {
+    const repo = makeRepo();
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "a.xml", "<a/>\n");
+    write(repo, "b.xml", "<b/>\n");
+    write(repo, "docs/c.md", "c\n");
+    commitAll(repo, "content");
+    const acquired = acquireDiff(repo, request({ exclude: ["docs/**", "*.xml"] }));
+    expect(acquired).toMatchObject({
+      text: "",
+      scope: {
+        changed: 3,
+        outsideInclude: 0,
+        excluded: [
+          { glob: "*.xml", files: 2 },
+          { glob: "docs/**", files: 1 },
+        ],
+      },
+    });
+  });
+
+  it("counts the files the last reviewed commit already covered", () => {
+    const repo = makeRepo();
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "first.txt", "first\n");
+    write(repo, "kept.xml", "<a/>\n");
+    commitAll(repo, "first");
+    const anchor = headSha(repo);
+    write(repo, "second.txt", "second\n");
+    commitAll(repo, "second");
+    const acquired = acquireDiff(repo, request({ lastReviewedCommit: anchor, exclude: ["*.xml"] }));
+    expect(acquired).toMatchObject({
+      mode: "incremental",
+      scope: {
+        changed: 3,
+        outsideInclude: 0,
+        excluded: [{ glob: "*.xml", files: 1 }],
+        alreadyReviewed: { files: 1, commit: anchor },
+      },
+    });
+  });
+
+  it("scopes the index the same way", () => {
+    const repo = makeRepo();
+    write(repo, "staged.xml", "<a/>\n");
+    write(repo, "staged.js", "js\n");
+    git(repo, "add", "staged.xml", "staged.js");
+    expect(
+      stagedDiff(repo, { include: [], exclude: ["*.xml"], maxDiffBytes: 1_000_000 }),
+    ).toMatchObject({
+      scope: { changed: 2, outsideInclude: 0, excluded: [{ glob: "*.xml", files: 1 }] },
+    });
   });
 });

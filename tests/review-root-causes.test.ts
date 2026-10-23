@@ -120,11 +120,13 @@ async function reviewOnBitbucket(
   fake: FakeBitbucket,
   repo: string,
   port: ModelPort,
+  extraEnv: Record<string, string> = {},
 ): Promise<{ code: number; stderr: string }> {
   let stderr = "";
   const code = await runCli(["review"], {
     cwd: repo,
     env: {
+      ...extraEnv,
       DELTA_PEACOCK_SCM_PROVIDER: "bitbucket",
       DELTA_PEACOCK_SCM_REPOSITORY: "acme/e2e",
       DELTA_PEACOCK_SCM_PULL_REQUEST: "1",
@@ -157,8 +159,10 @@ describe("PR 1 root causes, replayed", () => {
       expect(code).toBe(0);
       expect(stderr).toContain("matches the guideline's own Good example");
       expect(inlineOf(fake)).toHaveLength(0);
-      // clean on Bitbucket: the status and the Insights card carry it, no summary comment
-      expect(summaryOf(fake)).toBe("");
+      // clean on Bitbucket: one line says the review ran, at which commit
+      expect(summaryOf(fake)).toMatch(
+        /^No issues found in this change at \[[0-9a-f]{12}\]\([^)]+\): 1 changed file, 0 findings on the rest\.$/,
+      );
       expect(fake.statuses.at(-1)?.description).toBe("Passed. No findings in 1 changed file.");
       expect(fake.insightReport?.["details"]).toBe("No issues found in this change.");
     } finally {
@@ -388,10 +392,98 @@ describe("summary comments on Bitbucket", () => {
       await reviewOnBitbucket(fake, repo, scripted({ text: '{"findings": []}' }).port);
       const summaries = fake.comments.filter((comment) => comment.inline === undefined);
       expect(summaries).toHaveLength(1);
-      expect(summaries[0]).toMatchObject({
-        id: 70,
-        content: { raw: "No issues found in this change." },
+      expect(summaries[0]?.id).toBe(70);
+      expect(summaries[0]?.content.raw).toMatch(/^No issues found in this change at \[/);
+    } finally {
+      await fake.close();
+    }
+  });
+});
+
+describe("the one line a run without findings leaves on Bitbucket", () => {
+  const head = (repo: string) => git(repo, "rev-parse", "HEAD").trim();
+  const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lineOf = (text: string) =>
+    new RegExp(`^${escaped(text).replaceAll("LINK", "\\([^)]+\\)")}$`);
+
+  function scopedRepo(): string {
+    const repo = makeRepo();
+    write(repo, "guidelines/axis-tags.md", AXIS_TAGS);
+    write(repo, "test-runner.config.ts", RUNNER_CONFIG);
+    write(repo, "delta-peacock.config.yaml", 'review:\n  exclude: ["**/*.xml", "docs/**"]\n');
+    commitAll(repo, "rules");
+    git(repo, "checkout", "-q", "-b", "feature/scope");
+    return repo;
+  }
+
+  it("names the globs that left every changed file out", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const repo = scopedRepo();
+      write(repo, "docs/notes.md", "notes\n");
+      write(repo, "data/one.xml", "<a/>\n");
+      write(repo, "data/two.xml", "<b/>\n");
+      commitAll(repo, "content only");
+      const model = scripted({ text: '{"findings": []}' });
+      await reviewOnBitbucket(fake, repo, model.port);
+      expect(model.requests).toHaveLength(0);
+      expect(summaryOf(fake)).toMatch(
+        lineOf(
+          `Nothing to review in this change at [${head(repo).slice(0, 12)}]LINK: 3 changed files, 3 outside the guideline scope (2 \`**/*.xml\`, 1 \`docs/**\`).`,
+        ),
+      );
+      expect(fake.statuses.at(-1)?.description).toBe("Passed. No reviewable files in this change.");
+      expect(fake.insightReport?.["details"]).toBe("Nothing in scope was changed.");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("counts a mix of left out and reviewed files", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const repo = scopedRepo();
+      write(repo, "tests/smoke/homepage.spec.ts", SPEC);
+      write(repo, "data/one.xml", "<a/>\n");
+      write(repo, "data/two.xml", "<b/>\n");
+      commitAll(repo, "spec and content");
+      await reviewOnBitbucket(fake, repo, scripted({ text: '{"findings": []}' }).port);
+      expect(summaryOf(fake)).toMatch(
+        lineOf(
+          `No issues found in this change at [${head(repo).slice(0, 12)}]LINK: 3 changed files, 2 outside the guideline scope (2 \`**/*.xml\`), 0 findings on the rest.`,
+        ),
+      );
+      expect(fake.insightReport?.["details"]).toBe("No issues found in this change.");
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("names the commit that already reviewed the rest, editing the same comment", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const repo = scopedRepo();
+      write(repo, "tests/smoke/homepage.spec.ts", SPEC);
+      commitAll(repo, "spec");
+      const first = head(repo);
+      await reviewOnBitbucket(fake, repo, scripted({ text: '{"findings": []}' }).port);
+      const before = fake.comments.filter((comment) => comment.inline === undefined);
+      expect(before).toHaveLength(1);
+      write(repo, "data/one.xml", "<a/>\n");
+      commitAll(repo, "content");
+      const model = scripted({ text: '{"findings": []}' });
+      await reviewOnBitbucket(fake, repo, model.port, {
+        DELTA_PEACOCK_REVIEW_LAST_REVIEWED_COMMIT: first,
       });
+      expect(model.requests).toHaveLength(0);
+      const after = fake.comments.filter((comment) => comment.inline === undefined);
+      expect(after).toHaveLength(1);
+      expect(after[0]?.id).toBe(before[0]?.id);
+      expect(after[0]?.content.raw).toMatch(
+        lineOf(
+          `Nothing to review in this change at [${head(repo).slice(0, 12)}]LINK: 2 changed files, 1 outside the guideline scope (1 \`**/*.xml\`), 1 already reviewed at [${first.slice(0, 12)}]LINK.`,
+        ),
+      );
     } finally {
       await fake.close();
     }
@@ -408,7 +500,9 @@ describe("one summary template", () => {
       const model = scripted({ text: '{"findings": []}' });
       await reviewOnBitbucket(fake, repo, model.port);
       expect(model.requests).toHaveLength(0);
-      expect(summaryOf(fake)).toBe("");
+      expect(summaryOf(fake)).toMatch(
+        /^Nothing to review in this change at \[[0-9a-f]{12}\]\([^)]+\): 2 changed files, 2 outside the guideline scope \(2 not under `review.include`\)\.$/,
+      );
       expect(fake.statuses.at(-1)?.description).toBe("Passed. No reviewable files in this change.");
       expect(fake.insightReport?.["details"]).toBe("Nothing in scope was changed.");
       // with summaryWhenClean the same template is posted as a comment
@@ -419,7 +513,8 @@ describe("one summary template", () => {
       );
       commitAll(repo, "summaries");
       await reviewOnBitbucket(fake, repo, model.port);
-      expect(summaryOf(fake)).toBe("Nothing in scope was changed.");
+      expect(summaryOf(fake)).toMatch(/^Nothing to review in this change at \[/);
+      expect(fake.comments.filter((comment) => comment.inline === undefined)).toHaveLength(1);
     } finally {
       await fake.close();
     }
