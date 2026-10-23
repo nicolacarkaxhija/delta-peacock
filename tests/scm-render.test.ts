@@ -3,6 +3,8 @@ import type { Finding, Violation } from "../src/domain/finding.js";
 import type { GateDecision } from "../src/domain/gate.js";
 import {
   blockedLine,
+  isSummaryBody,
+  NOT_REVIEWED,
   parseFindingComment,
   reviewerComment,
   twoSentences,
@@ -13,6 +15,7 @@ import {
   publishReview,
   renderCommentBody,
   renderSummaryBody,
+  type SummaryInput,
 } from "../src/scm/publish.js";
 import type { ScmPort } from "../src/scm/port.js";
 
@@ -344,5 +347,216 @@ describe("publishReview dry run", () => {
       unchanged: 0,
       notices: [expect.stringContaining("dry run")],
     });
+  });
+});
+
+describe("the one line a clean run leaves", () => {
+  const HEAD = "a".repeat(40);
+  const ANCHOR = "b".repeat(40);
+  const LINKED: Presentation = {
+    ...BITBUCKET_LOOK,
+    commitLink: (sha) => `https://bitbucket.org/acme/widgets/commits/${sha}`,
+  };
+  const at = (sha: string) =>
+    `[${sha.slice(0, 12)}](https://bitbucket.org/acme/widgets/commits/${sha})`;
+
+  function cleanInput(extra: object): SummaryInput {
+    return Object.assign(
+      { findings: [], proposals: [], droppedUncited: 0, filtered: 0, gate: PASSED },
+      extra,
+    );
+  }
+
+  it("names the files the scope left out, grouped by the glob that matched them", () => {
+    const input = cleanInput({
+      outcome: { kind: "not-reviewed", line: NOT_REVIEWED.nothingInScope },
+      reviewedCommit: HEAD,
+      scope: {
+        changed: 3,
+        outsideInclude: 0,
+        excluded: [
+          { glob: "**/*.xml", files: 2 },
+          { glob: "docs/**", files: 1 },
+        ],
+      },
+    });
+    expect(renderSummaryBody(input, LINKED)).toBe(
+      `Nothing to review in this change at ${at(HEAD)}: 3 changed files, 3 outside the guideline scope (2 \`**/*.xml\`, 1 \`docs/**\`).`,
+    );
+  });
+
+  it("counts a mix of left out and reviewed files on a clean review", () => {
+    const input = cleanInput({
+      reviewedCommit: HEAD,
+      scope: { changed: 4, outsideInclude: 1, excluded: [{ glob: "**/*.xml", files: 2 }] },
+    });
+    expect(renderSummaryBody(input, LINKED)).toBe(
+      `No issues found in this change at ${at(HEAD)}: 4 changed files, 3 outside the guideline scope (2 \`**/*.xml\`, 1 not under \`review.include\`), 0 findings on the rest.`,
+    );
+  });
+
+  it("names the commit an earlier review already covered", () => {
+    const input = cleanInput({
+      outcome: { kind: "not-reviewed", line: NOT_REVIEWED.nothingInScope },
+      reviewedCommit: HEAD,
+      scope: {
+        changed: 2,
+        outsideInclude: 0,
+        excluded: [],
+        alreadyReviewed: { files: 2, commit: ANCHOR },
+      },
+    });
+    expect(renderSummaryBody(input, LINKED)).toBe(
+      `Nothing to review in this change at ${at(HEAD)}: 2 changed files, 2 already reviewed at ${at(ANCHOR)}.`,
+    );
+  });
+
+  it("says when no guideline applies to the files in scope, and when nothing changed at all", () => {
+    const none = cleanInput({
+      outcome: { kind: "not-reviewed", line: NOT_REVIEWED.noneApply },
+      scope: { changed: 1, outsideInclude: 0, excluded: [] },
+    });
+    expect(renderSummaryBody(none, BITBUCKET_LOOK)).toBe(
+      "Nothing to review in this change: 1 changed file, 1 with no applicable guideline.",
+    );
+    const empty = cleanInput({
+      outcome: { kind: "not-reviewed", line: NOT_REVIEWED.nothingInScope },
+      reviewedCommit: HEAD,
+      scope: { changed: 0, outsideInclude: 0, excluded: [] },
+    });
+    expect(renderSummaryBody(empty, BITBUCKET_LOOK)).toBe(
+      `Nothing to review in this change at \`${HEAD.slice(0, 12)}\`: no file changed.`,
+    );
+  });
+
+  it("keeps the old line where the run knows no scope, and never touches the Insights card", () => {
+    const input = cleanInput({ reviewedCommit: HEAD });
+    expect(renderSummaryBody(input, LINKED)).toBe("No issues found in this change.");
+    const scoped = cleanInput({
+      reviewedCommit: HEAD,
+      scope: { changed: 1, outsideInclude: 0, excluded: [] },
+    });
+    expect(buildInsightReport(scoped, LINKED).details).toBe("No issues found in this change.");
+  });
+
+  it("leaves every other outcome its own line", () => {
+    const scope = { changed: 2, outsideInclude: 0, excluded: [] };
+    const large = cleanInput({
+      outcome: { kind: "not-reviewed", line: NOT_REVIEWED.tooLarge },
+      reviewedCommit: HEAD,
+      scope,
+    });
+    expect(renderSummaryBody(large, LINKED)).toBe(NOT_REVIEWED.tooLarge);
+    const failed = cleanInput({
+      outcome: { kind: "failed", reason: "the model timed out" },
+      reviewedCommit: HEAD,
+      scope,
+    });
+    expect(renderSummaryBody(failed, LINKED).split("\n")[0]).toBe(
+      "The review could not complete: the model timed out.",
+    );
+    const found = cleanInput({ reviewedCommit: HEAD, scope, findings: [violation()] });
+    expect(renderSummaryBody(found, LINKED).split("\n")[0]).toBe("1 finding: 1 major");
+  });
+
+  it("recognises the new lines and the old ones as the reviewer's summary", () => {
+    for (const first of [
+      `No issues found in this change at ${at(HEAD)}: 1 changed file, 0 findings on the rest.`,
+      "Nothing to review in this change: 2 changed files, 2 outside the guideline scope (2 `*.xml`).",
+      "No issues found in this change.",
+      NOT_REVIEWED.nothingInScope,
+      NOT_REVIEWED.noneApply,
+    ]) {
+      expect(isSummaryBody(first, BITBUCKET_LOOK)).toBe(true);
+    }
+    expect(isSummaryBody("Nothing to review here, says a person.", BITBUCKET_LOOK)).toBe(false);
+  });
+});
+
+describe("publishReview on a clean run where a card carries the result", () => {
+  /** An in-memory host with a card: summary comments live in a list. */
+  function cardHost(markers = false): {
+    port: ScmPort;
+    summaries: { id: string; body: string }[];
+    edits: number;
+  } {
+    const state = { summaries: [] as { id: string; body: string }[], edits: 0 };
+    const port: ScmPort = {
+      hidesHtmlComments: markers,
+      commitUrl: (sha) => `https://bitbucket.org/acme/widgets/commits/${sha}`,
+      listInlineComments: () => Promise.resolve([]),
+      createInlineComment: () => Promise.resolve(),
+      updateComment: () => Promise.resolve(),
+      deleteComment: () => Promise.resolve(),
+      listSummaryComments: () => Promise.resolve(state.summaries.map((one) => ({ ...one }))),
+      createSummaryComment: (body) => {
+        state.summaries.push({ id: String(state.summaries.length + 1), body });
+        return Promise.resolve();
+      },
+      updateSummaryComment: (id, body) => {
+        const found = state.summaries.find((one) => one.id === id);
+        if (found !== undefined) found.body = body;
+        state.edits += 1;
+        return Promise.resolve();
+      },
+      postStatus: () => Promise.resolve(),
+      publishInsights: () => Promise.resolve(),
+    };
+    return {
+      port,
+      get summaries() {
+        return state.summaries;
+      },
+      get edits() {
+        return state.edits;
+      },
+    };
+  }
+
+  function cleanRun(commit: string): Parameters<typeof publishReview>[1] {
+    return Object.assign(
+      {
+        findings: [],
+        proposals: [{ id: "no-magic", severity: "MINOR" as const, rationale: "recurring" }],
+        droppedUncited: 0,
+        filtered: 1,
+        gate: PASSED,
+        commitStatus: true,
+        comments: true,
+        codeInsights: true,
+        dryRun: false,
+        reviewedCommit: commit,
+      },
+      { scope: { changed: 2, outsideInclude: 0, excluded: [{ glob: "**/*.xml", files: 1 }] } },
+    );
+  }
+
+  it("posts one line once, then edits it in place on every later push", async () => {
+    const host = cardHost();
+    await publishReview(host.port, cleanRun("1".repeat(40)));
+    expect(host.summaries).toHaveLength(1);
+    expect(host.summaries[0]?.body).toBe(
+      `No issues found in this change at [111111111111](https://bitbucket.org/acme/widgets/commits/${"1".repeat(40)}): 2 changed files, 1 outside the guideline scope (1 \`**/*.xml\`), 0 findings on the rest.`,
+    );
+    await publishReview(host.port, cleanRun("2".repeat(40)));
+    expect(host.summaries).toHaveLength(1);
+    expect(host.summaries[0]?.body).toContain("at [222222222222](");
+    expect(host.edits).toBe(1);
+    await publishReview(host.port, cleanRun("2".repeat(40)));
+    expect(host.edits).toBe(1);
+  });
+
+  it("keeps the marker under the line where the host hides it", async () => {
+    const host = cardHost(true);
+    await publishReview(host.port, cleanRun("1".repeat(40)));
+    expect(host.summaries[0]?.body).toMatch(
+      /^No issues found in this change at \[111111111111\]\([^)]+\): .+\.\n\n<!-- delta-peacock:summary -->$/,
+    );
+  });
+
+  it("posts the full template when summaryWhenClean asks for it", async () => {
+    const host = cardHost();
+    await publishReview(host.port, { ...cleanRun("1".repeat(40)), summaryWhenClean: true });
+    expect(host.summaries[0]?.body).toContain("### Proposed guidelines");
   });
 });
