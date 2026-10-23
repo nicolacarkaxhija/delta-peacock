@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.4](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.3...delta-peacock-v0.9.4) (2026-10-23)
+
+
+### Bug Fixes
+
+* **publish:** leave one line on a run without findings, naming commit and scope ([#30](https://github.com/nicolacarkaxhija/delta-peacock/issues/30)) ([6b3acf4](https://github.com/nicolacarkaxhija/delta-peacock/commit/6b3acf45bee6a64595418c1dc817bd975605a62a))
+
 ## [0.9.3](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.2...delta-peacock-v0.9.3) (2026-10-22)
 
 
