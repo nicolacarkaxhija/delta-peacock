@@ -141,6 +141,7 @@
     "Unparseable",
     "unposted",
     "unscored",
+    "unstub",
     "upserted",
     "upserts",
     "vitest",

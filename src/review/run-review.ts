@@ -14,6 +14,8 @@ import {
   changedFilesFromDiff,
   commitAuthor,
   filterDiffByPath,
+  scopeOfFiles,
+  type ChangeScope,
   LocalDiffUnavailableError,
   newLineTexts,
   resolveTargetRef,
@@ -208,7 +210,7 @@ export async function runReview(
   const diff = acquired.text;
   if (diff.trim() === "") {
     deps.out(`nothing to review: no changes against ${acquired.targetRef}\n`);
-    await publishAllClear(deps, config, NOT_REVIEWED.nothingInScope, sources);
+    await publishAllClear(deps, config, NOT_REVIEWED.nothingInScope, sources, acquired.scope);
     return 0;
   }
 
@@ -220,7 +222,7 @@ export async function runReview(
   }
   if (guidelines.length === 0 && options.bootstrap !== true) {
     deps.out("no guidelines apply to this change; nothing to review against\n");
-    await publishAllClear(deps, config, NOT_REVIEWED.noneApply, sources);
+    await publishAllClear(deps, config, NOT_REVIEWED.noneApply, sources, acquired.scope);
     return 0;
   }
 
@@ -680,6 +682,7 @@ export async function runReview(
       filtered: filtered.length,
       gate,
       changedFiles: changedFiles.length,
+      scope: acquired.scope,
       commitStatus: config.scm.commitStatus,
       comments: config.scm.comments,
       dryRun: isDryRun(config),
@@ -1381,15 +1384,20 @@ async function apiDiffFallback(
   const causeMessage = cause instanceof Error ? cause.message.split("\n")[0] : String(cause);
   const raw = await scm.fetchPullRequestDiff();
   const text = filterDiffByPath(raw, config.review.include, config.review.exclude);
+  const scope = scopeOfFiles(
+    changedFilesFromDiff(raw),
+    config.review.include,
+    config.review.exclude,
+  );
   const notices = [
     `local git diff unavailable (${String(causeMessage)}); using the SCM API diff instead`,
     "incremental review and target fetching degrade in API-diff mode",
   ];
   if (Buffer.byteLength(text, "utf8") > config.review.maxDiffBytes) {
     notices.push("diff exceeds the configured size ceiling");
-    return { text: "", mode: "full", targetRef: "scm api", notices, skipped: "too-large" };
+    return { text: "", mode: "full", targetRef: "scm api", notices, skipped: "too-large", scope };
   }
-  return { text, mode: "full", targetRef: "scm api", notices };
+  return { text, mode: "full", targetRef: "scm api", notices, scope };
 }
 
 /**
@@ -1401,6 +1409,7 @@ async function publishAllClear(
   config: Config,
   line: string,
   sources: PublishSources,
+  scope?: ChangeScope,
 ): Promise<void> {
   await publishIfConfigured(
     deps,
@@ -1412,6 +1421,7 @@ async function publishAllClear(
       filtered: 0,
       gate: evaluateGate([], config.gate.failOn),
       outcome: { kind: "not-reviewed", line },
+      ...(scope !== undefined ? { scope } : {}),
       commitStatus: config.scm.commitStatus,
       comments: config.scm.comments,
       dryRun: isDryRun(config),
