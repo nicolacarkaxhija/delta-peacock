@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 7,
+      "guidelineId": "axis-tags",
+      "severity": "MINOR",
+      "mustMention": ["@smoke"],
+      "why": "@smoke is neither an axis tag nor a feature tag the config declares, and the guideline shows it as Bad"
+    }
+  ],
+  "noFinding": []
+}

@@ -60,7 +60,7 @@ interface Page<T> {
   next?: string;
 }
 
-/** Code Insights' four severities; BLOCKER and CRITICAL share the top one. */
+/** Code Insights' four severities, for annotations only; texts keep the guideline's word. */
 export const BITBUCKET_SEVERITIES: Readonly<
   Record<Severity, "CRITICAL" | "HIGH" | "MEDIUM" | "LOW">
 > = {
@@ -202,8 +202,6 @@ export function createBitbucketPort(options: BitbucketPortOptions): ScmPort {
     // Bitbucket prints HTML comments as text and has no one-click suggestions
     hidesHtmlComments: false,
     suggestionFence: "",
-    // one word everywhere: comments, summary and status read like the annotations
-    severityScale: BITBUCKET_SEVERITIES,
     currentUserId,
     fileUrl,
     commitUrl(sha: string): string {

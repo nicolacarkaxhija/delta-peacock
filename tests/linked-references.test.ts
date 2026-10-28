@@ -40,18 +40,18 @@ const REF = `ref ${FINGERPRINT}.${lineDigest(LINE)}`;
 
 const REASON =
   "Name the spec for what it checks.\n\nGuideline: A spec file is named for the feature it checks.";
-const LINKED_BODY = `**Medium** · [spec-named-for-feature](${GUIDE})\n\n${REASON}`;
+const LINKED_BODY = `**Minor** · [spec-named-for-feature](${GUIDE})\n\n${REASON}`;
 const RESOLVED_TAIL = "the flagged line changed or the finding no longer holds.";
 /** The plain task text earlier versions wrote; still matched by its reference. */
-const TASK = `Medium: spec-named-for-feature in ${FILE} line 1, ${REF}`;
+const TASK = `Minor: spec-named-for-feature in ${FILE} line 1, ${REF}`;
 
 /** The headings earlier versions wrote for the same finding. */
 const OLD_HEADINGS = {
-  "on a host it could not link": "**Medium** · `spec-named-for-feature`",
-  "with a link on the target branch": `**Medium** · [spec-named-for-feature](${SITE}/src/main/guidelines/spec-named-for-feature.md)`,
+  "on a host it could not link": "**Minor** · `spec-named-for-feature`",
+  "with a link on the target branch": `**Minor** · [spec-named-for-feature](${SITE}/src/main/guidelines/spec-named-for-feature.md)`,
 };
 
-/** Two high findings on one file. */
+/** Two major findings on one file. */
 const skipped = (line: number): Finding => ({
   kind: "violation",
   guidelineId: "skip-with-reason",
@@ -63,12 +63,12 @@ const skipped = (line: number): Finding => ({
 });
 const SKIP_GUIDE = `${SITE}/src/${RULES}/guidelines/skips.md`;
 const OLD_SUMMARY = [
-  "2 findings: 2 high",
+  "2 findings: 2 major",
   "",
-  `- **High** [skip-with-reason](${SITE}/src/main/guidelines/skip-with-reason.md) in \`tests/cart/discounts.spec.ts\` line 16: Skip without a reason`,
-  `- **High** [skip-with-reason](${SITE}/src/main/guidelines/skip-with-reason.md) in \`tests/cart/discounts.spec.ts\` line 20: Skip without a reason`,
+  `- **Major** [skip-with-reason](${SITE}/src/main/guidelines/skip-with-reason.md) in \`tests/cart/discounts.spec.ts\` line 16: Skip without a reason`,
+  `- **Major** [skip-with-reason](${SITE}/src/main/guidelines/skip-with-reason.md) in \`tests/cart/discounts.spec.ts\` line 20: Skip without a reason`,
   "",
-  "**Blocked: 2 high findings must be resolved.**",
+  "**Blocked: 2 major findings must be resolved.**",
   "",
   `How reviews work and how to respond: ${DOCS}`,
 ].join("\n");
@@ -214,14 +214,14 @@ describe("inline comments on a bitbucket pull request", () => {
     expect(inline()[0]?.content.raw).toBe(LINKED_BODY);
     const comment = `${SITE}/pull-requests/10#comment-${String(inline()[0]?.id)}`;
     expect(fake.tasks.map((task) => task.content.raw)).toEqual([
-      `Medium: [spec-named-for-feature](${GUIDE}) in [${FILE} line 1](${comment}), ${REF}`,
+      `Minor: [spec-named-for-feature](${GUIDE}) in [${FILE} line 1](${comment}), ${REF}`,
     ]);
   });
 
   it("keep a pack guideline in code, since it has no file in the repository", async () => {
     await publish([{ ...finding, pack: "team" }]);
-    expect(inline()[0]?.content.raw).toBe(`**Medium** · \`spec-named-for-feature\`\n\n${REASON}`);
-    expect(summaries()[0]?.content.raw).toContain("- **Medium** `spec-named-for-feature` in [");
+    expect(inline()[0]?.content.raw).toBe(`**Minor** · \`spec-named-for-feature\`\n\n${REASON}`);
+    expect(summaries()[0]?.content.raw).toContain("- **Minor** `spec-named-for-feature` in [");
   });
 
   it("link the resolving commit and the guideline in the trace, keeping its start", async () => {
@@ -229,7 +229,7 @@ describe("inline comments on a bitbucket pull request", () => {
     await publish([], { lineText: "changed" });
     const trace = inline()[0]?.content.raw ?? "";
     expect(trace).toBe(
-      `**Medium** · [spec-named-for-feature](${GUIDE})\n\nResolved in [5c11e1ff8352](${SITE}/commits/${REVIEWED}): ${RESOLVED_TAIL}`,
+      `**Minor** · [spec-named-for-feature](${GUIDE})\n\nResolved in [5c11e1ff8352](${SITE}/commits/${REVIEWED}): ${RESOLVED_TAIL}`,
     );
     expect(trace).not.toContain("`");
   });
@@ -259,12 +259,12 @@ describe("the summary on a bitbucket pull request", () => {
       `[tests/cart/discounts.spec.ts line ${String(line)}](${SITE}/pull-requests/10#comment-${String(id)})`;
     expect(summaries()[0]?.content.raw).toBe(
       [
-        "2 findings: 2 high",
+        "2 findings: 2 major",
         "",
-        `- **High** [skip-with-reason](${SKIP_GUIDE}) in ${place(16, first)}: Skip without a reason`,
-        `- **High** [skip-with-reason](${SKIP_GUIDE}) in ${place(20, second)}: Skip without a reason`,
+        `- **Major** [skip-with-reason](${SKIP_GUIDE}) in ${place(16, first)}: Skip without a reason`,
+        `- **Major** [skip-with-reason](${SKIP_GUIDE}) in ${place(20, second)}: Skip without a reason`,
         "",
-        "**Blocked: 2 high findings must be resolved.**",
+        "**Blocked: 2 major findings must be resolved.**",
         "",
         `How reviews work and how to respond: ${DOCS}`,
       ].join("\n"),
@@ -285,7 +285,7 @@ describe("the summary on a bitbucket pull request", () => {
     const summary = summaries()[0]?.content.raw;
     expect(summary).toContain(`not reviewed ([spec-named-for-feature](${GUIDE}), pack-rule).`);
     expect(summary).toContain(
-      `- **Medium** [spec-named-for-feature](${GUIDE}) in [${FILE}](${SITE}/src/${REVIEWED}/${FILE}): Spec name.`,
+      `- **Minor** [spec-named-for-feature](${GUIDE}) in [${FILE}](${SITE}/src/${REVIEWED}/${FILE}): Spec name.`,
     );
     expect(summary).not.toMatch(/`tests\//);
     // the report card takes plain text only, its annotations one link each
@@ -369,14 +369,14 @@ describe("comments an earlier version wrote without links", () => {
       expect(comment?.id).toBe(70);
       expect(comment?.resolution).toBeTruthy();
       expect(comment?.content.raw).toBe(
-        `**Medium** · [spec-named-for-feature](${GUIDE})\n\nResolved in [5c11e1ff8352](${SITE}/commits/${REVIEWED}): ${RESOLVED_TAIL}`,
+        `**Minor** · [spec-named-for-feature](${GUIDE})\n\nResolved in [5c11e1ff8352](${SITE}/commits/${REVIEWED}): ${RESOLVED_TAIL}`,
       );
       expect(fake.tasks.map((task) => [task.id, task.state])).toEqual([[71, "RESOLVED"]]);
     });
   }
 
   it("turns the hash of an earlier trace into a commit link once, and leaves a person's copy alone", async () => {
-    const oldTrace = `**Medium** · \`spec-named-for-feature\`\n\nResolved in \`5c11e1ff8352\`: ${RESOLVED_TAIL}`;
+    const oldTrace = `**Minor** · \`spec-named-for-feature\`\n\nResolved in \`5c11e1ff8352\`: ${RESOLVED_TAIL}`;
     fake.comments.push(
       {
         id: 80,
@@ -397,7 +397,7 @@ describe("comments an earlier version wrote without links", () => {
     expect(inline().map((comment) => [comment.id, comment.content.raw])).toEqual([
       [
         80,
-        `**Medium** · [spec-named-for-feature](${GUIDE})\n\nResolved in [5c11e1ff8352](${SITE}/commits/5c11e1ff8352): ${RESOLVED_TAIL}`,
+        `**Minor** · [spec-named-for-feature](${GUIDE})\n\nResolved in [5c11e1ff8352](${SITE}/commits/5c11e1ff8352): ${RESOLVED_TAIL}`,
       ],
       [81, oldTrace],
     ]);

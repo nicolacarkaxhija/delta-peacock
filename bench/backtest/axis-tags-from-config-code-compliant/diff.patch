@@ -1,0 +1,26 @@
+diff --git a/tests/notes.spec.ts b/tests/notes.spec.ts
+index 6f69217..54747c0 100644
+--- a/tests/notes.spec.ts
++++ b/tests/notes.spec.ts
+@@ -3,3 +3,21 @@ import { expect, test } from './fixtures';
+ test('an empty list shows the hint', { tag: ['@notes'] }, async ({ notes }) => {
+   await expect(notes.emptyHint()).toBeVisible();
+ });
++
++const rows = [
++  { name: 'a short note', tags: ['@site:alpha'] },
++  { name: 'a long note', tags: [] },
++];
++
++for (const row of rows) {
++  test(`the list shows ${row.name}`, { tag: [...row.tags, '@not-env:prd', '@notes', '@sharing'] }, async ({ notes }) => {
++    await notes.add(row.name);
++    await expect(notes.line(row.name)).toBeVisible();
++  });
++}
++
++// the preview opens on hover, which a phone cannot do
++test('hovering a note shows its preview', { tag: ['@device:desktop', '@preview'] }, async ({ notes }) => {
++  await notes.hover('Buy milk');
++  await expect(notes.preview('Buy milk')).toBeVisible();
++});

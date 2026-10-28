@@ -8,10 +8,14 @@ interface Frame {
   keys: string[];
   /** Keys whose value is a plain string literal, with that string. */
   strings: Map<string, string>;
+  /** The dotted key this object literal is the value of, outside any array. */
+  owner?: string;
 }
 
 interface Scan {
   keys: Map<string, string[]>;
+  /** Dotted keys, from the top level and outside arrays, whose value code builds. */
+  built: Set<string>;
   strings: Map<string, Map<string, string>>;
 }
 
@@ -39,6 +43,7 @@ export function objectKeysByPath(source: string): Map<string, string[]> {
 function scanObjects(source: string): Scan {
   const found = new Map<string, string[]>();
   const strings = new Map<string, Map<string, string>>();
+  const built = new Set<string>();
   const stack: Frame[] = [{ kind: "(", path: [], keys: [], strings: new Map() }];
   // the last token, and whether a key may start here (after `{` or `,`)
   let keyPosition = false;
@@ -76,6 +81,7 @@ function scanObjects(source: string): Scan {
       // a string right after `key:` is that key's value
       if (pendingKey !== undefined && top?.kind === "{" && char !== "`") {
         top.strings.set(pendingKey, source.slice(at + 1, end - 1));
+        built.delete([...top.path, pendingKey].join("."));
       }
       candidate = keyPosition && char !== "`" ? source.slice(at + 1, end - 1) : undefined;
       keyPosition = false;
@@ -93,15 +99,28 @@ function scanObjects(source: string): Scan {
     }
     if (char === ":" && candidate !== undefined && top?.kind === "{") {
       top.keys.push(candidate);
+      // built until its value turns out a literal
+      if (!stack.some((frame) => frame.kind === "[")) {
+        built.add([...top.path, candidate].join("."));
+      }
       pendingKey = candidate;
       candidate = undefined;
       at += 1;
       continue;
     }
+    if (char === "." && source.startsWith("...", at) && top?.owner !== undefined) {
+      built.add(top.owner);
+      keyPosition = false;
+      at += 3;
+      continue;
+    }
     if (char === "{" || char === "[" || char === "(") {
       const parent = stack.at(-1)?.path ?? [];
       const named = char === "{" && pendingKey !== undefined ? [...parent, pendingKey] : parent;
-      stack.push({ kind: char, path: named, keys: [], strings: new Map() });
+      const owner = char === "{" && pendingKey !== undefined ? named.join(".") : undefined;
+      if (owner !== undefined && built.delete(owner)) {
+        stack.push({ kind: char, path: named, keys: [], strings: new Map(), owner });
+      } else stack.push({ kind: char, path: named, keys: [], strings: new Map() });
       keyPosition = char === "{";
     } else if (char === "}" || char === "]" || char === ")") {
       if (stack.length > 1) close();
@@ -114,7 +133,7 @@ function scanObjects(source: string): Scan {
     at += 1;
   }
   while (stack.length > 1) close();
-  return { keys: found, strings };
+  return { keys: found, strings, built };
 }
 
 /** The string values under every path whose tail is `pattern`, by key. */
@@ -126,6 +145,16 @@ function stringsAt(scan: Scan, pattern: string): Map<string, string> {
     }
   }
   return values;
+}
+
+/** Whether a dotted key is exactly the pattern; `*` stands for any one key. */
+function onPath(dotted: string, pattern: string): boolean {
+  const segments = dotted.split(".");
+  const wanted = pattern.split(".");
+  return (
+    segments.length === wanted.length &&
+    wanted.every((segment, index) => segment === "*" || segment === segments[index])
+  );
 }
 
 /** Keys under every path whose tail matches `pattern`; `*` stands for any one key. */
@@ -148,6 +177,8 @@ export interface DeclaredTags {
   source: string;
   features: string[];
   axis: string[];
+  /** Axes whose values the config builds in code, so none could be read; absent when every axis was. */
+  openAxes?: string[];
   /** What each feature tag covers, as the config describes it; absent when it says nothing. */
   descriptions?: Record<string, string>;
 }
@@ -169,9 +200,16 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
   const scan = scanObjects(source);
   const index = scan.keys;
   const features = keysAt(index, "tags.features").map((key) => `@${key}`);
-  const axis = AXES.flatMap(([name, keyPath]) =>
-    keysAt(index, keyPath).flatMap((value) => [`@${name}:${value}`, `@not-${name}:${value}`]),
-  );
+  const axis: string[] = [];
+  const openAxes: string[] = [];
+  for (const [name, keyPath] of AXES) {
+    const values = keysAt(index, keyPath);
+    // an axis the file names but whose values it builds in code
+    if (values.length === 0 && [...scan.built].some((dotted) => onPath(dotted, keyPath))) {
+      openAxes.push(name);
+    }
+    for (const value of values) axis.push(`@${name}:${value}`, `@not-${name}:${value}`);
+  }
   if (keysAt(index, "sites.*.locales").length > 0) axis.push("@locales");
   if (features.length === 0 && axis.length === 0) return undefined;
   const described = [...stringsAt(scan, "tags.features")].filter(([key]) =>
@@ -181,6 +219,7 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
     source: file,
     features,
     axis,
+    ...(openAxes.length > 0 ? { openAxes } : {}),
     ...(described.length > 0
       ? { descriptions: Object.fromEntries(described.map(([key, text]) => [`@${key}`, text])) }
       : {}),
@@ -197,6 +236,18 @@ export function readDeclaredTags(cwd: string, file: string): DeclaredTags | unde
   } catch {
     return undefined;
   }
+}
+
+/** The axis tags read, then every form of an axis whose values only code builds. */
+function axisLines(tags: DeclaredTags): string[] {
+  const open = tags.openAxes ?? [];
+  const read = tags.axis.length > 0 ? tags.axis.join(", ") : "none";
+  if (open.length === 0) return [`Axis tags: ${read}`];
+  const forms = open.flatMap((name) => [`@${name}:<value>`, `@not-${name}:<value>`]);
+  return [
+    ...(tags.axis.length > 0 ? [`Axis tags: ${read}`] : []),
+    `Axis tags whose values the config builds in code, so any value counts as declared: ${forms.join(", ")}`,
+  ];
 }
 
 /**
@@ -219,7 +270,7 @@ export function declaredTagsBlock(tags: DeclaredTags): string {
     `## Tags declared in ${tags.source}`,
     "",
     ...features,
-    `Axis tags: ${tags.axis.length > 0 ? tags.axis.join(", ") : "none"}`,
+    ...axisLines(tags),
     "No other tag exists in this repository: never suggest one, and a test that fits none of the feature tags owes none.",
     "A finding about a missing feature tag names the one declared tag whose description covers what the test checks; when no description covers it, there is no finding. Never offer a list of candidate tags.",
     "A tag covers a test when its description names the feature the test asserts on; a page the test only opens on the way does not make that page's tag fit.",
