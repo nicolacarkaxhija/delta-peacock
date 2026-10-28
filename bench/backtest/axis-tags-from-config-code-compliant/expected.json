@@ -1,0 +1,17 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 13,
+      "guidelineId": "axis-tags",
+      "why": "@not-env:prd is an axis tag the guideline's Good example uses; the config builds its environments in code"
+    },
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 20,
+      "guidelineId": "axis-tags",
+      "why": "@device:desktop is an axis tag; the test needs hover, so it cannot pass on mobile"
+    }
+  ]
+}

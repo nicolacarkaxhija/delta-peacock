@@ -56,6 +56,7 @@ const RESPONSE_SHAPE =
 const FINDING_RULES = [
   "List only violations: a line that follows the guidelines is never listed, not even with a low confidence or a remark that it is fine.",
   "Code that matches a guideline's Good example, verbatim or in structure, is never a finding under that guideline.",
+  "A tag, name or value that a guideline's Good example uses is an accepted form under that guideline: never report it as undeclared, unknown or wrong, whatever another part of this prompt lists.",
   'Every finding quotes in "quote" the one source line it is about, copied exactly from the new file, and "line" is that line\'s number; a finding you cannot tie to one line is not reported.',
   'Every finding copies into "guidelineQuote" the sentence of the cited guideline that the code breaks, word for word. A finding whose sentence is not in the guideline is discarded, so never paraphrase a rule, never make it stricter and never report what no sentence forbids.',
   "A guideline's heading states a rule as binding as its sentences; when the heading is the rule the code breaks, quote the heading. A property a rule states, such as a length, a count or a form, is checked literally: a comment spanning two lines is not one line, whatever it says.",

@@ -148,6 +148,8 @@ export interface DeclaredTags {
   source: string;
   features: string[];
   axis: string[];
+  /** Axes whose values the config builds in code, so none could be read; absent when every axis was. */
+  openAxes?: string[];
   /** What each feature tag covers, as the config describes it; absent when it says nothing. */
   descriptions?: Record<string, string>;
 }
@@ -169,9 +171,13 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
   const scan = scanObjects(source);
   const index = scan.keys;
   const features = keysAt(index, "tags.features").map((key) => `@${key}`);
-  const axis = AXES.flatMap(([name, keyPath]) =>
-    keysAt(index, keyPath).flatMap((value) => [`@${name}:${value}`, `@not-${name}:${value}`]),
-  );
+  const axis: string[] = [];
+  const openAxes: string[] = [];
+  for (const [name, keyPath] of AXES) {
+    const values = keysAt(index, keyPath);
+    if (values.length === 0) openAxes.push(name);
+    for (const value of values) axis.push(`@${name}:${value}`, `@not-${name}:${value}`);
+  }
   if (keysAt(index, "sites.*.locales").length > 0) axis.push("@locales");
   if (features.length === 0 && axis.length === 0) return undefined;
   const described = [...stringsAt(scan, "tags.features")].filter(([key]) =>
@@ -181,6 +187,7 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
     source: file,
     features,
     axis,
+    ...(openAxes.length > 0 ? { openAxes } : {}),
     ...(described.length > 0
       ? { descriptions: Object.fromEntries(described.map(([key, text]) => [`@${key}`, text])) }
       : {}),
@@ -197,6 +204,18 @@ export function readDeclaredTags(cwd: string, file: string): DeclaredTags | unde
   } catch {
     return undefined;
   }
+}
+
+/** The axis tags read, then every form of an axis whose values only code builds. */
+function axisLines(tags: DeclaredTags): string[] {
+  const open = tags.openAxes ?? [];
+  const read = tags.axis.length > 0 ? tags.axis.join(", ") : "none";
+  if (open.length === 0) return [`Axis tags: ${read}`];
+  const forms = open.flatMap((name) => [`@${name}:<value>`, `@not-${name}:<value>`]);
+  return [
+    ...(tags.axis.length > 0 ? [`Axis tags: ${read}`] : []),
+    `Axis tags whose values the config builds in code, so any value counts as declared: ${forms.join(", ")}`,
+  ];
 }
 
 /**
@@ -219,7 +238,7 @@ export function declaredTagsBlock(tags: DeclaredTags): string {
     `## Tags declared in ${tags.source}`,
     "",
     ...features,
-    `Axis tags: ${tags.axis.length > 0 ? tags.axis.join(", ") : "none"}`,
+    ...axisLines(tags),
     "No other tag exists in this repository: never suggest one, and a test that fits none of the feature tags owes none.",
     "A finding about a missing feature tag names the one declared tag whose description covers what the test checks; when no description covers it, there is no finding. Never offer a list of candidate tags.",
     "A tag covers a test when its description names the feature the test asserts on; a page the test only opens on the way does not make that page's tag fit.",
