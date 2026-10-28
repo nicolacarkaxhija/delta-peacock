@@ -8,12 +8,14 @@ interface Frame {
   keys: string[];
   /** Keys whose value is a plain string literal, with that string. */
   strings: Map<string, string>;
+  /** The dotted key this object literal is the value of, outside any array. */
+  owner?: string;
 }
 
 interface Scan {
   keys: Map<string, string[]>;
-  /** Every key the file names, at any depth, the top level included. */
-  named: Set<string>;
+  /** Dotted keys, from the top level and outside arrays, whose value code builds. */
+  built: Set<string>;
   strings: Map<string, Map<string, string>>;
 }
 
@@ -41,7 +43,7 @@ export function objectKeysByPath(source: string): Map<string, string[]> {
 function scanObjects(source: string): Scan {
   const found = new Map<string, string[]>();
   const strings = new Map<string, Map<string, string>>();
-  const named = new Set<string>();
+  const built = new Set<string>();
   const stack: Frame[] = [{ kind: "(", path: [], keys: [], strings: new Map() }];
   // the last token, and whether a key may start here (after `{` or `,`)
   let keyPosition = false;
@@ -79,6 +81,7 @@ function scanObjects(source: string): Scan {
       // a string right after `key:` is that key's value
       if (pendingKey !== undefined && top?.kind === "{" && char !== "`") {
         top.strings.set(pendingKey, source.slice(at + 1, end - 1));
+        built.delete([...top.path, pendingKey].join("."));
       }
       candidate = keyPosition && char !== "`" ? source.slice(at + 1, end - 1) : undefined;
       keyPosition = false;
@@ -96,16 +99,28 @@ function scanObjects(source: string): Scan {
     }
     if (char === ":" && candidate !== undefined && top?.kind === "{") {
       top.keys.push(candidate);
-      named.add(candidate);
+      // built until its value turns out a literal
+      if (!stack.some((frame) => frame.kind === "[")) {
+        built.add([...top.path, candidate].join("."));
+      }
       pendingKey = candidate;
       candidate = undefined;
       at += 1;
       continue;
     }
+    if (char === "." && source.startsWith("...", at) && top?.owner !== undefined) {
+      built.add(top.owner);
+      keyPosition = false;
+      at += 3;
+      continue;
+    }
     if (char === "{" || char === "[" || char === "(") {
       const parent = stack.at(-1)?.path ?? [];
       const named = char === "{" && pendingKey !== undefined ? [...parent, pendingKey] : parent;
-      stack.push({ kind: char, path: named, keys: [], strings: new Map() });
+      const owner = char === "{" && pendingKey !== undefined ? named.join(".") : undefined;
+      if (owner !== undefined && built.delete(owner)) {
+        stack.push({ kind: char, path: named, keys: [], strings: new Map(), owner });
+      } else stack.push({ kind: char, path: named, keys: [], strings: new Map() });
       keyPosition = char === "{";
     } else if (char === "}" || char === "]" || char === ")") {
       if (stack.length > 1) close();
@@ -118,7 +133,7 @@ function scanObjects(source: string): Scan {
     at += 1;
   }
   while (stack.length > 1) close();
-  return { keys: found, strings, named };
+  return { keys: found, strings, built };
 }
 
 /** The string values under every path whose tail is `pattern`, by key. */
@@ -130,6 +145,16 @@ function stringsAt(scan: Scan, pattern: string): Map<string, string> {
     }
   }
   return values;
+}
+
+/** Whether a dotted key is exactly the pattern; `*` stands for any one key. */
+function onPath(dotted: string, pattern: string): boolean {
+  const segments = dotted.split(".");
+  const wanted = pattern.split(".");
+  return (
+    segments.length === wanted.length &&
+    wanted.every((segment, index) => segment === "*" || segment === segments[index])
+  );
 }
 
 /** Keys under every path whose tail matches `pattern`; `*` stands for any one key. */
@@ -180,7 +205,7 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
   for (const [name, keyPath] of AXES) {
     const values = keysAt(index, keyPath);
     // an axis the file names but whose values it builds in code
-    if (values.length === 0 && scan.named.has(String(keyPath.split(".").at(-1)))) {
+    if (values.length === 0 && [...scan.built].some((dotted) => onPath(dotted, keyPath))) {
       openAxes.push(name);
     }
     for (const value of values) axis.push(`@${name}:${value}`, `@not-${name}:${value}`);

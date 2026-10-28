@@ -39,6 +39,19 @@ describe("axes whose values the config builds in code", () => {
     expect(block).not.toContain("builds in code");
   });
 
+  it("opens no axis for a same-named key off the axis path, or for an empty literal", () => {
+    const sources = [
+      "export default { tags: { features: { devices: 'the device list' } } };",
+      "export default { reporter: { environments: envs } };",
+      "export default { projects: [{ use: { locales: x } }] };",
+      "export default { projects: [{ environments: x }] };",
+      "export default { environments: {}, devices: 'all', tags: { features: { notes: 1 } } };",
+    ];
+    for (const source of sources) {
+      expect(declaredTags(source, "runner.ts")?.openAxes, source).toBeUndefined();
+    }
+  });
+
   it("opens the locale axis when a site's locales come from code", () => {
     const source = "export default { sites: { alpha: { locales: localeRows } } };";
     expect(declaredTags(source, "runner.ts")?.openAxes).toEqual(["locale"]);
