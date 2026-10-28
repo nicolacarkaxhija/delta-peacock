@@ -12,6 +12,8 @@ interface Frame {
 
 interface Scan {
   keys: Map<string, string[]>;
+  /** Every key the file names, at any depth, the top level included. */
+  named: Set<string>;
   strings: Map<string, Map<string, string>>;
 }
 
@@ -39,6 +41,7 @@ export function objectKeysByPath(source: string): Map<string, string[]> {
 function scanObjects(source: string): Scan {
   const found = new Map<string, string[]>();
   const strings = new Map<string, Map<string, string>>();
+  const named = new Set<string>();
   const stack: Frame[] = [{ kind: "(", path: [], keys: [], strings: new Map() }];
   // the last token, and whether a key may start here (after `{` or `,`)
   let keyPosition = false;
@@ -93,6 +96,7 @@ function scanObjects(source: string): Scan {
     }
     if (char === ":" && candidate !== undefined && top?.kind === "{") {
       top.keys.push(candidate);
+      named.add(candidate);
       pendingKey = candidate;
       candidate = undefined;
       at += 1;
@@ -114,7 +118,7 @@ function scanObjects(source: string): Scan {
     at += 1;
   }
   while (stack.length > 1) close();
-  return { keys: found, strings };
+  return { keys: found, strings, named };
 }
 
 /** The string values under every path whose tail is `pattern`, by key. */
@@ -175,7 +179,10 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
   const openAxes: string[] = [];
   for (const [name, keyPath] of AXES) {
     const values = keysAt(index, keyPath);
-    if (values.length === 0) openAxes.push(name);
+    // an axis the file names but whose values it builds in code
+    if (values.length === 0 && scan.named.has(String(keyPath.split(".").at(-1)))) {
+      openAxes.push(name);
+    }
     for (const value of values) axis.push(`@${name}:${value}`, `@not-${name}:${value}`);
   }
   if (keysAt(index, "sites.*.locales").length > 0) axis.push("@locales");

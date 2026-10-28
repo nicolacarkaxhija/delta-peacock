@@ -25,7 +25,23 @@ describe("axes whose values the config builds in code", () => {
   it("names each axis it could not read as open", () => {
     const tags = declaredTags(BUILT_IN_CODE, "runner.ts");
     expect(tags?.axis).toEqual([]);
-    expect(tags?.openAxes).toEqual(["site", "env", "device", "locale"]);
+    expect(tags?.openAxes).toEqual(["site", "env", "device"]);
+  });
+
+  it("opens no axis the config never names", () => {
+    const literal = "export default { sites: { alpha: 1 }, tags: { features: { notes: 1 } } };";
+    expect(declaredTags(literal, "runner.ts")?.openAxes).toBeUndefined();
+    const bare = "export default { tags: { features: { notes: 1 } } };";
+    const block = declaredTagsBlock(
+      declaredTags(bare, "runner.ts") ?? { source: "", features: [], axis: [] },
+    );
+    expect(block).toContain("Axis tags: none");
+    expect(block).not.toContain("builds in code");
+  });
+
+  it("opens the locale axis when a site's locales come from code", () => {
+    const source = "export default { sites: { alpha: { locales: localeRows } } };";
+    expect(declaredTags(source, "runner.ts")?.openAxes).toEqual(["locale"]);
   });
 
   it("names no axis as open when the config lists every value", () => {
@@ -42,14 +58,14 @@ describe("axes whose values the config builds in code", () => {
       declaredTags(source, "runner.ts") ?? { source: "", features: [], axis: [] },
     );
     expect(block).toContain("Axis tags: @site:alpha, @not-site:alpha\n");
-    expect(block).toContain("so any value counts as declared: @env:<value>, @not-env:<value>,");
+    expect(block).toContain("so any value counts as declared: @env:<value>, @not-env:<value>");
   });
 
   it("accepts every tag of an open axis and never calls the list complete", () => {
     const tags = declaredTags(BUILT_IN_CODE, "runner.ts");
     const block = declaredTagsBlock(tags ?? { source: "", features: [], axis: [] });
     expect(block).toContain(
-      "Axis tags whose values the config builds in code, so any value counts as declared: @site:<value>, @not-site:<value>, @env:<value>, @not-env:<value>, @device:<value>, @not-device:<value>, @locale:<value>, @not-locale:<value>",
+      "Axis tags whose values the config builds in code, so any value counts as declared: @site:<value>, @not-site:<value>, @env:<value>, @not-env:<value>, @device:<value>, @not-device:<value>",
     );
     expect(block).not.toContain("Axis tags: none");
     expect(block).toContain("No other tag exists in this repository");
