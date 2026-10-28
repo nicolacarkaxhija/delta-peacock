@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.4...delta-peacock-v0.9.5) (2026-10-28)
+
+
+### Bug Fixes
+
+* **review:** accept axis tags the config builds in code and forms a Good example uses ([#32](https://github.com/nicolacarkaxhija/delta-peacock/issues/32)) ([2d682f1](https://github.com/nicolacarkaxhija/delta-peacock/commit/2d682f1155a0da7724efa63cda965a12b5b241e6))
+
 ## [0.9.4](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.3...delta-peacock-v0.9.4) (2026-10-23)
 
 
