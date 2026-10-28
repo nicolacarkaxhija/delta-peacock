@@ -90,11 +90,11 @@ describe("bitbucket presentation", () => {
       expect(fake.drafts).toBe(0); // nothing to recognise yet, so no identity lookup
       expect(fake.comments.every((c) => !c.content.raw.includes("<!--"))).toBe(true);
       // no heading: the bot's name, the status and the card already say who reviewed
-      expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("2 findings: 1 critical, 1 high");
+      expect(summaries(fake)[0]?.content.raw.split("\n")[0]).toBe("2 findings: 1 blocker, 1 major");
       // the guideline's real file, at the target commit its text was read from
       const rules = git(repo, "rev-parse", "main").trim();
       expect(inline(fake)[0]?.content.raw).toBe(
-        `**Critical** · [no-console](https://bitbucket.org/acme/widgets/src/${rules}/guidelines/g0.md)\n\nUse the logger.\n\nGuideline: Use the logger.`,
+        `**Blocker** · [no-console](https://bitbucket.org/acme/widgets/src/${rules}/guidelines/g0.md)\n\nUse the logger.\n\nGuideline: Use the logger.`,
       );
       // each finding in the summary opens its own comment
       expect(summaries(fake)[0]?.content.raw).toContain(
@@ -187,9 +187,9 @@ describe("bitbucket presentation", () => {
       });
       const second = await review(fake);
       expect(second.stderr).toContain("1 created, 1 updated");
-      expect(
-        fake.comments.find((c) => c.id === 52)?.content.raw.startsWith("**Critical** · "),
-      ).toBe(true);
+      expect(fake.comments.find((c) => c.id === 52)?.content.raw.startsWith("**Blocker** · ")).toBe(
+        true,
+      );
     } finally {
       await fake.close();
     }

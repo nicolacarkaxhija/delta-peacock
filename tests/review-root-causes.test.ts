@@ -388,7 +388,7 @@ describe("summary comments on Bitbucket", () => {
         repo,
         scripted({ text: JSON.stringify({ findings: [finding] }) }).port,
       );
-      expect(summaryOf(fake).split("\n")[0]).toBe("1 finding: 1 medium");
+      expect(summaryOf(fake).split("\n")[0]).toBe("1 finding: 1 minor");
       await reviewOnBitbucket(fake, repo, scripted({ text: '{"findings": []}' }).port);
       const summaries = fake.comments.filter((comment) => comment.inline === undefined);
       expect(summaries).toHaveLength(1);

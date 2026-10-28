@@ -86,13 +86,13 @@ describe("bitbucket code insights", () => {
         report_type: "BUG",
         result: "FAILED",
         details:
-          "2 findings: 1 critical, 1 high. Blocked: 2 findings (1 critical, 1 high) must be resolved.",
+          "2 findings: 1 blocker, 1 major. Blocked: 2 findings (1 blocker, 1 major) must be resolved.",
       });
       const data = fake.insightReport?.["data"] as { title: string; value: number }[];
       expect(data).toEqual([
         { title: "Findings", type: "NUMBER", value: 2 },
-        { title: "Critical", type: "NUMBER", value: 1 },
-        { title: "High", type: "NUMBER", value: 1 },
+        { title: "Blocker", type: "NUMBER", value: 1 },
+        { title: "Major", type: "NUMBER", value: 1 },
       ]);
       expect(fake.insightAnnotations[0]?.link).toMatch(
         /^https:\/\/bitbucket\.org\/acme\/widgets\/src\/[0-9a-f]{40}\/guidelines\/g0\.md$/,

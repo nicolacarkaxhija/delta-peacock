@@ -161,6 +161,41 @@ describe("severity scale", () => {
 });
 
 describe("bitbucket adapter severity", () => {
+  it("keeps a MINOR guideline's word in every text, Medium only in the annotation", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      fake.comments.push({
+        id: 41,
+        content: { raw: "**Medium** · `prefer-test-ids`\n\nUse a test id." },
+        inline: { path: "pages/pdp.ts", to: 2 },
+        user: { uuid: BOT_UUID },
+      });
+      const scm = createBitbucketPort({
+        repository: "acme/widgets",
+        pullRequest: 7,
+        token: "test-token",
+        baseUrl: fake.baseUrl,
+      });
+      expect(scm.severityScale).toBeUndefined();
+      await publishReview(scm, {
+        ...PR33,
+        findings: [violation("MINOR")],
+        gate: { threshold: "MAJOR", failing: 0, failed: false },
+        commitStatus: true,
+        codeInsights: true,
+        dryRun: false,
+      });
+      expect(fake.insightAnnotations.map((annotation) => annotation.severity)).toEqual(["MEDIUM"]);
+      const heading = fake.comments.find((comment) => comment.id === 41)?.content.raw;
+      expect(heading).toMatch(/^\*\*Minor\*\* · /);
+      for (const text of [heading, fake.statuses.at(-1)?.description]) {
+        expect(text).not.toMatch(HOST_WORDS);
+      }
+    } finally {
+      await fake.close();
+    }
+  });
+
   it("sends each annotation on Bitbucket's scale and rewrites an old heading in place", async () => {
     const fake = await startFakeBitbucket();
     try {
@@ -195,9 +230,9 @@ describe("bitbucket adapter severity", () => {
         "LOW",
       ]);
       expect(fake.comments.find((comment) => comment.id === 40)?.content.raw).toMatch(
-        /^\*\*High\*\* · \[prefer-test-ids\]\(\S+\)\n\nUse a test id\.$/,
+        /^\*\*Major\*\* · \[prefer-test-ids\]\(\S+\)\n\nUse a test id\.$/,
       );
-      expect(fake.statuses.at(-1)?.description).toBe("5 findings, 3 high. See the comments.");
+      expect(fake.statuses.at(-1)?.description).toBe("5 findings, 3 major. See the comments.");
     } finally {
       await fake.close();
     }
