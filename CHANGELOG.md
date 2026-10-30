@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.6](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.5...delta-peacock-v0.9.6) (2026-10-30)
+
+
+### Bug Fixes
+
+* **review:** accept listed forms and keep tasks to major findings ([#34](https://github.com/nicolacarkaxhija/delta-peacock/issues/34)) ([2f302c9](https://github.com/nicolacarkaxhija/delta-peacock/commit/2f302c92f707eee3d6739005fce2279d9f1f276f))
+
 ## [0.9.5](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.4...delta-peacock-v0.9.5) (2026-10-28)
 
 
