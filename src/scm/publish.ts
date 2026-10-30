@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Config } from "../config/schema.js";
 import { fingerprintFrom, fingerprintOf, type Finding } from "../domain/finding.js";
+import { meetsThreshold } from "../domain/severity.js";
 import {
   blockedLine,
   commitText,
@@ -514,7 +515,7 @@ export interface TaskOutcome {
 }
 
 /**
- * Tasks mirror findings: one per posted finding, resolved by the reviewer once
+ * Tasks mirror findings: one per posted Major finding or above, resolved once
  * the anchored line changed, left open while it stands. A finding whose task a
  * person resolved stays settled and is not posted again.
  */
@@ -639,7 +640,7 @@ export async function publishReview(
     /** Post the whole summary on a clean run even where an Insights card carries the result, not just its line. */
     summaryWhenClean?: boolean;
     presentation?: PresentationSettings;
-    /** One pull request task per posted finding, where the host has tasks. */
+    /** One pull request task per posted Major finding or above, where the host has tasks. */
     tasks?: boolean;
     /** A file's line at the reviewed commit; tasks resolve once it changed. */
     lineTextOf?: (file: string, line: number) => string | undefined;
@@ -674,6 +675,10 @@ export async function publishReview(
       if (input.tasks === true && taskApi === undefined) {
         outcome.notices.push("this provider has no pull request tasks; skipping them");
       }
+      // a task blocks the merge, so only a Major finding or above gets one
+      const blocking = new Map(
+        [...desired].filter(([, finding]) => meetsThreshold(finding.severity, "MAJOR")),
+      );
       let own: OwnTask[] = [];
       const settled = new Set<string>();
       if (taskApi !== undefined) {
@@ -687,7 +692,7 @@ export async function publishReview(
           if (entry.task.resolved && entry.task.resolvedBy !== me) settled.add(entry.fingerprint);
         }
         if (notRejudged === undefined) {
-          await resolveStaleTasks(taskApi, own, desired, lineTextOf, outcome);
+          await resolveStaleTasks(taskApi, own, blocking, lineTextOf, outcome);
         }
       }
       const { commentIds, anchors } = await reconcileInlineComments(
@@ -704,7 +709,7 @@ export async function publishReview(
         if (finding !== undefined) commentOf.set(finding, id);
       }
       if (taskApi !== undefined) {
-        await createTasks(taskApi, own, desired, commentIds, lineTextOf, outcome, presentation);
+        await createTasks(taskApi, own, blocking, commentIds, lineTextOf, outcome, presentation);
       }
       if (input.factsOnly !== undefined && notRejudged !== undefined && notRejudged.length > 0) {
         notRejudged.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
@@ -719,6 +724,7 @@ export async function publishReview(
     const cardCarries = input.codeInsights === true && scm.publishInsights !== undefined;
     const quiet =
       input.findings.length === 0 &&
+      (input.accepted ?? 0) === 0 &&
       !failed &&
       cardCarries &&
       input.summaryWhenClean !== true &&

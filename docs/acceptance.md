@@ -84,6 +84,13 @@ from a clean checkout; a red line blocks it.
   text stays plain; comments and summaries an earlier version wrote are claimed and updated in
   place with no second comment or task. On its own:
   `pnpm exec vitest run tests/linked-references tests/guideline-sources`.
+- `tasks at major`: a pull request task is created only for a finding at MAJOR or above; a MINOR
+  or INFO finding posts its comment alone, and the reviewer resolves its own task once the finding
+  falls below MAJOR. On its own: `pnpm exec vitest run tests/bitbucket-tasks`.
+- `accepted forms`: a finding whose tags or text match the repository's `accepted-forms.json`,
+  read from the guidelines ref, is never posted, and the summary counts it as accepted; the
+  synthetic `@not-site` and `@locale` cases replay a recorded false positive and post nothing.
+  On its own: `pnpm exec vitest run tests/accepted-forms tests/scm-render`.
 
 ## Release
 

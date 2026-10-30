@@ -55,6 +55,7 @@ import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate } from "./calibrate.js";
 import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { keepOnChangedLines } from "./changed-lines.js";
+import { partitionAccepted, readAcceptedForms } from "./accepted-forms.js";
 import { applyExclusions } from "./exclusions.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
@@ -518,7 +519,10 @@ export async function runReview(
   const waivers = parseWaivers(newLineTexts(redacted.text)).waivers;
   const waived: { finding: Finding; waiver: Waiver }[] = [];
   const kept: Finding[] = [];
-  for (const finding of finalized.kept) {
+  // a form the repository listed as accepted is never posted, only counted
+  const forms = readAcceptedForms(deps.cwd, loaded.origin, config.review.guidelinesDir);
+  const { kept: unaccepted, accepted } = partitionAccepted(finalized.kept, forms);
+  for (const finding of unaccepted) {
     const waiver = findWaiver(finding, waivers);
     if (waiver === undefined) kept.push(finding);
     else waived.push({ finding, waiver });
@@ -556,6 +560,7 @@ export async function runReview(
       droppedMalformed: parsed.droppedMalformed,
       droppedMisquoted: parsed.droppedMisquoted,
       filtered: filtered.length,
+      accepted: accepted.length,
       waived: waivedEntries,
       gate,
     }),
@@ -607,6 +612,7 @@ export async function runReview(
       ...(waivedEntries.length > 0 ? { waived: waivedEntries } : {}),
       ...(parsed.rejected.length > 0 ? { rejected: parsed.rejected } : {}),
       filtered,
+      ...(accepted.length > 0 ? { accepted } : {}),
       proposals,
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
@@ -680,6 +686,7 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOffChange: onChange.dropped.length,
       filtered: filtered.length,
+      ...(accepted.length > 0 ? { accepted: accepted.length } : {}),
       gate,
       changedFiles: changedFiles.length,
       scope: acquired.scope,

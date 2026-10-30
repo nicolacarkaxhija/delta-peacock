@@ -1,0 +1,22 @@
+# A synthetic regression case: one model call per review, changed files only.
+model:
+  provider: bedrock
+  id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
+context:
+  providers: [full_files]
+  maxTokens: 12000
+review:
+  target: main
+  guidelinesDir: guidelines
+  generalPass: false
+  repoConfigPath: test-runner.config.ts
+gate:
+  failOn: none
+calibration:
+  enabled: false
+cost:
+  rateInputPer1M: 1.10
+  rateOutputPer1M: 5.50
+  maxPerReview: 0.05
+stats:
+  enabled: false

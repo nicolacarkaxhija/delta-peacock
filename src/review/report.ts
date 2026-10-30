@@ -54,6 +54,8 @@ export interface ReviewReport {
   rejectedCandidates?: RejectedCandidate[];
   /** Findings under the confidence floor; kept for tuning, never rendered or posted. */
   filtered: ReportedFinding[];
+  /** Findings on a form the repository lists as accepted; never posted, present when any. */
+  accepted?: ReportedFinding[];
   proposedGuidelines: ProposedGuideline[];
   droppedUncitedFindings: number;
   /** Violations whose cited guideline declares a scope excluding the file. */
@@ -136,6 +138,7 @@ export interface FactsOnly {
 export function buildReport(input: {
   findings: readonly Finding[];
   filtered: readonly Finding[];
+  accepted?: readonly Finding[];
   proposals: readonly ProposedGuideline[];
   droppedUncited: number;
   droppedOutOfScope?: number;
@@ -186,6 +189,9 @@ export function buildReport(input: {
       })),
     ],
     filtered: input.filtered.map(withFingerprint),
+    ...(input.accepted && input.accepted.length > 0
+      ? { accepted: input.accepted.map(withFingerprint) }
+      : {}),
     ...(input.waived && input.waived.length > 0 ? { waived: [...input.waived] } : {}),
     ...(input.rejected && input.rejected.length > 0
       ? { rejectedCandidates: input.rejected.slice(0, REJECTED_CAP) }

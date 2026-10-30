@@ -238,6 +238,29 @@ describe("summary rendering", () => {
   });
 });
 
+describe("findings on an accepted form", () => {
+  it("are counted first in the not posted line", () => {
+    const body = renderSummaryBody({
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 1,
+      accepted: 2,
+      gate: PASSED,
+    });
+    expect(body).toContain("_Not posted: 2 accepted findings, 1 low-confidence finding._");
+    const one = renderSummaryBody({
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      filtered: 0,
+      accepted: 1,
+      gate: PASSED,
+    });
+    expect(one).toContain("_Not posted: 1 accepted finding._");
+  });
+});
+
 describe("code insights report", () => {
   it("titles the report with the display name and counts every severity", () => {
     const report = buildInsightReport(
@@ -544,6 +567,14 @@ describe("publishReview on a clean run where a card carries the result", () => {
     expect(host.edits).toBe(1);
     await publishReview(host.port, cleanRun("2".repeat(40)));
     expect(host.edits).toBe(1);
+  });
+
+  it("posts the full template when a finding was accepted, so the count shows", async () => {
+    const host = cardHost();
+    await publishReview(host.port, { ...cleanRun("1".repeat(40)), accepted: 2 });
+    expect(host.summaries[0]?.body).toContain(
+      "_Not posted: 2 accepted findings, 1 low-confidence finding._",
+    );
   });
 
   it("keeps the marker under the line where the host hides it", async () => {
