@@ -287,6 +287,8 @@ export interface SummaryInput {
   /** Model findings on no added or edited line of the change. */
   droppedOffChange?: number;
   filtered: number;
+  /** Findings on a form the repository lists as accepted; counted, never posted. */
+  accepted?: number;
   gate: GateDecision;
   /** Absent means reviewed. */
   outcome?: ReviewOutcome;
@@ -662,6 +664,9 @@ export function renderSummaryBody(
     }
   }
   const unposted = [
+    ...(input.accepted !== undefined && input.accepted > 0
+      ? [plural(input.accepted, "accepted finding")]
+      : []),
     ...(input.filtered > 0 ? [plural(input.filtered, "low-confidence finding")] : []),
     ...(input.droppedUncited > 0
       ? [`${plural(input.droppedUncited, "finding")} citing no guideline`]

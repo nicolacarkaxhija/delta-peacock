@@ -35,6 +35,8 @@ const finding: Finding = {
   body: "Name the spec for what it checks.",
   guidelineQuote: "A spec file is named for the feature it checks.",
 };
+// a task needs a Major finding or above
+const major: Finding = { ...finding, severity: "MAJOR" };
 const FINGERPRINT = fingerprintOf(finding);
 const REF = `ref ${FINGERPRINT}.${lineDigest(LINE)}`;
 
@@ -209,12 +211,12 @@ describe("addresses each host builds", () => {
 
 describe("inline comments on a bitbucket pull request", () => {
   it("link the guideline in the heading, and the guideline and comment in the task", async () => {
-    const outcome = await publish([finding]);
+    const outcome = await publish([major]);
     expect(outcome.created).toBe(1);
-    expect(inline()[0]?.content.raw).toBe(LINKED_BODY);
+    expect(inline()[0]?.content.raw).toBe(LINKED_BODY.replace("**Minor**", "**Major**"));
     const comment = `${SITE}/pull-requests/10#comment-${String(inline()[0]?.id)}`;
     expect(fake.tasks.map((task) => task.content.raw)).toEqual([
-      `Minor: [spec-named-for-feature](${GUIDE}) in [${FILE} line 1](${comment}), ${REF}`,
+      `Major: [spec-named-for-feature](${GUIDE}) in [${FILE} line 1](${comment}), ${REF}`,
     ]);
   });
 
@@ -352,8 +354,9 @@ describe("comments an earlier version wrote without links", () => {
       expect(inline().map((comment) => [comment.id, comment.content.raw])).toEqual([
         [70, LINKED_BODY],
       ]);
+      // its own task on a Minor finding is resolved, the comment stays
       expect(fake.tasks.map((task) => [task.id, task.state, task.content.raw])).toEqual([
-        [71, "UNRESOLVED", TASK],
+        [71, "RESOLVED", TASK],
       ]);
 
       const again = await publish([finding]);
@@ -572,15 +575,15 @@ describe("a host that cannot build addresses", () => {
         lineTextOf: () => LINE,
       });
     const unplaced: Finding = { ...finding, file: "a.ts", unplaced: true, note: "Not on a line." };
-    await run([finding, unplaced]);
+    await run([major, unplaced]);
     await run([]);
     expect(bodies.join("\n")).not.toContain("](");
-    expect(bodies).toContain(`Minor: spec-named-for-feature in ${FILE} line 1, ${REF}`);
+    expect(bodies).toContain(`Major: spec-named-for-feature in ${FILE} line 1, ${REF}`);
     expect(bodies[2]).toContain(`in \`${FILE}\` line 1: Spec name`);
     expect(bodies[2]).toContain("in `a.ts`: Spec name. Not on a line.");
     expect(bodies[2]).toContain("How reviews work and how to respond: docs/reviews.md");
     expect(bodies.at(-2)).toBe(
-      `**Minor** · \`spec-named-for-feature\`\n\nResolved in \`5c11e1ff8352\`: ${RESOLVED_TAIL}`,
+      `**Major** · \`spec-named-for-feature\`\n\nResolved in \`5c11e1ff8352\`: ${RESOLVED_TAIL}`,
     );
   });
 });

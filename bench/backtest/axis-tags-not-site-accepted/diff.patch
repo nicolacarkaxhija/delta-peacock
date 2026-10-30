@@ -1,0 +1,13 @@
+diff --git a/tests/notes.spec.ts b/tests/notes.spec.ts
+index 6f69217..dee26ae 100644
+--- a/tests/notes.spec.ts
++++ b/tests/notes.spec.ts
+@@ -3,3 +3,8 @@ import { expect, test } from './fixtures';
+ test('an empty list shows the hint', { tag: ['@notes'] }, async ({ notes }) => {
+   await expect(notes.emptyHint()).toBeVisible();
+ });
++
++test('the list shows a short note', { tag: ['@not-site:BE', '@notes'] }, async ({ notes }) => {
++  await notes.add('a short note');
++  await expect(notes.line('a short note')).toBeVisible();
++});

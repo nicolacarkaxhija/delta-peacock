@@ -64,6 +64,26 @@ describe("bitbucket pull request tasks", () => {
     expect(outcome.tasksCreated).toBe(1);
   });
 
+  it("creates a task only for a Major finding or above; a Minor one posts its comment alone", async () => {
+    const minor: Finding = { ...finding, severity: "MINOR", line: 31 };
+    const critical: Finding = { ...finding, severity: "CRITICAL", line: 33 };
+    const outcome = await publish([minor, critical], "const panel = '.size-guide';");
+    expect(fake.comments.filter((c) => c.inline !== undefined)).toHaveLength(2);
+    expect(fake.tasks.map((task) => task.content.raw.split(":")[0])).toEqual(["Critical"]);
+    expect(outcome.tasksCreated).toBe(1);
+  });
+
+  it("resolves its own task on a finding now Minor, and keeps the comment", async () => {
+    await publish([finding], "const panel = '.size-guide';");
+    const outcome = await publish(
+      [{ ...finding, severity: "MINOR" }],
+      "const panel = '.size-guide';",
+    );
+    expect(fake.tasks[0]?.state).toBe("RESOLVED");
+    expect(outcome.tasksResolved).toBe(1);
+    expect(outcome.tasksCreated).toBeUndefined();
+  });
+
   it("never creates a second task for a finding that already has one", async () => {
     await publish([finding], "const panel = '.size-guide';");
     const again = await publish([finding], "const panel = '.size-guide';");

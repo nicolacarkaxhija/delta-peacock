@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "guidelineId": "axis-tags",
+      "file": "tests/notes.spec.ts",
+      "line": 7,
+      "title": "Locale tag @locale:nl is not an axis tag",
+      "body": "The guideline lists site, environment and device axis tags; this tag is not one of them.",
+      "quote": "test('the list shows a short note in dutch', { tag: ['@locale:nl', '@notes'] }, async ({ notes }) => {",
+      "guidelineQuote": "A test carries only axis tags and the feature tags the config declares."
+    }
+  ]
+}

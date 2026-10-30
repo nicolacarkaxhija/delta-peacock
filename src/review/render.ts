@@ -17,6 +17,8 @@ export interface RenderableReview {
   droppedMisquoted?: number;
   /** How many findings sit under the confidence floor, report-only. */
   filtered: number;
+  /** Findings on a form the repository lists as accepted. */
+  accepted?: number;
   /** Violations excused by an in-code waiver: reported here, never gating. */
   waived?: readonly {
     guidelineId: string;
@@ -120,6 +122,11 @@ export function renderReview(review: RenderableReview): string {
     ...((review.droppedMisquoted ?? 0) > 0
       ? [
           `${String(review.droppedMisquoted ?? 0)} finding(s) dropped: the quoted rule is not in the cited guideline`,
+        ]
+      : []),
+    ...(review.accepted !== undefined && review.accepted > 0
+      ? [
+          `${String(review.accepted)} finding(s) accepted: the repository lists their form as accepted`,
         ]
       : []),
     ...(review.filtered > 0

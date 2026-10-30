@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "guidelineId": "axis-tags",
+      "file": "tests/notes.spec.ts",
+      "line": 7,
+      "title": "Undeclared axis tag @not-site:BE",
+      "body": "The guideline lists site, environment and device axis tags; this tag is not one of them.",
+      "quote": "test('the list shows a short note', { tag: ['@not-site:BE', '@notes'] }, async ({ notes }) => {",
+      "guidelineQuote": "A test carries only axis tags and the feature tags the config declares."
+    }
+  ]
+}

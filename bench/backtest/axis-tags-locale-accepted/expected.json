@@ -1,0 +1,11 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 7,
+      "guidelineId": "axis-tags",
+      "why": "@locale:nl is an axis tag on a locale the config declares, and the repository lists the form as accepted"
+    }
+  ]
+}
