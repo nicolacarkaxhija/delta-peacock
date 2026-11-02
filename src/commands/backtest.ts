@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadBacktestCases, type BacktestCase, type ExpectedFinding } from "../backtest/cases.js";
+import { intakeFalsePositives } from "../backtest/intake.js";
 import { replayCase, type Replay } from "../backtest/replay.js";
 import { drift, scoreFacts, scoreRun, type FactsScore, type RunScore } from "../backtest/score.js";
 import type { RuntimeDeps } from "../deps.js";
@@ -25,6 +26,8 @@ export interface BacktestOptions {
   provider?: string;
   /** Lines either side of an expected span a finding may sit on and still count; 0 by default. */
   anchorWindow?: number;
+  /** A folder of false positive files the engine wrote, taken in as cases before the run. */
+  intake?: string;
 }
 
 interface Run {
@@ -260,6 +263,15 @@ export async function runBacktestCommand(
     throw new ToolError("--anchor-window takes a whole number of lines, 0 or more");
   }
   const casesDir = path.resolve(deps.cwd, options.cases);
+  if (options.intake !== undefined) {
+    for (const outcome of intakeFalsePositives(deps.cwd, options.intake, casesDir)) {
+      deps.out(
+        outcome.case !== undefined
+          ? `intake: ${outcome.file} became case ${outcome.case}\n`
+          : `intake: ${outcome.file} skipped: ${String(outcome.skipped)}\n`,
+      );
+    }
+  }
   const cases = loadBacktestCases(casesDir, options.only);
   const configText =
     options.config !== undefined

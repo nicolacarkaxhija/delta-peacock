@@ -351,6 +351,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
       "a finding this many lines either side of an expected span still counts",
       "0",
     )
+    .option("--intake <dir>", "take the false positive files in this folder in as cases first")
     .action(
       async (options: {
         cases: string;
@@ -361,6 +362,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
         report?: string;
         provider?: string;
         anchorWindow: string;
+        intake?: string;
       }) => {
         const { runBacktestCommand } = await import("./commands/backtest.js");
         const code = await runBacktestCommand(deps, {
@@ -375,6 +377,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
             : {}),
           ...(options.report !== undefined ? { report: options.report } : {}),
           ...(options.provider !== undefined ? { provider: options.provider } : {}),
+          ...(options.intake !== undefined ? { intake: options.intake } : {}),
         });
         if (code !== 0) throw new ExitCodeError(code);
       },
