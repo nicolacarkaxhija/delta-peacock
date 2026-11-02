@@ -38,7 +38,8 @@ function port(text: string): ModelPort {
   return { complete: () => Promise.resolve({ text }) };
 }
 
-const FINGERPRINT = "0123456789abcdef";
+/** The fingerprint the reviewer gives the fixture's finding; set by reviewed(). */
+let FINGERPRINT = "";
 const INTAKE = "findings/backtest";
 
 /** A reviewed repository whose review wrote its findings file, and the finding it holds. */
@@ -59,6 +60,7 @@ async function reviewed(): Promise<{ repo: string; finding: Record<string, unkno
   expect(code).toBe(0);
   const text = readFileSync(path.join(repo, "reports/findings", FINDINGS_FILE), "utf8");
   const [finding] = (JSON.parse(text) as { findings: Record<string, unknown>[] }).findings;
+  FINGERPRINT = String(finding?.["fingerprint"]);
   return { repo, finding: finding ?? {} };
 }
 
@@ -132,7 +134,7 @@ describe("intakeFalsePositives", () => {
     ]);
   });
 
-  it("skips a case already taken in, another producer's finding, a file of another shape, a finding with no record and a record from another clone", async () => {
+  it("skips a case already taken in, another producer's finding, a file of another shape, a finding with no record, a record from another clone and a fingerprint the review never wrote", async () => {
     const { repo, finding } = await reviewed();
     markFalsePositive(repo, finding);
     const cases = casesDir();
@@ -148,7 +150,11 @@ describe("intakeFalsePositives", () => {
     write(
       repo,
       ".delta-peacock-cache/reviews/far/review.json",
-      JSON.stringify({ schema: "review-record-1", base: "0".repeat(40) }),
+      JSON.stringify({
+        schema: "review-record-1",
+        base: "0".repeat(40),
+        fingerprints: ["4444444444444444"],
+      }),
     );
     write(repo, ".delta-peacock-cache/reviews/far/diff.patch", "");
     markFalsePositive(
@@ -157,6 +163,7 @@ describe("intakeFalsePositives", () => {
       "g",
       "4444444444444444",
     );
+    markFalsePositive(repo, finding, "h", "5555555555555555");
 
     expect(intakeFalsePositives(repo, INTAKE, cases)).toEqual([
       { file: `${INTAKE}/${FINGERPRINT}.json`, skipped: "already a backtest case" },
@@ -169,6 +176,10 @@ describe("intakeFalsePositives", () => {
         file: `${INTAKE}/g.json`,
         skipped:
           "the base commit of .delta-peacock-cache/reviews/far/review.json is not in this clone",
+      },
+      {
+        file: `${INTAKE}/h.json`,
+        skipped: `the review at ${String(finding["evidence"])} holds no finding with fingerprint 5555555555555555`,
       },
     ]);
     expect(existsSync(path.join(cases, "false-positive-1111111111111111"))).toBe(false);

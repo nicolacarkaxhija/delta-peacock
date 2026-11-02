@@ -237,6 +237,32 @@ describe("review --findings", () => {
     const record = readReviewRecord(repo, evidence);
     expect(record?.base).toBe(base);
     expect(record?.patch).toBe(git(repo, "diff", "--binary", "--no-color", base, "HEAD"));
+    expect(record?.fingerprints).toEqual([finding?.fingerprint]);
+  });
+
+  it("masks secret shaped values in the recorded change", async () => {
+    const repo = reviewedRepo();
+    const key = `AKIA${"Q".repeat(16)}`;
+    write(repo, "src/key.js", `const key = "${key}";\n`);
+    commitAll(repo, "key");
+    expect(await review(repo, "--findings", "f")).toBe(0);
+    const record = readReviewRecord(repo, String(writtenIn(repo, "f")[0]?.evidence));
+    expect(record?.patch).not.toContain(key);
+    expect(record?.patch).toContain("[redacted:aws-access-key]");
+  });
+
+  it("empties a stale findings file before a review that throws", async () => {
+    const repo = reviewedRepo();
+    write(repo, `f/${FINDINGS_FILE}`, renderFindingsFile([violation()]));
+    const failing = await runCli(["review", "--target", "main", "--findings", "f"], {
+      cwd: repo,
+      env: {},
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: { complete: () => Promise.reject(new Error("the model is down")) },
+    }).catch(() => 1);
+    expect(failing).not.toBe(0);
+    expect(writtenIn(repo, "f")).toEqual([]);
   });
 
   it("takes the folder from output.findingsDir and records a staged review against HEAD", async () => {
@@ -312,7 +338,10 @@ describe("writeReviewRecord", () => {
   it("records nothing when the target is not in the clone", () => {
     const repo = reviewedRepo();
     expect(
-      writeReviewRecord(repo, { staged: false, target: "origin/absent" }, new Date(0)),
+      writeReviewRecord(repo, { staged: false, target: "origin/absent" }, new Date(0), {
+        fingerprints: [],
+        redact: (text) => text,
+      }),
     ).toBeUndefined();
     expect(existsSync(path.join(repo, ".delta-peacock-cache"))).toBe(false);
   });
@@ -321,9 +350,10 @@ describe("writeReviewRecord", () => {
 const RECORDS = ".delta-peacock-cache/reviews";
 
 describe("readReviewRecord", () => {
-  it("returns nothing for an evidence path with no record, outside the records, a record of another shape, without a commit as its base, or a missing patch", async () => {
+  it("returns nothing for an evidence path with no record, outside the records, a record of another shape, without a commit as its base or a fingerprint list, or a missing patch", async () => {
     const repo = reviewedRepo();
-    const record = (base: string): string => JSON.stringify({ schema: "review-record-1", base });
+    const record = (base: string): string =>
+      JSON.stringify({ schema: "review-record-1", base, fingerprints: [] });
     const sha = git(repo, "rev-parse", "HEAD").trim();
     expect(readReviewRecord(repo, `${RECORDS}/nowhere/review.json`)).toBeUndefined();
     write(repo, "outside/review.json", record(sha));
@@ -339,6 +369,13 @@ describe("readReviewRecord", () => {
     write(repo, `${RECORDS}/option/review.json`, record("--output=x"));
     write(repo, `${RECORDS}/option/diff.patch`, "");
     expect(readReviewRecord(repo, `${RECORDS}/option/review.json`)).toBeUndefined();
+    write(
+      repo,
+      `${RECORDS}/unlisted/review.json`,
+      JSON.stringify({ schema: "review-record-1", base: sha }),
+    );
+    write(repo, `${RECORDS}/unlisted/diff.patch`, "");
+    expect(readReviewRecord(repo, `${RECORDS}/unlisted/review.json`)).toBeUndefined();
     expect(await review(repo, "--findings", "f")).toBe(0);
     const evidence = String(writtenIn(repo, "f")[0]?.evidence);
     rmSync(path.join(repo, path.dirname(evidence), "diff.patch"));

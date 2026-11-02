@@ -13,6 +13,8 @@ const COMMIT = /^[0-9a-f]{40,64}$/;
 export interface ReviewRecord {
   base: string;
   patch: string;
+  /** The fingerprints of the findings the review wrote. */
+  fingerprints: string[];
 }
 
 /**
@@ -23,7 +25,12 @@ export function writeReviewRecord(
   cwd: string,
   change: { staged: boolean; target: string; since?: string | undefined },
   at: Date,
+  _contents: { fingerprints: readonly string[]; redact: (text: string) => string } = {
+    fingerprints: [],
+    redact: (text) => text,
+  },
 ): string | undefined {
+  void _contents;
   let base: string;
   let patch: string;
   try {
@@ -61,5 +68,5 @@ export function readReviewRecord(cwd: string, evidence: string): ReviewRecord | 
   if (!COMMIT.test(record.base)) return undefined;
   const patchFile = path.join(path.dirname(file), PATCH_FILE);
   if (!existsSync(patchFile)) return undefined;
-  return { base: record.base, patch: readFileSync(patchFile, "utf8") };
+  return { base: record.base, patch: readFileSync(patchFile, "utf8"), fingerprints: [] };
 }
