@@ -7,7 +7,7 @@ import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
 import { FINDINGS_FILE, renderFindingsFile } from "../src/review/findings-file.js";
 import type { ReportedFinding } from "../src/review/report.js";
-import { readReviewRecord } from "../src/review/review-record.js";
+import { readReviewRecord, writeReviewRecord } from "../src/review/review-record.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 const schema = JSON.parse(
@@ -217,6 +217,16 @@ describe("review --findings", () => {
     const repo = reviewedRepo();
     expect(await review(repo)).toBe(0);
     expect(existsSync(path.join(repo, ".delta-peacock-cache", "reviews"))).toBe(false);
+  });
+});
+
+describe("writeReviewRecord", () => {
+  it("records nothing when the target is not in the clone", () => {
+    const repo = reviewedRepo();
+    expect(
+      writeReviewRecord(repo, { staged: false, target: "origin/absent" }, new Date(0)),
+    ).toBeUndefined();
+    expect(existsSync(path.join(repo, ".delta-peacock-cache"))).toBe(false);
   });
 });
 
