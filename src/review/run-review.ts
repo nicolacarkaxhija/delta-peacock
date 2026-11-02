@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { ToolSet } from "ai";
 import type { Config } from "../config/schema.js";
@@ -49,6 +49,8 @@ import {
 import type { RetryOptions } from "../model/retry.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
+import { FINDINGS_FILE, renderFindingsFile } from "./findings-file.js";
+import { writeReviewRecord } from "./review-record.js";
 import { planBatches, planBudget } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
@@ -602,7 +604,8 @@ export async function runReview(
   const wantsArtifacts =
     config.output.report !== undefined ||
     config.output.sarifPath !== undefined ||
-    config.output.codeQualityPath !== undefined;
+    config.output.codeQualityPath !== undefined ||
+    config.output.findingsDir !== undefined;
   if (wantsArtifacts) {
     const anchorTexts = newLineTexts(redacted.text);
     const report = buildReport({
@@ -674,6 +677,16 @@ export async function runReview(
         path.resolve(deps.cwd, config.output.codeQualityPath),
         renderCodeQuality(report.findings),
       );
+    }
+    if (config.output.findingsDir !== undefined) {
+      const evidence = writeReviewRecord(
+        deps.cwd,
+        { staged: options.staged === true, target: acquired.targetRef },
+        deps.clock?.() ?? new Date(),
+      );
+      const dir = path.resolve(deps.cwd, config.output.findingsDir);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, FINDINGS_FILE), renderFindingsFile(report.findings, evidence));
     }
   }
 

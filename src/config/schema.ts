@@ -102,6 +102,8 @@ export const OutputSchema = z.strictObject({
   sarifPath: z.string().min(1).optional(),
   /** GitLab Code Quality artifact for the MR widget. */
   codeQualityPath: z.string().min(1).optional(),
+  /** Folder the review writes its findings file into, in the engine's finding shape. */
+  findingsDir: z.string().min(1).optional(),
 });
 
 const MODEL_PROVIDERS = ["anthropic", "bedrock", "openrouter", "openai-compatible"] as const;

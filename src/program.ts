@@ -18,6 +18,7 @@ interface ReviewCommandOptions {
   guidelinesDir?: string;
   guidelinesRef?: string;
   report?: string;
+  findings?: string;
   include?: string;
   exclude?: string;
   maxDiffBytes?: string;
@@ -30,6 +31,7 @@ const REVIEW_FLAG_PATHS: Readonly<Record<keyof ReviewCommandOptions, string>> = 
   guidelinesDir: "review.guidelinesDir",
   guidelinesRef: "review.guidelinesRef",
   report: "output.report",
+  findings: "output.findingsDir",
   include: "review.include",
   exclude: "review.exclude",
   maxDiffBytes: "review.maxDiffBytes",
@@ -77,6 +79,7 @@ export function buildProgram(deps: RuntimeDeps): Command {
     .option("--guidelines-dir <dir>", "directory holding guideline markdown files")
     .option("--guidelines-ref <ref>", "read guidelines from: target, source, or a git ref")
     .option("--report <path>", "write the JSON report to this path")
+    .option("--findings <dir>", "write the findings file for the editor into this folder")
     .option("--include <globs>", "comma-separated path globs to review")
     .option("--exclude <globs>", "comma-separated path globs to leave out")
     .option("--max-diff-bytes <n>", "skip reviews larger than this many bytes")

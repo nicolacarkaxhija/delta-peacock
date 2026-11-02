@@ -1,12 +1,50 @@
+import type { Severity } from "../domain/severity.js";
+import { guidelineLine, twoSentences } from "../scm/comment-format.js";
 import type { ReportedFinding } from "./report.js";
 
+/** The findings file the review writes into the folder `output.findingsDir` names. */
 export const FINDINGS_FILE = "reviewer.json";
+export const FINDINGS_PRODUCER = "reviewer";
+/** The engine's document id; schema/finding.schema.json is its vendored contract. */
+const FINDINGS_DOCUMENT = "findings-1";
 
+/** The engine knows three severities; the grouping is the one the SARIF artifact uses. */
+const ENGINE_SEVERITIES: Record<Severity, "error" | "warning" | "info"> = {
+  BLOCKER: "error",
+  CRITICAL: "error",
+  MAJOR: "warning",
+  MINOR: "info",
+  INFO: "info",
+};
+
+/** The reason as a comment gives it, then its guideline sentence, on one line. */
+function messageOf(finding: ReportedFinding): string {
+  const reason = twoSentences(finding.body === "" ? finding.title : finding.body);
+  const rule = guidelineLine(finding);
+  return rule === undefined ? reason : `${reason} ${rule}`;
+}
+
+/**
+ * A findings file in the engine's shape. Baselined findings and findings on no line stay out;
+ * the fingerprint is left for the engine to derive.
+ */
 export function renderFindingsFile(
-  _findings: readonly ReportedFinding[],
-  _evidence?: string,
+  findings: readonly ReportedFinding[],
+  evidence?: string,
 ): string {
-  void _findings;
-  void _evidence;
-  throw new Error("not implemented");
+  const written = findings
+    .filter(
+      (finding) => finding.baselined !== true && finding.unplaced !== true && finding.line > 0,
+    )
+    .map((finding) => ({
+      producer: FINDINGS_PRODUCER,
+      rule: finding.kind === "violation" ? finding.guidelineId : "observation",
+      severity: ENGINE_SEVERITIES[finding.severity],
+      file: finding.file,
+      range: { startLine: finding.line },
+      message: messageOf(finding),
+      ...(finding.suggestion !== undefined ? { suggested: finding.suggestion } : {}),
+      ...(evidence !== undefined ? { evidence } : {}),
+    }));
+  return `${JSON.stringify({ schema: FINDINGS_DOCUMENT, findings: written }, null, 2)}\n`;
 }
