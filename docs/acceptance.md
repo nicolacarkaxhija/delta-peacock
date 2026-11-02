@@ -91,6 +91,18 @@ from a clean checkout; a red line blocks it.
   read from the guidelines ref, is never posted, and the summary counts it as accepted; the
   synthetic `@not-site` and `@locale` cases replay a recorded false positive and post nothing.
   On its own: `pnpm exec vitest run tests/accepted-forms tests/scm-render`.
+- `findings for the editor`: `review --findings <dir>` writes `<dir>/reviewer.json` that the
+  vendored engine schema takes, one finding per placed finding outside the baseline with the producer
+  `reviewer`, the guideline id as its rule, the mapped severity, a message quoting the guideline,
+  the suggested change, no fingerprint, and the review record as evidence. On its own:
+  `pnpm exec vitest run tests/findings-file`.
+- `false positives become cases`: `backtest --intake <dir>` turns each false positive file of the
+  reviewer into a case the loader picks up, with the recorded base and change and the finding as a
+  `noFinding` entry, and names every file it skips with its reason. On its own:
+  `pnpm exec vitest run tests/findings-intake`.
+- `findings schema script`: the schema script passes an engine schema that says what the vendored
+  copy says, fails on drift naming the refresh, refreshes the copy and validates a findings file.
+  On its own: `pnpm exec vitest run tests/findings-schema-script`.
 
 ## Release
 
@@ -107,6 +119,8 @@ from a clean checkout; a red line blocks it.
   [backtest.md](guides/backtest.md).
 - `synthetic backtest`: every case in `bench/backtest` passes over three repeats with zero wrong
   findings and zero drift. On its own: `delta-peacock backtest --cases bench/backtest`.
+- `findings schema in step`: the vendored findings schema says what the engine's says. On its
+  own: the engine's `findings schema` output piped into `pnpm findings:schema check -`.
 - `backtest anchor window`: with `--anchor-window <lines>` a finding that many lines beside an
   expected span counts as right and goes to the nearest span; 0 keeps the exact span. On its own:
   `pnpm exec vitest run tests/backtest.test.ts`.

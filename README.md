@@ -36,6 +36,7 @@ It reviews pull requests against guidelines your team keeps as markdown in its o
 - [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [What ships](#what-ships)
+- [Findings for the editor](#findings-for-the-editor)
 - [Continuous integration](#continuous-integration)
 - [Configuration](#configuration)
 - [Security and privacy](#security-and-privacy)
@@ -187,6 +188,20 @@ Credentials, tokens and API keys must come from the environment, never a literal
 ![doctor](docs/media/doctor.gif)
 
 </details>
+
+## Findings for the editor
+
+`review --findings <dir>` (`output.findingsDir`, env `DELTA_PEACOCK_OUTPUT_FINDINGS_DIR`) writes the review's findings into `<dir>/reviewer.json` in the finding shape an editor extension reads, so each one shows on its line next to the code. Where the reviewed repository runs its tests on the test engine, the folder is `reports/findings`:
+
+```bash
+npx delta-peacock review --findings reports/findings
+```
+
+Every finding names the producer `reviewer`, the guideline id as its rule (`observation` for a finding that cites none), the file and line, a one line message that gives the reason and quotes the guideline sentence the way a comment does, and the suggested change when the review proposes one. BLOCKER and CRITICAL become `error`, MAJOR `warning`, MINOR and INFO `info`. The fingerprint is left out, so the engine derives it. Baselined findings and findings that sit on no line stay out of the file, and each review overwrites it, an empty list included.
+
+Each finding's `evidence` names the review record: `.delta-peacock-cache/reviews/<time>/review.json`, with the commit the change applies to and the change as `diff.patch` beside it. A review that read its diff from the SCM API writes no record and no evidence. When a person marks a finding as a false positive in the editor, the engine writes a backtest case file, and `backtest --intake` turns it into a case; see [false positives from the editor](docs/guides/backtest.md#false-positives-from-the-editor).
+
+The file follows the engine's JSON schema, vendored as [schema/finding.schema.json](schema/finding.schema.json). `pnpm findings:schema validate <file>` validates a findings file against it. `pnpm findings:schema check <engine schema>` fails when the vendored copy no longer says what the engine's says; the engine prints its schema with its `findings schema` command, and piping that output into `pnpm findings:schema refresh -` replaces the copy.
 
 ## Continuous integration
 
