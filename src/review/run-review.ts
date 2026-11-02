@@ -49,7 +49,7 @@ import {
 import type { RetryOptions } from "../model/retry.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
-import { writeFindingsFile } from "./findings-file.js";
+import { fingerprintsOf, writeFindingsFile } from "./findings-file.js";
 import { writeReviewRecord } from "./review-record.js";
 import { planBatches, planBudget } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
@@ -131,6 +131,10 @@ export async function runReview(
 ): Promise<number> {
   const startedAt = performance.now();
   const config = deps.loadConfig(flags);
+  // an earlier review's findings never outlive a run that stops or throws
+  if (config.output.findingsDir !== undefined) {
+    writeFindingsFile(deps.cwd, config.output.findingsDir, []);
+  }
 
   if (options.staged === true) {
     // at commit time there is no target ref and no pull request to speak of
@@ -687,6 +691,13 @@ export async function runReview(
           ...(acquired.mode === "incremental" ? { since: config.review.lastReviewedCommit } : {}),
         },
         deps.clock?.() ?? new Date(),
+        {
+          fingerprints: fingerprintsOf(report.findings),
+          redact: (text) =>
+            redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
+              strict: config.redaction.strict,
+            }).text,
+        },
       );
       writeFindingsFile(deps.cwd, config.output.findingsDir, report.findings, evidence);
     }
@@ -1433,10 +1444,6 @@ async function publishAllClear(
   sources: PublishSources,
   scope?: ChangeScope,
 ): Promise<void> {
-  // a run with nothing to review leaves the editor no findings of an earlier one
-  if (config.output.findingsDir !== undefined) {
-    writeFindingsFile(deps.cwd, config.output.findingsDir, []);
-  }
   await publishIfConfigured(
     deps,
     config,

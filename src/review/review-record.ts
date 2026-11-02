@@ -18,19 +18,16 @@ export interface ReviewRecord {
 }
 
 /**
- * Records the change a review saw and returns the record's path from cwd, the evidence its
+ * Records the change a review saw, its secret shaped values masked, and the fingerprints of the
+ * findings it wrote. Records and returns the record's path from cwd, the evidence its
  * findings name; undefined when the target is not in the clone, as on the SCM API fallback.
  */
 export function writeReviewRecord(
   cwd: string,
   change: { staged: boolean; target: string; since?: string | undefined },
   at: Date,
-  _contents: { fingerprints: readonly string[]; redact: (text: string) => string } = {
-    fingerprints: [],
-    redact: (text) => text,
-  },
+  contents: { fingerprints: readonly string[]; redact: (text: string) => string },
 ): string | undefined {
-  void _contents;
   let base: string;
   let patch: string;
   try {
@@ -46,8 +43,13 @@ export function writeReviewRecord(
   }
   const dir = `${REVIEWS_DIR}/${at.toISOString().replace(/[:.]/g, "-")}`;
   mkdirSync(path.join(cwd, dir), { recursive: true });
-  writeFileSync(path.join(cwd, dir, PATCH_FILE), patch);
-  const record = { schema: RECORD_SCHEMA, at: at.toISOString(), base };
+  writeFileSync(path.join(cwd, dir, PATCH_FILE), contents.redact(patch));
+  const record = {
+    schema: RECORD_SCHEMA,
+    at: at.toISOString(),
+    base,
+    fingerprints: contents.fingerprints,
+  };
   writeFileSync(path.join(cwd, dir, RECORD_FILE), `${JSON.stringify(record, null, 2)}\n`);
   return `${dir}/${RECORD_FILE}`;
 }
@@ -63,10 +65,14 @@ export function readReviewRecord(cwd: string, evidence: string): ReviewRecord | 
   } catch {
     return undefined;
   }
-  const record = value as { schema?: unknown; base?: unknown };
+  const record = value as { schema?: unknown; base?: unknown; fingerprints?: unknown };
   if (record.schema !== RECORD_SCHEMA || typeof record.base !== "string") return undefined;
   if (!COMMIT.test(record.base)) return undefined;
+  const fingerprints = record.fingerprints;
+  if (!Array.isArray(fingerprints) || !fingerprints.every((one) => typeof one === "string")) {
+    return undefined;
+  }
   const patchFile = path.join(path.dirname(file), PATCH_FILE);
   if (!existsSync(patchFile)) return undefined;
-  return { base: record.base, patch: readFileSync(patchFile, "utf8"), fingerprints: [] };
+  return { base: record.base, patch: readFileSync(patchFile, "utf8"), fingerprints };
 }

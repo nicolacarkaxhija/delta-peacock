@@ -39,6 +39,17 @@ function fingerprintOf(finding: ReportedFinding): string {
   return createHash("sha256").update(parts.join("\0")).digest("hex").slice(0, 16);
 }
 
+/** The findings the file holds: not baselined, and on a line. */
+const placed = (findings: readonly ReportedFinding[]): ReportedFinding[] =>
+  findings.filter(
+    (finding) => finding.baselined !== true && finding.unplaced !== true && finding.line > 0,
+  );
+
+/** The fingerprints of the findings the file holds, as the review record lists them. */
+export function fingerprintsOf(findings: readonly ReportedFinding[]): string[] {
+  return placed(findings).map(fingerprintOf);
+}
+
 /**
  * A findings file in the engine's shape, each finding with the reviewer's own fingerprint.
  * Baselined findings and findings on no line stay out.

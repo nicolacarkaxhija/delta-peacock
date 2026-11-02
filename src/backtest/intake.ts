@@ -104,6 +104,12 @@ function intakeOne(cwd: string, source: string, casesDir: string): IntakeOutcome
   if (record === undefined) {
     return { file: source, skipped: `no review record at ${finding.evidence}` };
   }
+  if (!record.fingerprints.includes(falsePositive.fingerprint)) {
+    return {
+      file: source,
+      skipped: `the review at ${finding.evidence} holds no finding with fingerprint ${falsePositive.fingerprint}`,
+    };
+  }
   if (!checkoutBase(cwd, record.base, path.join(dir, "base"))) {
     rmSync(dir, { recursive: true, force: true });
     return {
