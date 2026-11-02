@@ -55,6 +55,8 @@ export interface BacktestCase {
   expected: ExpectedFinding[];
   noFinding: NoFinding[];
   previous: PriorFindingEntry[];
+  /** Findings outside every listed span are left unjudged. */
+  othersUnjudged?: boolean;
 }
 
 function readExpected(file: string): {

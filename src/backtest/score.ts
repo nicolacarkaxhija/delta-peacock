@@ -24,6 +24,8 @@ export interface RunScore {
   right: number;
   wrong: WrongFinding[];
   missed: ExpectedFinding[];
+  /** Findings a case marked othersUnjudged leaves out of the judgement. */
+  unjudged: ReplayedFinding[];
 }
 
 interface Span {
@@ -80,7 +82,9 @@ export function scoreRun(
   expected: readonly ExpectedFinding[],
   noFinding: readonly NoFinding[],
   window = 0,
+  _othersUnjudged = false,
 ): RunScore {
+  void _othersUnjudged;
   const open = [...expected];
   const wrong: WrongFinding[] = [];
   let right = 0;
@@ -117,7 +121,14 @@ export function scoreRun(
             : "not in the human judgement",
     });
   }
-  return { expected: expected.length, found: produced.length, right, wrong, missed: open };
+  return {
+    expected: expected.length,
+    found: produced.length,
+    right,
+    wrong,
+    missed: open,
+    unjudged: [],
+  };
 }
 
 /** A facts only score: the missed findings a judgement decides are split off from the real misses. */
@@ -135,7 +146,9 @@ export function scoreFacts(
   noFinding: readonly NoFinding[],
   reach: FactsReach,
   window = 0,
+  _othersUnjudged = false,
 ): FactsScore {
+  void _othersUnjudged;
   const score = scoreRun(produced, expected, noFinding, window);
   const judgement: ExpectedFinding[] = [];
   const missed: ExpectedFinding[] = [];

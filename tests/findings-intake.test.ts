@@ -96,6 +96,7 @@ describe("intakeFalsePositives", () => {
     expect(outcomes).toEqual([{ file: `${INTAKE}/${FINGERPRINT}.json`, case: name }]);
     const [loaded] = loadBacktestCases(cases);
     expect(loaded?.name).toBe(name);
+    expect(loaded?.othersUnjudged).toBe(true);
     expect(loaded?.expected).toEqual([]);
     expect(loaded?.noFinding).toEqual([
       {
@@ -203,6 +204,47 @@ describe("backtest --intake", () => {
     );
     expect(stdout).toContain(`| false-positive-${FINGERPRINT} | 0 | 0 | 0 | 0 | 0 |`);
     expect(code).toBe(0);
+  });
+
+  it("judges only the marked finding: another finding of the review is neither wrong nor drift", async () => {
+    const { repo, finding } = await reviewed();
+    markFalsePositive(repo, finding);
+    const cases = casesDir();
+    const other = {
+      guidelineId: "no-console",
+      file: "src/app.js",
+      line: 3,
+      quote: "return name;",
+      title: "Return value logged nowhere",
+      body: "Log the returned name with the logger.",
+      guidelineQuote: "Use the logger instead.",
+    };
+    const replies = [
+      JSON.stringify({
+        findings: [...(JSON.parse(REPLY) as { findings: unknown[] }).findings, other],
+      }),
+      REPLY,
+    ];
+    let calls = 0;
+    let stdout = "";
+    const code = await runCli(
+      ["backtest", "--cases", cases, "--intake", INTAKE, "--repeats", "2", "--concurrency", "1"],
+      {
+        cwd: repo,
+        env: {},
+        out: (text) => {
+          stdout += text;
+        },
+        err: () => undefined,
+        modelPort: { complete: () => Promise.resolve({ text: replies[calls++ % 2] ?? "" }) },
+      },
+    );
+    expect(code).toBe(2);
+    expect(stdout).toContain(
+      `| false-positive-${FINGERPRINT} | 0 | 1/1 | 0/0 | 1/1 | 0/0 | 0/0 | 0 |`,
+    );
+    expect(stdout).toContain("src/app.js:2 no-console MAJOR");
+    expect(stdout).not.toContain("not in the human judgement");
   });
 
   it("names each false positive it skipped", async () => {

@@ -49,7 +49,7 @@ function violation(overrides: Partial<ReportedFinding> = {}): ReportedFinding {
 }
 
 describe("renderFindingsFile", () => {
-  it("writes a violation in the engine's shape, quoting its guideline, with no fingerprint of its own", () => {
+  it("writes a violation in the engine's shape, quoting its guideline, with a fingerprint of its own", () => {
     const file = parsed(
       renderFindingsFile([violation({ suggestion: "  logger.info(name);" })], "records/r1.json"),
     );
@@ -65,6 +65,7 @@ describe("renderFindingsFile", () => {
           "Replace the console.log with the logger. It keeps the output in one place. Guideline: Use the logger instead.",
         suggested: "  logger.info(name);",
         evidence: "records/r1.json",
+        fingerprint: expect.stringMatching(/^[0-9a-f]{16}$/) as string,
       },
     ]);
   });
@@ -99,6 +100,7 @@ describe("renderFindingsFile", () => {
         file: "src/app.js",
         range: { startLine: 3 },
         message: "Name the magic number.",
+        fingerprint: expect.stringMatching(/^[0-9a-f]{16}$/) as string,
       },
     ]);
   });
@@ -115,6 +117,40 @@ describe("renderFindingsFile", () => {
     expect(file.findings.map((one) => [one.range.startLine, one.message])).toEqual([
       [4, "Replace the console.log with the logger. It keeps the output in one place."],
     ]);
+  });
+
+  it("keeps the fingerprint through new wording, a moved line or file and other indentation, and changes it with the guideline, the code or the guideline sentence", () => {
+    const fingerprint = (finding: ReportedFinding): string | undefined =>
+      parsed(renderFindingsFile([finding])).findings[0]?.fingerprint;
+    const base = fingerprint(violation({ lineText: "  console.log(name);" }));
+    expect(
+      fingerprint(
+        violation({
+          lineText: "\tconsole.log(name);  ",
+          title: "Another title",
+          body: "Other words from another run.",
+          line: 9,
+          file: "src/moved.js",
+          suggestion: "  logger.info(name);",
+          guidelineQuote: "Use the logger   instead.",
+        }),
+      ),
+    ).toBe(base);
+    expect(fingerprint(violation({ quote: "console.log(name);" }))).toBe(base);
+    const others = [
+      fingerprint(violation({ lineText: "  console.log(name);", guidelineId: "other-rule" })),
+      fingerprint(violation({ lineText: "  console.log(other);" })),
+      fingerprint(violation({ lineText: "  console.log(name);", guidelineQuote: "No console." })),
+      fingerprint(
+        Object.fromEntries(
+          Object.entries(violation({ lineText: "  console.log(name);" })).filter(
+            ([key]) => key !== "guidelineQuote",
+          ),
+        ) as ReportedFinding,
+      ),
+      fingerprint(violation()),
+    ];
+    expect(new Set([base, ...others]).size).toBe(others.length + 1);
   });
 
   it("writes an empty findings list for a review without findings", () => {
@@ -195,7 +231,7 @@ describe("review --findings", () => {
       message: "Replace the console.log with the logger. Guideline: Use the logger instead.",
       suggested: "  logger.info(name);",
     });
-    expect(finding?.fingerprint).toBeUndefined();
+    expect(finding?.fingerprint).toMatch(/^[0-9a-f]{16}$/);
     const evidence = String(finding?.evidence);
     expect(evidence).toMatch(/^\.delta-peacock-cache\/reviews\/[^/]+\/review\.json$/);
     const record = readReviewRecord(repo, evidence);
