@@ -197,8 +197,7 @@ describe("review --findings", () => {
 
   it("takes the folder from output.findingsDir and records a staged review against HEAD", async () => {
     const repo = reviewedRepo();
-    write(repo, "src/app.js", "function greet(name) {\n  console.log(name);\n  return 1;\n}\n");
-    git(repo, "add", "-A");
+    git(repo, "reset", "-q", "--soft", "HEAD~1");
     const code = await runCli(["review", "--staged"], {
       cwd: repo,
       env: { DELTA_PEACOCK_OUTPUT_FINDINGS_DIR: "out" },
@@ -231,13 +230,15 @@ describe("writeReviewRecord", () => {
 });
 
 describe("readReviewRecord", () => {
-  it("returns nothing for an evidence path with no record, a record of another shape, or a missing patch", async () => {
+  it("returns nothing for an evidence path with no record, a record of another shape or without a base, or a missing patch", async () => {
     const repo = reviewedRepo();
     expect(readReviewRecord(repo, "nowhere/review.json")).toBeUndefined();
     write(repo, "bad/review.json", "{ not json");
     expect(readReviewRecord(repo, "bad/review.json")).toBeUndefined();
     write(repo, "other/review.json", JSON.stringify({ schema: "something-else" }));
     expect(readReviewRecord(repo, "other/review.json")).toBeUndefined();
+    write(repo, "baseless/review.json", JSON.stringify({ schema: "review-record-1" }));
+    expect(readReviewRecord(repo, "baseless/review.json")).toBeUndefined();
     expect(await review(repo, "--findings", "f")).toBe(0);
     const evidence = String(writtenIn(repo, "f")[0]?.evidence);
     rmSync(path.join(repo, path.dirname(evidence), "diff.patch"));
