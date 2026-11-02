@@ -94,12 +94,14 @@ from a clean checkout; a red line blocks it.
 - `findings for the editor`: `review --findings <dir>` writes `<dir>/reviewer.json` that the
   vendored engine schema takes, one finding per placed finding outside the baseline with the producer
   `reviewer`, the guideline id as its rule, the mapped severity, a message quoting the guideline,
-  the suggested change, no fingerprint, and the review record as evidence. On its own:
+  the suggested change, a fingerprint of the guideline id, the flagged code and the guideline
+  sentence that no wording, line or path changes, and the review record as evidence. On its own:
   `pnpm exec vitest run tests/findings-file`.
 - `false positives become cases`: `backtest --intake <dir>` turns each false positive file of the
   reviewer into a case the loader picks up, with the recorded base and change and the finding as a
-  `noFinding` entry, and names every file it skips with its reason. On its own:
-  `pnpm exec vitest run tests/findings-intake`.
+  `noFinding` entry, and names every file it skips with its reason; the case judges only the marked
+  finding, and the review's other findings are neither wrong nor drift. On its own:
+  `pnpm exec vitest run tests/findings-intake tests/score-unjudged`.
 - `findings schema script`: the schema script passes an engine schema that says what the vendored
   copy says, fails on drift naming the refresh, refreshes the copy and validates a findings file.
   On its own: `pnpm exec vitest run tests/findings-schema-script`.
