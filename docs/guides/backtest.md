@@ -82,7 +82,8 @@ tree of the commit the record names, `diff.patch` is the recorded change, and `e
 holds the finding's span as a `noFinding` entry with the person's reason as its `why`.
 `case.json` names the file it came from. A file is skipped, with its reason on one line, when the
 case already exists, another producer wrote the finding, the file is not a false positive file, the
-finding names no record or a record that is gone, or the record's commit is not in the clone.
+finding names no record, a record outside `.delta-peacock-cache/reviews/` or one that is gone, or
+the record's commit is not in the clone.
 
 ## What a run does
 
