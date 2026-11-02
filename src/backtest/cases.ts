@@ -39,6 +39,8 @@ const ExpectedFileSchema = z.strictObject({
   noFinding: z.array(NoFindingSchema).default([]),
   /** Findings posted on the revision before the fix; a rerun must resolve them cleanly. */
   previous: z.array(PriorFindingSchema).default([]),
+  /** Findings outside every listed span are left unjudged, as on a case made from one false positive. */
+  othersUnjudged: z.boolean().optional(),
 });
 
 export type ExpectedFinding = z.infer<typeof ExpectedFindingSchema>;
@@ -63,6 +65,7 @@ function readExpected(file: string): {
   findings: ExpectedFinding[];
   noFinding: NoFinding[];
   previous: PriorFindingEntry[];
+  othersUnjudged?: boolean | undefined;
 } {
   let raw: unknown;
   try {
@@ -110,6 +113,7 @@ export function loadBacktestCases(casesDir: string, only?: readonly string[]): B
       expected: expected.findings,
       noFinding: expected.noFinding,
       previous: expected.previous,
+      ...(expected.othersUnjudged === true ? { othersUnjudged: true } : {}),
     });
   }
   const missing = (only ?? []).filter((name) => !cases.some((one) => one.name === name));

@@ -75,18 +75,19 @@ function contentProblem(want: ExpectedFinding, have: ReplayedFinding): string | 
  * Scores one replayed review against the human judgement. Every finding is
  * either right (on an expected span or within `window` lines of it, same
  * guideline, severity and wording checks hold) or wrong, named with its
- * reason; nothing is left unjudged. The nearest open span wins.
+ * reason. With othersUnjudged a finding on no listed span is left unjudged
+ * and out of found. The nearest open span wins.
  */
 export function scoreRun(
   produced: readonly ReplayedFinding[],
   expected: readonly ExpectedFinding[],
   noFinding: readonly NoFinding[],
   window = 0,
-  _othersUnjudged = false,
+  othersUnjudged = false,
 ): RunScore {
-  void _othersUnjudged;
   const open = [...expected];
   const wrong: WrongFinding[] = [];
+  const unjudged: ReplayedFinding[] = [];
   let right = 0;
   for (const finding of produced) {
     let index = -1;
@@ -111,6 +112,10 @@ export function scoreRun(
     const repeated = expected.some(
       (entry) => covers(entry, finding, window) && sameGuideline(entry, finding),
     );
+    if (othersUnjudged && known === undefined && !repeated) {
+      unjudged.push(finding);
+      continue;
+    }
     wrong.push({
       finding,
       reason:
@@ -123,11 +128,11 @@ export function scoreRun(
   }
   return {
     expected: expected.length,
-    found: produced.length,
+    found: produced.length - unjudged.length,
     right,
     wrong,
     missed: open,
-    unjudged: [],
+    unjudged,
   };
 }
 
@@ -146,10 +151,9 @@ export function scoreFacts(
   noFinding: readonly NoFinding[],
   reach: FactsReach,
   window = 0,
-  _othersUnjudged = false,
+  othersUnjudged = false,
 ): FactsScore {
-  void _othersUnjudged;
-  const score = scoreRun(produced, expected, noFinding, window);
+  const score = scoreRun(produced, expected, noFinding, window, othersUnjudged);
   const judgement: ExpectedFinding[] = [];
   const missed: ExpectedFinding[] = [];
   for (const want of score.missed) {

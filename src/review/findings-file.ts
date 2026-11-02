@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Severity } from "../domain/severity.js";
@@ -26,9 +27,21 @@ function messageOf(finding: ReportedFinding): string {
   return rule === undefined ? reason : `${reason} ${rule}`;
 }
 
+const flat = (text: string): string => text.trim().replace(/\s+/g, " ");
+
+/** The guideline, the flagged code and the guideline sentence; never the path, the line or the model's wording. */
+function fingerprintOf(finding: ReportedFinding): string {
+  const code = flat(finding.lineText ?? finding.quote ?? "");
+  const parts =
+    finding.kind === "violation"
+      ? [finding.guidelineId, code, flat(finding.guidelineQuote ?? "")]
+      : ["observation", code, ""];
+  return createHash("sha256").update(parts.join("\0")).digest("hex").slice(0, 16);
+}
+
 /**
- * A findings file in the engine's shape. Baselined findings and findings on no line stay out;
- * the fingerprint is left for the engine to derive.
+ * A findings file in the engine's shape, each finding with the reviewer's own fingerprint.
+ * Baselined findings and findings on no line stay out.
  */
 export function renderFindingsFile(
   findings: readonly ReportedFinding[],
@@ -47,6 +60,7 @@ export function renderFindingsFile(
       message: messageOf(finding),
       ...(finding.suggestion !== undefined ? { suggested: finding.suggestion } : {}),
       ...(evidence !== undefined ? { evidence } : {}),
+      fingerprint: fingerprintOf(finding),
     }));
   return `${JSON.stringify({ schema: FINDINGS_DOCUMENT, findings: written }, null, 2)}\n`;
 }

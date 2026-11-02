@@ -73,7 +73,10 @@ function writeCase(
   };
   const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
   writeFileSync(path.join(dir, "diff.patch"), record.patch);
-  writeFileSync(path.join(dir, "expected.json"), json({ findings: [], noFinding: [noFinding] }));
+  writeFileSync(
+    path.join(dir, "expected.json"),
+    json({ findings: [], noFinding: [noFinding], othersUnjudged: true }),
+  );
   const origin = {
     from: source,
     fingerprint: falsePositive.fingerprint,

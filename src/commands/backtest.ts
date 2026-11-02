@@ -300,8 +300,15 @@ export async function runBacktestCommand(
               benchCase.noFinding,
               replay.facts,
               window,
+              benchCase.othersUnjudged === true,
             )
-          : scoreRun(replay.findings, benchCase.expected, benchCase.noFinding, window);
+          : scoreRun(
+              replay.findings,
+              benchCase.expected,
+              benchCase.noFinding,
+              window,
+              benchCase.othersUnjudged === true,
+            );
       writeFileSync(path.join(runsDir, `${label}.log`), replay.log);
       if (replay.report !== undefined) {
         writeFileSync(path.join(runsDir, `${label}.report.json`), replay.report);
@@ -325,7 +332,9 @@ export async function runBacktestCommand(
       name: benchCase.name,
       expected: benchCase.expected.length,
       runs: own,
-      drift: drift(own.map((run) => run.replay.findings)),
+      drift: drift(
+        own.map((run) => run.replay.findings.filter((one) => !run.score.unjudged.includes(one))),
+      ),
       recall: Math.min(
         ...own.map((run) => ratio(run.score.right, run.score.facts ?? run.score.expected)),
       ),
