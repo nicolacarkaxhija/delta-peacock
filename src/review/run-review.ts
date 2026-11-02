@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { ToolSet } from "ai";
 import type { Config } from "../config/schema.js";
@@ -49,7 +49,7 @@ import {
 import type { RetryOptions } from "../model/retry.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
-import { FINDINGS_FILE, renderFindingsFile } from "./findings-file.js";
+import { writeFindingsFile } from "./findings-file.js";
 import { writeReviewRecord } from "./review-record.js";
 import { planBatches, planBudget } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
@@ -681,12 +681,14 @@ export async function runReview(
     if (config.output.findingsDir !== undefined) {
       const evidence = writeReviewRecord(
         deps.cwd,
-        { staged: options.staged === true, target: acquired.targetRef },
+        {
+          staged: options.staged === true,
+          target: acquired.targetRef,
+          ...(acquired.mode === "incremental" ? { since: config.review.lastReviewedCommit } : {}),
+        },
         deps.clock?.() ?? new Date(),
       );
-      const dir = path.resolve(deps.cwd, config.output.findingsDir);
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(path.join(dir, FINDINGS_FILE), renderFindingsFile(report.findings, evidence));
+      writeFindingsFile(deps.cwd, config.output.findingsDir, report.findings, evidence);
     }
   }
 
@@ -1431,6 +1433,10 @@ async function publishAllClear(
   sources: PublishSources,
   scope?: ChangeScope,
 ): Promise<void> {
+  // a run with nothing to review leaves the editor no findings of an earlier one
+  if (config.output.findingsDir !== undefined) {
+    writeFindingsFile(deps.cwd, config.output.findingsDir, []);
+  }
   await publishIfConfigured(
     deps,
     config,

@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import type { Severity } from "../domain/severity.js";
 import { guidelineLine, twoSentences } from "../scm/comment-format.js";
 import type { ReportedFinding } from "./report.js";
@@ -47,4 +49,16 @@ export function renderFindingsFile(
       ...(evidence !== undefined ? { evidence } : {}),
     }));
   return `${JSON.stringify({ schema: FINDINGS_DOCUMENT, findings: written }, null, 2)}\n`;
+}
+
+/** Writes the findings file into dir, replacing the one an earlier review left. */
+export function writeFindingsFile(
+  cwd: string,
+  dir: string,
+  findings: readonly ReportedFinding[],
+  evidence?: string,
+): void {
+  const folder = path.resolve(cwd, dir);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(path.join(folder, FINDINGS_FILE), renderFindingsFile(findings, evidence));
 }

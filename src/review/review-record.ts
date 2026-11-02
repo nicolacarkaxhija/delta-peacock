@@ -7,6 +7,7 @@ const REVIEWS_DIR = ".delta-peacock-cache/reviews";
 const RECORD_FILE = "review.json";
 const PATCH_FILE = "diff.patch";
 const RECORD_SCHEMA = "review-record-1";
+const COMMIT = /^[0-9a-f]{40,64}$/;
 
 /** What a backtest case needs of a review: the commit the change applies to, and the change. */
 export interface ReviewRecord {
@@ -20,7 +21,7 @@ export interface ReviewRecord {
  */
 export function writeReviewRecord(
   cwd: string,
-  change: { staged: boolean; target: string },
+  change: { staged: boolean; target: string; since?: string | undefined },
   at: Date,
 ): string | undefined {
   let base: string;
@@ -30,7 +31,7 @@ export function writeReviewRecord(
       base = runGit(cwd, ["rev-parse", "HEAD"]).trim();
       patch = runGit(cwd, ["diff", "--cached", "--binary", "--no-color"]);
     } else {
-      base = runGit(cwd, ["merge-base", change.target, "HEAD"]).trim();
+      base = runGit(cwd, ["merge-base", change.since ?? change.target, "HEAD"]).trim();
       patch = runGit(cwd, ["diff", "--binary", "--no-color", base, "HEAD"]);
     }
   } catch {
@@ -44,10 +45,11 @@ export function writeReviewRecord(
   return `${dir}/${RECORD_FILE}`;
 }
 
-/** The record a finding's evidence names, or undefined when it is missing or of another shape. */
+/** The record a finding's evidence names under the records folder, or undefined when it is missing or of another shape. */
 export function readReviewRecord(cwd: string, evidence: string): ReviewRecord | undefined {
   const file = path.resolve(cwd, evidence);
-  if (!existsSync(file)) return undefined;
+  const records = `${path.resolve(cwd, REVIEWS_DIR)}${path.sep}`;
+  if (!file.startsWith(records) || !existsSync(file)) return undefined;
   let value: unknown;
   try {
     value = JSON.parse(readFileSync(file, "utf8"));
@@ -56,6 +58,7 @@ export function readReviewRecord(cwd: string, evidence: string): ReviewRecord | 
   }
   const record = value as { schema?: unknown; base?: unknown };
   if (record.schema !== RECORD_SCHEMA || typeof record.base !== "string") return undefined;
+  if (!COMMIT.test(record.base)) return undefined;
   const patchFile = path.join(path.dirname(file), PATCH_FILE);
   if (!existsSync(patchFile)) return undefined;
   return { base: record.base, patch: readFileSync(patchFile, "utf8") };
