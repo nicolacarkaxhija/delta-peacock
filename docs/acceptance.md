@@ -99,7 +99,8 @@ from a clean checkout; a red line blocks it.
   `pnpm exec vitest run tests/findings-file`.
 - `false positives become cases`: `backtest --intake <dir>` turns each false positive file of the
   reviewer into a case the loader picks up, with the recorded base and change and the finding as a
-  `noFinding` entry, and names every file it skips with its reason; the case judges only the marked
+  `noFinding` entry, refuses a false positive whose fingerprint the record does not list, and names
+  every file it skips with its reason; the case judges only the marked
   finding, and the review's other findings are neither wrong nor drift. On its own:
   `pnpm exec vitest run tests/findings-intake tests/score-unjudged`.
 - `findings schema script`: the schema script passes an engine schema that says what the vendored

@@ -83,8 +83,10 @@ holds the finding's span as a `noFinding` entry with the person's reason as its 
 `othersUnjudged: true`.
 `case.json` names the file it came from. A file is skipped, with its reason on one line, when the
 case already exists, another producer wrote the finding, the file is not a false positive file, the
-finding names no record, a record outside `.delta-peacock-cache/reviews/` or one that is gone, or
-the record's commit is not in the clone.
+finding names no record, a record outside `.delta-peacock-cache/reviews/` or one that is gone, the
+record lists no finding with the file's fingerprint, or the record's commit is not in the clone. A
+recorded change keeps its secret shaped values masked, so a case whose masked lines the base also
+holds may not apply; such a case is fixed by hand.
 
 `othersUnjudged: true` in any case's `expected.json` judges only its listed spans: a finding on no
 `findings` or `noFinding` span is left unjudged. It is not wrong, it is not counted in `found` or
