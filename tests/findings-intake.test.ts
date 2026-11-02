@@ -131,7 +131,7 @@ describe("intakeFalsePositives", () => {
     ]);
   });
 
-  it("skips a case already taken in, another producer's finding, a file of another shape and a finding with no record", async () => {
+  it("skips a case already taken in, another producer's finding, a file of another shape, a finding with no record and a record from another clone", async () => {
     const { repo, finding } = await reviewed();
     markFalsePositive(repo, finding);
     const cases = casesDir();
@@ -144,6 +144,13 @@ describe("intakeFalsePositives", () => {
       Object.entries(finding).filter(([key]) => key !== "evidence"),
     );
     markFalsePositive(repo, unlinked, "f", "3333333333333333");
+    write(
+      repo,
+      "far/review.json",
+      JSON.stringify({ schema: "review-record-1", base: "0".repeat(40) }),
+    );
+    write(repo, "far/diff.patch", "");
+    markFalsePositive(repo, { ...finding, evidence: "far/review.json" }, "g", "4444444444444444");
 
     expect(intakeFalsePositives(repo, INTAKE, cases)).toEqual([
       { file: `${INTAKE}/${FINGERPRINT}.json`, skipped: "already a backtest case" },
@@ -152,6 +159,10 @@ describe("intakeFalsePositives", () => {
       { file: `${INTAKE}/d.json`, skipped: "not a false positive file" },
       { file: `${INTAKE}/e.json`, skipped: "no review record at gone/review.json" },
       { file: `${INTAKE}/f.json`, skipped: "no review record: the finding names no evidence" },
+      {
+        file: `${INTAKE}/g.json`,
+        skipped: "the base commit of far/review.json is not in this clone",
+      },
     ]);
     expect(existsSync(path.join(cases, "false-positive-1111111111111111"))).toBe(false);
   });
