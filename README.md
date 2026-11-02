@@ -36,6 +36,7 @@ It reviews pull requests against guidelines your team keeps as markdown in its o
 - [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [What ships](#what-ships)
+- [Findings for the editor](#findings-for-the-editor)
 - [Continuous integration](#continuous-integration)
 - [Configuration](#configuration)
 - [Security and privacy](#security-and-privacy)
@@ -187,6 +188,20 @@ Credentials, tokens and API keys must come from the environment, never a literal
 ![doctor](docs/media/doctor.gif)
 
 </details>
+
+## Findings for the editor
+
+`review --findings <dir>` (`output.findingsDir`, env `DELTA_PEACOCK_OUTPUT_FINDINGS_DIR`) writes the review's findings into `<dir>/reviewer.json` in the finding shape an editor extension reads, so each one shows on its line next to the code. Where the reviewed repository runs its tests on the test engine, the folder is `reports/findings`:
+
+```bash
+npx delta-peacock review --findings reports/findings
+```
+
+Every finding names the producer `reviewer`, the guideline id as its rule (`observation` for a finding that cites none), the file and line, a one line message that gives the reason and quotes the guideline sentence the way a comment does, and the suggested change when the review proposes one. BLOCKER and CRITICAL become `error`, MAJOR `warning`, MINOR and INFO `info`. Each finding carries the reviewer's own fingerprint: a short hex digest of the guideline id, the code on the flagged line and the quoted guideline sentence, each with its whitespace collapsed. The path, the line number and the model's wording stay out, so a suppression or a false positive mark holds when the finding moves, its file is renamed, or a later review words it differently, and changes when the guideline, the code or the guideline sentence does. Baselined findings and findings that sit on no line stay out of the file. Each review empties it when it starts and writes its findings when it ends, so a run that stops early or fails leaves an empty list.
+
+Each finding's `evidence` names the review record: `.delta-peacock-cache/reviews/<time>/review.json`, with the commit the reviewed change applies to (the last reviewed commit on an incremental review) the fingerprints of the findings it wrote, and that change as `diff.patch` beside it, its secret shaped values masked the way the model's copy is. The record holds code of the reviewed repository, so `.delta-peacock-cache/` belongs in that repository's `.gitignore`. A review that read its diff from the SCM API writes no record and no evidence. When a person marks a finding as a false positive in the editor, the engine writes a backtest case file, and `backtest --intake` turns it into a case; see [false positives from the editor](docs/guides/backtest.md#false-positives-from-the-editor).
+
+The file follows the engine's JSON schema, vendored as [schema/finding.schema.json](schema/finding.schema.json). `pnpm findings:schema validate <file>` validates a findings file against it. `pnpm findings:schema check <engine schema>` fails when the vendored copy no longer says what the engine's says; the engine prints its schema with its `findings schema` command, and piping that output into `pnpm findings:schema refresh -` replaces the copy.
 
 ## Continuous integration
 

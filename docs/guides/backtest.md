@@ -6,7 +6,7 @@ it. A release that finds something new that a person judged wrong, drifts betwee
 less than the last passing run fails the backtest.
 
 ```
-delta-peacock backtest --cases <dir> [--repeats 3] [--config <file>] [--only a,b] [--concurrency 3] [--report out.json] [--provider none] [--anchor-window 0]
+delta-peacock backtest --cases <dir> [--repeats 3] [--config <file>] [--only a,b] [--concurrency 3] [--report out.json] [--provider none] [--anchor-window 0] [--intake <dir>]
 ```
 
 `--provider` runs every case under that model provider. With `none` the run checks facts only and
@@ -63,6 +63,35 @@ one line below, the opening of the block above. `--anchor-window <lines>` widens
 span by that many lines either way, so a finding on such a nearby line counts as right. A
 finding inside the window of two spans goes to the nearest one. The window is 0 by default, it
 never widens a `noFinding` span, and the run's `summary.json` records it as `anchorWindow`.
+
+## False positives from the editor
+
+A review run with `--findings` leaves a record of the change it saw, and each finding in the
+findings file names that record as its evidence (see
+[findings for the editor](../../README.md#findings-for-the-editor)). When a person marks one of
+those findings as a false positive, the test engine writes a backtest case file into the reviewed
+repository's `findings/backtest/` folder, holding the fingerprint, the reason and the finding.
+
+```
+delta-peacock backtest --cases <cases> --intake findings/backtest [--only false-positive-<fingerprint>]
+```
+
+Run it from the clone the review ran in. Before the cases load, every file in the intake folder
+whose finding the reviewer produced becomes the case `false-positive-<fingerprint>`: `base/` is the
+tree of the commit the record names, `diff.patch` is the recorded change, and `expected.json`
+holds the finding's span as a `noFinding` entry with the person's reason as its `why`, and
+`othersUnjudged: true`.
+`case.json` names the file it came from. A file is skipped, with its reason on one line, when the
+case already exists, another producer wrote the finding, the file is not a false positive file, the
+finding names no record, a record outside `.delta-peacock-cache/reviews/` or one that is gone, the
+record lists no finding with the file's fingerprint, or the record's commit is not in the clone. A
+recorded change keeps its secret shaped values masked, so a case whose masked lines the base also
+holds may not apply; such a case is fixed by hand.
+
+`othersUnjudged: true` in any case's `expected.json` judges only its listed spans: a finding on no
+`findings` or `noFinding` span is left unjudged. It is not wrong, it is not counted in `found` or
+precision, and it does not count as drift, so a case made from one false positive fails only when
+the marked finding comes back.
 
 ## What a run does
 

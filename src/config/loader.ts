@@ -48,6 +48,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_OUTPUT_REPORT: "output.report",
   DELTA_PEACOCK_OUTPUT_SARIF_PATH: "output.sarifPath",
   DELTA_PEACOCK_OUTPUT_CODE_QUALITY_PATH: "output.codeQualityPath",
+  DELTA_PEACOCK_OUTPUT_FINDINGS_DIR: "output.findingsDir",
   DELTA_PEACOCK_REDACTION_PATTERNS: "redaction.patterns",
   DELTA_PEACOCK_REDACTION_STRICT: "redaction.strict",
   DELTA_PEACOCK_SCM_PROVIDER: "scm.provider",

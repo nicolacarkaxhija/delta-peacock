@@ -49,6 +49,8 @@ import {
 import type { RetryOptions } from "../model/retry.js";
 import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
+import { fingerprintsOf, writeFindingsFile } from "./findings-file.js";
+import { writeReviewRecord } from "./review-record.js";
 import { planBatches, planBudget } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
@@ -129,6 +131,10 @@ export async function runReview(
 ): Promise<number> {
   const startedAt = performance.now();
   const config = deps.loadConfig(flags);
+  // an earlier review's findings never outlive a run that stops or throws
+  if (config.output.findingsDir !== undefined) {
+    writeFindingsFile(deps.cwd, config.output.findingsDir, []);
+  }
 
   if (options.staged === true) {
     // at commit time there is no target ref and no pull request to speak of
@@ -602,7 +608,8 @@ export async function runReview(
   const wantsArtifacts =
     config.output.report !== undefined ||
     config.output.sarifPath !== undefined ||
-    config.output.codeQualityPath !== undefined;
+    config.output.codeQualityPath !== undefined ||
+    config.output.findingsDir !== undefined;
   if (wantsArtifacts) {
     const anchorTexts = newLineTexts(redacted.text);
     const report = buildReport({
@@ -674,6 +681,25 @@ export async function runReview(
         path.resolve(deps.cwd, config.output.codeQualityPath),
         renderCodeQuality(report.findings),
       );
+    }
+    if (config.output.findingsDir !== undefined) {
+      const evidence = writeReviewRecord(
+        deps.cwd,
+        {
+          staged: options.staged === true,
+          target: acquired.targetRef,
+          ...(acquired.mode === "incremental" ? { since: config.review.lastReviewedCommit } : {}),
+        },
+        deps.clock?.() ?? new Date(),
+        {
+          fingerprints: fingerprintsOf(report.findings),
+          redact: (text) =>
+            redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
+              strict: config.redaction.strict,
+            }).text,
+        },
+      );
+      writeFindingsFile(deps.cwd, config.output.findingsDir, report.findings, evidence);
     }
   }
 

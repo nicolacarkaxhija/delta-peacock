@@ -1,0 +1,64 @@
+{
+  "$id": "urn:test-runner:findings:document:1",
+  "title": "A findings file: what one producer found, each finding at a file and range of the suite",
+  "type": "object",
+  "required": ["schema", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "findings-1" },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1 },
+    "position": { "type": "integer", "minimum": 1 },
+    "finding": {
+      "type": "object",
+      "required": ["producer", "rule", "severity", "file", "range", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "producer": {
+          "description": "An open set: any name the pattern takes, the engine's own producers among them.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:/-]*$"
+        },
+        "rule": { "$ref": "#/$defs/text" },
+        "severity": { "type": "string", "pattern": "^(error|warning|info)$" },
+        "file": { "type": "string", "pattern": "^[^/\\\\][^\\\\]*$" },
+        "range": { "$ref": "#/$defs/range" },
+        "message": { "$ref": "#/$defs/text" },
+        "suggested": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/text" },
+        "fingerprint": {
+          "description": "Optional; derived from producer, rule, message and suggested form when absent. Path and lines stay out, so a moved finding keeps it.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{16,64}$"
+        },
+        "baseline": { "$ref": "#/$defs/baseline" }
+      }
+    },
+    "range": {
+      "type": "object",
+      "required": ["startLine"],
+      "additionalProperties": false,
+      "properties": {
+        "startLine": { "$ref": "#/$defs/position" },
+        "startColumn": { "$ref": "#/$defs/position" },
+        "endLine": { "$ref": "#/$defs/position" },
+        "endColumn": { "$ref": "#/$defs/position" }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "required": ["kind", "page", "device", "element", "property", "rendered"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "parity" },
+        "page": { "$ref": "#/$defs/text" },
+        "device": { "$ref": "#/$defs/text" },
+        "element": { "$ref": "#/$defs/text" },
+        "property": { "$ref": "#/$defs/text" },
+        "rendered": { "type": "string" }
+      }
+    }
+  }
+}
