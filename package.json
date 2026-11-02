@@ -56,6 +56,7 @@
     "format:check": "prettier --check .",
     "docs:check": "node scripts/check-docs.mjs",
     "schema:update": "vitest run tests/config-schema.test.ts -u",
+    "findings:schema": "node scripts/findings-schema.mjs",
     "prepack": "tsup",
     "pack:bundled": "sh scripts/pack-bundled.sh",
     "prepare": "husky",
