@@ -158,6 +158,14 @@ function reviewedRepo(): string {
   return repo;
 }
 
+/** A file committed on the target branch, the feature branch checked out again. */
+function onTarget(repo: string, file: string, text: string): void {
+  git(repo, "checkout", "-q", "main");
+  write(repo, file, text);
+  commitAll(repo, "target");
+  git(repo, "checkout", "-q", "feature");
+}
+
 async function review(repo: string, ...args: string[]): Promise<number> {
   return runCli(["review", "--target", "main", ...args], {
     cwd: repo,
@@ -212,6 +220,51 @@ describe("review --findings", () => {
     expect(record?.patch).toBe(git(repo, "diff", "--cached", "--binary", "--no-color"));
   });
 
+  it("records an incremental review from the last reviewed commit", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "rules");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/app.js", "function greet(name) {\n  return name;\n}\n");
+    commitAll(repo, "first");
+    const anchor = git(repo, "rev-parse", "HEAD").trim();
+    write(repo, "src/app.js", "function greet(name) {\n  console.log(name);\n  return name;\n}\n");
+    commitAll(repo, "second");
+    expect(await review(repo, "--findings", "f", "--last-reviewed-commit", anchor)).toBe(0);
+    const record = readReviewRecord(repo, String(writtenIn(repo, "f")[0]?.evidence));
+    expect(record?.base).toBe(anchor);
+    expect(record?.patch).toBe(git(repo, "diff", "--binary", "--no-color", anchor, "HEAD"));
+  });
+
+  it.each<[string, (repo: string) => string[]]>([
+    ["nothing in scope changed", (repo) => (git(repo, "checkout", "-q", "main"), [])],
+    ["the change is too large", () => ["--max-diff-bytes", "1"]],
+    [
+      "no guideline applies",
+      (repo) => (
+        onTarget(
+          repo,
+          "guidelines/no-console.md",
+          GUIDELINE.replace("---\n#", "paths: [lib/**]\n---\n#"),
+        ),
+        []
+      ),
+    ],
+    [
+      "no guideline is usable",
+      (repo) => (
+        onTarget(repo, "broken/rule.md", "# No frontmatter\n"),
+        ["--guidelines-dir", "broken"]
+      ),
+    ],
+  ])("empties a stale findings file when %s", async (_situation, arrange) => {
+    const repo = reviewedRepo();
+    const extra = arrange(repo);
+    write(repo, `f/${FINDINGS_FILE}`, renderFindingsFile([violation()]));
+    expect(await review(repo, "--findings", "f", ...extra)).toBe(0);
+    expect(writtenIn(repo, "f")).toEqual([]);
+  });
+
   it("writes no findings file without the option", async () => {
     const repo = reviewedRepo();
     expect(await review(repo)).toBe(0);
@@ -229,16 +282,27 @@ describe("writeReviewRecord", () => {
   });
 });
 
+const RECORDS = ".delta-peacock-cache/reviews";
+
 describe("readReviewRecord", () => {
-  it("returns nothing for an evidence path with no record, a record of another shape or without a base, or a missing patch", async () => {
+  it("returns nothing for an evidence path with no record, outside the records, a record of another shape, without a commit as its base, or a missing patch", async () => {
     const repo = reviewedRepo();
-    expect(readReviewRecord(repo, "nowhere/review.json")).toBeUndefined();
-    write(repo, "bad/review.json", "{ not json");
-    expect(readReviewRecord(repo, "bad/review.json")).toBeUndefined();
-    write(repo, "other/review.json", JSON.stringify({ schema: "something-else" }));
-    expect(readReviewRecord(repo, "other/review.json")).toBeUndefined();
-    write(repo, "baseless/review.json", JSON.stringify({ schema: "review-record-1" }));
-    expect(readReviewRecord(repo, "baseless/review.json")).toBeUndefined();
+    const record = (base: string): string => JSON.stringify({ schema: "review-record-1", base });
+    const sha = git(repo, "rev-parse", "HEAD").trim();
+    expect(readReviewRecord(repo, `${RECORDS}/nowhere/review.json`)).toBeUndefined();
+    write(repo, "outside/review.json", record(sha));
+    write(repo, "outside/diff.patch", "");
+    expect(readReviewRecord(repo, `${RECORDS}/../../outside/review.json`)).toBeUndefined();
+    expect(readReviewRecord(repo, "outside/review.json")).toBeUndefined();
+    write(repo, `${RECORDS}/bad/review.json`, "{ not json");
+    expect(readReviewRecord(repo, `${RECORDS}/bad/review.json`)).toBeUndefined();
+    write(repo, `${RECORDS}/other/review.json`, JSON.stringify({ schema: "something-else" }));
+    expect(readReviewRecord(repo, `${RECORDS}/other/review.json`)).toBeUndefined();
+    write(repo, `${RECORDS}/baseless/review.json`, JSON.stringify({ schema: "review-record-1" }));
+    expect(readReviewRecord(repo, `${RECORDS}/baseless/review.json`)).toBeUndefined();
+    write(repo, `${RECORDS}/option/review.json`, record("--output=x"));
+    write(repo, `${RECORDS}/option/diff.patch`, "");
+    expect(readReviewRecord(repo, `${RECORDS}/option/review.json`)).toBeUndefined();
     expect(await review(repo, "--findings", "f")).toBe(0);
     const evidence = String(writtenIn(repo, "f")[0]?.evidence);
     rmSync(path.join(repo, path.dirname(evidence), "diff.patch"));

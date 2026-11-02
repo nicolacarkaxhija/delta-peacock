@@ -146,11 +146,16 @@ describe("intakeFalsePositives", () => {
     markFalsePositive(repo, unlinked, "f", "3333333333333333");
     write(
       repo,
-      "far/review.json",
+      ".delta-peacock-cache/reviews/far/review.json",
       JSON.stringify({ schema: "review-record-1", base: "0".repeat(40) }),
     );
-    write(repo, "far/diff.patch", "");
-    markFalsePositive(repo, { ...finding, evidence: "far/review.json" }, "g", "4444444444444444");
+    write(repo, ".delta-peacock-cache/reviews/far/diff.patch", "");
+    markFalsePositive(
+      repo,
+      { ...finding, evidence: ".delta-peacock-cache/reviews/far/review.json" },
+      "g",
+      "4444444444444444",
+    );
 
     expect(intakeFalsePositives(repo, INTAKE, cases)).toEqual([
       { file: `${INTAKE}/${FINGERPRINT}.json`, skipped: "already a backtest case" },
@@ -161,7 +166,8 @@ describe("intakeFalsePositives", () => {
       { file: `${INTAKE}/f.json`, skipped: "no review record: the finding names no evidence" },
       {
         file: `${INTAKE}/g.json`,
-        skipped: "the base commit of far/review.json is not in this clone",
+        skipped:
+          "the base commit of .delta-peacock-cache/reviews/far/review.json is not in this clone",
       },
     ]);
     expect(existsSync(path.join(cases, "false-positive-1111111111111111"))).toBe(false);
