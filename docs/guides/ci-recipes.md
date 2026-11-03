@@ -178,4 +178,4 @@ A persistent counter through the SCM is possible but not built: on Bitbucket the
 
 ## Debugging an unparsable reply
 
-When a review stops with `every batch's reply failed to parse`, set `DELTA_PEACOCK_DUMP_REPLY=replies.jsonl`: every model call appends one JSON line with its finish reason and each step's text and tool calls. The file holds the model's own words about the redacted diff; keep it out of published artifacts.
+When a review names files as `not reviewed: reply unparseable`, set `DELTA_PEACOCK_DUMP_REPLY=replies.jsonl`: every model call appends one JSON line with its finish reason and each step's text and tool calls. The file holds the model's own words about the redacted diff; keep it out of published artifacts.
