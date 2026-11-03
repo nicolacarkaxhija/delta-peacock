@@ -300,6 +300,15 @@ export interface SummaryInput {
   scope?: ChangeScope;
   /** The reviewed commit, full hash: named on a clean summary and on the comment of a finding it resolved, and where file links point. */
   reviewedCommit?: string;
+  /** Set when no model reply could be read for some files; the rest were reviewed. */
+  unreviewed?: UnreviewedFiles;
+}
+
+/** Files whose model reply could not be read, so no model judged them. */
+export interface UnreviewedFiles {
+  files: readonly string[];
+  /** The status the run posts while the gate passes. */
+  status: Config["fallback"]["status"];
 }
 
 /** What a run with no model left out: candidates for a person, guidelines no check owns. */

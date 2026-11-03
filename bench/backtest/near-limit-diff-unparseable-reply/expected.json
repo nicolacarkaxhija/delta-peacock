@@ -1,0 +1,12 @@
+{
+  "findings": [
+    {
+      "file": "src/widgets/gallery.js",
+      "line": 31,
+      "guidelineId": "no-debug-output",
+      "severity": "MAJOR",
+      "why": "a console.log call in shipped code; the case exists to prove a change near the window still gets reviewed"
+    }
+  ],
+  "noFinding": []
+}

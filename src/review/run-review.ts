@@ -957,7 +957,7 @@ async function assembleReview(
     prefix,
     context: projectContext,
     diff: redacted.text,
-    windowTokens: config.review.windowTokens,
+    budgetTokens: config.review.windowTokens,
   });
   for (const notice of plan.notices) deps.err(`${notice}\n`);
   // splitting (when needed) happens regardless of contextTools: agentic tools
@@ -1218,7 +1218,12 @@ export async function runPasses(
   for (const [index, outcome] of outcomes.entries()) {
     if (!outcome.ok && outcome.outage !== undefined) continue;
     if (!outcome.ok) {
-      unparsedBatches.push({ batch: index + 1, of: passes.length, reason: outcome.reason });
+      unparsedBatches.push({
+        batch: index + 1,
+        of: passes.length,
+        reason: outcome.reason,
+        files: passes[index]?.files ?? [],
+      });
       continue;
     }
     const { parsed, reply } = outcome;

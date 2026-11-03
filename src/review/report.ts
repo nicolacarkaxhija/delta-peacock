@@ -42,6 +42,8 @@ export interface UnparsedBatch {
   of: number;
   /** The parse failure's own message (e.g. "model response held no JSON object"). */
   reason: string;
+  /** The files of the batch, none of them reviewed. */
+  files: string[];
 }
 
 export interface ReviewReport {

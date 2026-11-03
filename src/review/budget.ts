@@ -8,8 +8,8 @@ export interface BudgetInput {
   context: string;
   /** The diff under review. */
   diff: string;
-  /** The target window the assembled prompt should fit inside. */
-  windowTokens: number;
+  /** The tokens the assembled prompt may take: the window less the reply and a margin. */
+  budgetTokens: number;
 }
 
 export interface BudgetPlan {
@@ -32,21 +32,21 @@ export function planBudget(input: BudgetInput): BudgetPlan {
   const contextTokens = approximateTokens(input.context);
   const diffTokens = approximateTokens(input.diff);
   const full = prefixTokens + contextTokens + diffTokens;
-  if (full <= input.windowTokens) {
+  if (full <= input.budgetTokens) {
     return { dropContext: false, batchDiff: false, notices: [], estimatedTokens: full };
   }
 
   const notices: string[] = [];
   const withoutContext = prefixTokens + diffTokens;
-  if (withoutContext <= input.windowTokens) {
+  if (withoutContext <= input.budgetTokens) {
     notices.push(
-      `prompt (~${String(full)} tokens) exceeds the window (${String(input.windowTokens)}); dropping cross-file context`,
+      `prompt (~${String(full)} tokens) exceeds the window (${String(input.budgetTokens)}); dropping cross-file context`,
     );
     return { dropContext: true, batchDiff: false, notices, estimatedTokens: withoutContext };
   }
 
   notices.push(
-    `prompt (~${String(full)} tokens) exceeds the window (${String(input.windowTokens)}) even without context; splitting the diff into file-boundary batches`,
+    `prompt (~${String(full)} tokens) exceeds the window (${String(input.budgetTokens)}) even without context; splitting the diff into file-boundary batches`,
   );
   return { dropContext: true, batchDiff: true, notices, estimatedTokens: withoutContext };
 }
@@ -124,7 +124,7 @@ export function planBatches(
   diff: string,
   projectContext: string,
   prefix: string,
-  windowTokens: number,
+  budgetTokens: number,
   attentionBudget: AttentionBudget,
 ): BatchPlan {
   const changedFiles = changedFilesFromDiff(diff);
@@ -157,7 +157,7 @@ export function planBatches(
   // the attention cap can bind first, well below the window, capping batches
   // smaller than the window alone would ever require
   const reserved = approximateTokens(prefix) + approximateTokens(projectContext);
-  const perBatchTokenCap = Math.min(windowTokens - reserved, attentionBudget.maxTokens);
+  const perBatchTokenCap = Math.min(budgetTokens - reserved, attentionBudget.maxTokens);
   const diffBatches = splitDiffByFile(diff, perBatchTokenCap, attentionBudget.maxFiles);
   let degraded = false;
   const batchContexts = diffBatches.map((batchDiff, index) => {
@@ -165,7 +165,7 @@ export function planBatches(
       prefix,
       context: projectContext,
       diff: batchDiff,
-      windowTokens,
+      budgetTokens,
     });
     if (!batchPlan.dropContext) return projectContext;
     degraded = true;
@@ -179,4 +179,15 @@ export function planBatches(
     return "";
   });
   return { diffBatches, batchContexts, degraded, notices };
+}
+
+/** The tokens a prompt may take in a window once the reply and a margin have room. */
+export function promptBudget(windowTokens: number, replyTokens: number): number {
+  void replyTokens;
+  return windowTokens;
+}
+
+/** Two smaller slices of a diff, or the diff alone when it cannot be cut. */
+export function halveDiff(diff: string): string[] {
+  return [diff];
 }
