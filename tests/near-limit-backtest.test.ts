@@ -72,12 +72,12 @@ describe("the near-limit backtest case", () => {
   if (nearLimit === undefined) throw new Error(`${CASE} is missing`);
   const windowTokens = loadConfig({ root: nearLimit.baseDir }).review.windowTokens;
 
-  it("keeps every prompt under the budget, so every batch answers and the finding stands", async () => {
+  it("keeps every prompt under the budget with room for the reply, so the finding stands", async () => {
     const model = nearLimitModel(windowTokens);
     const { run, report } = await replay(nearLimit, model.port);
     expect(run.error).toBeUndefined();
     expect(run.log).toMatch(/^full_files context: 18 changed file\(s\)/m);
-    expect(model.requests.length).toBeGreaterThan(1);
+    expect(run.log).toContain("exceeds the prompt budget");
     for (const request of model.requests) {
       expect(promptTokens(request)).toBeLessThanOrEqual(
         promptBudget(windowTokens, DEFAULT_MAX_OUTPUT_TOKENS),

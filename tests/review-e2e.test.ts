@@ -236,11 +236,11 @@ describe("review end to end (local mode)", () => {
     expect(report.findings).toEqual([]);
   });
 
-  it("maps a malformed model response to the tool-error exit code", async () => {
+  it("passes on a malformed model response and names the file not reviewed", async () => {
     const repo = makeScenario();
     const { code, stderr } = await review(repo, scriptedModel("I refuse to answer in JSON.").port);
-    expect(code).toBe(1);
-    expect(stderr).toContain("JSON");
+    expect(code).toBe(0);
+    expect(stderr).toContain("reviewed 0 of 1 file; not reviewed: reply unparseable: src/app.js");
   });
 
   it("honors an incremental anchor passed through the cli", async () => {

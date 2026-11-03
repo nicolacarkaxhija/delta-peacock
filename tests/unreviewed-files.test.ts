@@ -72,6 +72,14 @@ describe("statusLine", () => {
     );
   });
 
+  it("counts the unreviewed files alone when the changed files are not known", () => {
+    const unknown = input({});
+    delete unknown.changedFiles;
+    expect(statusLine(unknown)).toBe(
+      "Passed. Reviewed 0 of 2 changed files; 2 not reviewed: reply unparseable.",
+    );
+  });
+
   it("asks for a person's approval with fallback.status pending", () => {
     expect(statusLine(input({ unreviewed: { files: ["src/a.js"], status: "pending" } }))).toBe(
       "Passed. Reviewed 2 of 3 changed files; 1 not reviewed: reply unparseable. Needs a person's approval.",
@@ -110,6 +118,8 @@ describe("renderSummaryBody", () => {
         "",
         "- src/a.js: not reviewed: reply unparseable",
         "- src/c.js: not reviewed: reply unparseable",
+        "",
+        "<!-- delta-peacock:summary -->",
       ].join("\n"),
     );
   });

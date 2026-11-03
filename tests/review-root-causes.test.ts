@@ -288,7 +288,8 @@ describe("a reply with no JSON", () => {
         repo,
         scripted({ text: JSON.stringify({ findings: [finding] }) }).port,
       );
-      expect(inlineOf(fake)).toHaveLength(1);
+      const [earlier] = inlineOf(fake);
+      expect(earlier).toBeDefined();
       const model = scripted({ text: "I need to look at more files first." });
       const { code, stderr } = await reviewOnBitbucket(fake, repo, model.port);
       expect(code).toBe(0);
@@ -302,8 +303,10 @@ describe("a reply with no JSON", () => {
         description: "Passed. Reviewed 0 of 1 changed file; 1 not reviewed: reply unparseable.",
       });
       // no model judged the file again, so its earlier comment stays as it is
-      expect(inlineOf(fake)).toHaveLength(1);
-      expect(fake.writes.filter((write) => write.method === "DELETE")).toEqual([]);
+      expect(inlineOf(fake)).toEqual([earlier]);
+      expect(fake.writes.map((write) => write.url)).not.toContain(
+        `/repositories/acme/e2e/pullrequests/1/comments/${String(earlier?.id)}`,
+      );
     } finally {
       await fake.close();
     }

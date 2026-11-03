@@ -12,6 +12,14 @@ export interface BudgetInput {
   budgetTokens: number;
 }
 
+/** Share of the window left free for estimate error and for files the model fetches. */
+const WINDOW_MARGIN = 0.15;
+
+/** The tokens a prompt may take in a window once the reply and a margin have room. */
+export function promptBudget(windowTokens: number, replyTokens: number): number {
+  return Math.max(1, Math.floor(windowTokens * (1 - WINDOW_MARGIN)) - replyTokens);
+}
+
 export interface BudgetPlan {
   /** Drop the context section to reclaim its tokens. */
   dropContext: boolean;
@@ -23,7 +31,7 @@ export interface BudgetPlan {
 }
 
 /**
- * One place decides whether an assembled prompt fits the window, and how to
+ * One place decides whether an assembled prompt fits the prompt budget, and how to
  * degrade when it does not: shed context first, then split the diff into
  * file-boundary batches. Guidelines are never touched; they are the contract.
  */
@@ -40,28 +48,29 @@ export function planBudget(input: BudgetInput): BudgetPlan {
   const withoutContext = prefixTokens + diffTokens;
   if (withoutContext <= input.budgetTokens) {
     notices.push(
-      `prompt (~${String(full)} tokens) exceeds the window (${String(input.budgetTokens)}); dropping cross-file context`,
+      `prompt (~${String(full)} tokens) exceeds the prompt budget (${String(input.budgetTokens)}); dropping cross-file context`,
     );
     return { dropContext: true, batchDiff: false, notices, estimatedTokens: withoutContext };
   }
 
   notices.push(
-    `prompt (~${String(full)} tokens) exceeds the window (${String(input.budgetTokens)}) even without context; splitting the diff into file-boundary batches`,
+    `prompt (~${String(full)} tokens) exceeds the prompt budget (${String(input.budgetTokens)}) even without context; splitting the diff into file-boundary batches`,
   );
   return { dropContext: true, batchDiff: true, notices, estimatedTokens: withoutContext };
 }
 
 /**
  * Groups a unified diff's per-file chunks into batches that each fit the token
- * budget and, when given, never exceed a file-count cap either -- never
- * splitting one file. A single file over either cap still rides alone.
+ * budget and, when given, never exceed a file-count cap either. A file over the
+ * token budget is cut at its hunks, each piece under the file's own header; a
+ * single hunk over the budget still rides alone.
  */
 export function splitDiffByFile(
   diff: string,
   maxTokensPerBatch: number,
   maxFilesPerBatch = Number.POSITIVE_INFINITY,
 ): string[] {
-  const chunks = diff.split(/^(?=diff --git )/m).filter((chunk) => chunk !== "");
+  const chunks = fileChunks(diff).flatMap((chunk) => splitFile(chunk, maxTokensPerBatch));
   const batches: string[] = [];
   let current = "";
   let currentFiles = 0;
@@ -174,20 +183,61 @@ export function planBatches(
     // of the whole batch
     const files = changedFilesFromDiff(batchDiff).join(", ") || "unnamed files";
     notices.push(
-      `budget: batch ${String(index + 1)}/${String(diffBatches.length)} (${files}) does not fit the window with cross-file context; reviewing it without context`,
+      `budget: batch ${String(index + 1)}/${String(diffBatches.length)} (${files}) does not fit the prompt budget with cross-file context; reviewing it without context`,
     );
     return "";
   });
   return { diffBatches, batchContexts, degraded, notices };
 }
 
-/** The tokens a prompt may take in a window once the reply and a margin have room. */
-export function promptBudget(windowTokens: number, replyTokens: number): number {
-  void replyTokens;
-  return windowTokens;
+/** The per-file chunks of a unified diff, in order. */
+function fileChunks(diff: string): string[] {
+  return diff.split(/^(?=diff --git )/m).filter((chunk) => chunk !== "");
 }
 
-/** Two smaller slices of a diff, or the diff alone when it cannot be cut. */
+/** A file chunk's header and its hunks; no hunks when it carries none. */
+function hunksOf(chunk: string): { header: string; hunks: string[] } {
+  const [header = "", ...hunks] = chunk.split(/^(?=@@ )/m);
+  return { header, hunks };
+}
+
+/** One file's chunk, cut at its hunks into pieces under the budget when it is over. */
+function splitFile(chunk: string, maxTokens: number): string[] {
+  const { header, hunks } = hunksOf(chunk);
+  if (hunks.length < 2 || approximateTokens(chunk) <= maxTokens) return [chunk];
+  const pieces: string[] = [];
+  let current = "";
+  for (const hunk of hunks) {
+    if (current !== "" && approximateTokens(header + current + hunk) > maxTokens) {
+      pieces.push(header + current);
+      current = "";
+    }
+    current += hunk;
+  }
+  pieces.push(header + current);
+  return pieces;
+}
+
+/**
+ * Two smaller slices of a diff for a batch whose reply could not be read: by
+ * file at about half its tokens, or a single file by its hunks. A single hunk
+ * comes back whole, since nothing smaller is a diff.
+ */
 export function halveDiff(diff: string): string[] {
-  return [diff];
+  const chunks = fileChunks(diff);
+  if (chunks.length > 1) {
+    const total = approximateTokens(diff);
+    let sum = 0;
+    let cut = 1;
+    for (const [index, chunk] of chunks.slice(0, -1).entries()) {
+      sum += approximateTokens(chunk);
+      cut = index + 1;
+      if (sum * 2 >= total) break;
+    }
+    return [chunks.slice(0, cut).join(""), chunks.slice(cut).join("")];
+  }
+  const { header, hunks } = hunksOf(diff);
+  if (hunks.length < 2) return [diff];
+  const middle = Math.ceil(hunks.length / 2);
+  return [header + hunks.slice(0, middle).join(""), header + hunks.slice(middle).join("")];
 }
