@@ -468,7 +468,8 @@ fallback:
 
 ## When a reply cannot be read
 
-Each batch's prompt fits `review.windowTokens` with room left for the reply and a margin, so a
+Each batch's prompt fits `review.windowTokens` with room left for the reply ceiling
+(`review.maxOutputTokens`) and a margin, so a larger ceiling leaves a smaller prompt budget and a
 change that nearly fills the window is reviewed in more, smaller batches; a file too large for one
 batch is cut at its hunks. A reply that holds no readable JSON is asked once more for the answer,
 then its batch is asked once more as two smaller slices, by file, or by hunk for a single file. The
