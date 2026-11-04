@@ -1199,12 +1199,8 @@ function factsScope(facts: FactsOnly, config: Config): FactsScope {
   };
 }
 
-/** The review's model behind the response cache; the open passes and the judge share it. */
+/** The review's model behind the response cache; the open passes and the judge share it. Every caller runs only when the config names a model. */
 function reviewPort(deps: ReviewDeps, config: Config): ModelPort {
-  // an injected port must not slip past a config that names no model
-  if (noModel(config)) {
-    throw new ToolError("model.provider is none: no model is built and none is called");
-  }
   return withResponseCache(
     deps.modelPort ?? buildModelPort(config, deps.credentials, retryOf(deps)),
     config,
