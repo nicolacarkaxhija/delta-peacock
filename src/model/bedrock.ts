@@ -15,7 +15,7 @@ export interface BedrockPortOptions {
   omitTemperatureFor?: readonly string[];
   /** Test seam; also useful for VPC endpoints. */
   baseUrl?: string;
-  /** How hard the model may reason. */
+  /** Bounds the model's hidden reasoning; sent as the Bedrock reasoning effort. */
   reasoningEffort?: "low" | "medium" | "high";
   fetch?: typeof globalThis.fetch;
 }
@@ -38,6 +38,9 @@ export function createBedrockPort(options: BedrockPortOptions): ModelPort {
         request,
         cache,
         omitsTemperature(options.modelId, options.omitTemperatureFor),
+        options.reasoningEffort !== undefined
+          ? { bedrock: { reasoningConfig: { maxReasoningEffort: options.reasoningEffort } } }
+          : undefined,
       ),
   };
 }

@@ -242,6 +242,7 @@ describe("per-review cap", () => {
         DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
         DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
         DELTA_PEACOCK_COST_MAX_PER_REVIEW: "0.1",
+        DELTA_PEACOCK_REVIEW_MAX_OUTPUT_TOKENS: "4000",
       },
     });
     const request = { system: "s", user: "u" };

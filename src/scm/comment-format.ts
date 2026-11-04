@@ -432,7 +432,8 @@ const sentence = (text: string): string => `${text.replace(/[.\s]+$/, "")}.`;
 
 /** The one line that says how the run ended. */
 export function stateLine(
-  input: Pick<SummaryInput, "findings" | "outcome" | "factsOnly" | "unreviewed" | "changedFiles">,
+  input: Pick<SummaryInput, "findings" | "outcome" | "factsOnly" | "unreviewed" | "changedFiles"> &
+    Partial<Pick<SummaryInput, "gate">>,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
@@ -445,13 +446,32 @@ export function stateLine(
     const of = input.changedFiles ?? files.length;
     const found =
       input.findings.length === 0 ? "no findings" : countLine(input.findings, presentation);
-    return `Reviewed ${String(of - files.length)} of ${plural(of, "changed file")}, ${found}. ${plural(files.length, "file")} ${UNREVIEWED}. Merging needs a person's approval.`;
+    const approval = needsApproval(input.unreviewed, input.gate)
+      ? " Merging needs a person's approval."
+      : "";
+    return `Reviewed ${String(of - files.length)} of ${plural(of, "changed file")}, ${found}. ${plural(files.length, "file")} not reviewed: ${reasonLine(input.unreviewed)}.${approval}`;
   }
   return countLine(input.findings, presentation);
 }
 
-/** What a file no model reply could be read for is called, in the summary and the status. */
-const UNREVIEWED = "not reviewed: reply unparseable";
+const UNPARSEABLE = "reply unparseable";
+const CAP_HIT = "output cap hit";
+
+/** Why one file went unreviewed. */
+function reasonOf(unreviewed: UnreviewedFiles, file: string): string {
+  return unreviewed.capHit?.includes(file) === true ? CAP_HIT : UNPARSEABLE;
+}
+
+/** The reason the files share, or both when they differ, for the summary and the status. */
+function reasonLine(unreviewed: UnreviewedFiles): string {
+  const reasons = new Set(unreviewed.files.map((file) => reasonOf(unreviewed, file)));
+  return [UNPARSEABLE, CAP_HIT].filter((reason) => reasons.has(reason)).join(" or ");
+}
+
+/** True when the status the run posts is pending: the gate passed and the config asks for a person. */
+function needsApproval(unreviewed: UnreviewedFiles, gate: GateDecision | undefined): boolean {
+  return unreviewed.status === "pending" && gate?.failed !== true;
+}
 
 /** Room a host leaves for a status description; Bitbucket and GitHub cut near here. */
 const STATUS_MAX = 140;
@@ -486,14 +506,15 @@ export function statusLine(
     return factsStatus(input.findings.length, input.factsOnly, input.gate);
   }
   if (input.unreviewed !== undefined) {
-    const { files, status } = input.unreviewed;
+    const { files } = input.unreviewed;
     const of = input.changedFiles ?? files.length;
     const lead =
       input.findings.length === 0 ? "Passed." : findingsLead(input.findings, presentation);
-    const approval =
-      status === "pending" && input.gate?.failed !== true ? " Needs a person's approval." : "";
+    const approval = needsApproval(input.unreviewed, input.gate)
+      ? " Needs a person's approval."
+      : "";
     return clip(
-      `${lead} Reviewed ${String(of - files.length)} of ${plural(of, "changed file")}; ${String(files.length)} ${UNREVIEWED}.${approval}`,
+      `${lead} Reviewed ${String(of - files.length)} of ${plural(of, "changed file")}; ${String(files.length)} not reviewed: ${reasonLine(input.unreviewed)}.${approval}`,
     );
   }
   if (input.findings.length === 0) {
@@ -690,7 +711,13 @@ export function renderSummaryBody(
       const url = presentation.reviewedFileLink?.(file);
       return url === undefined ? file : `[${file}](${url})`;
     };
-    lines.push("", ...input.unreviewed.files.map((file) => `- ${linked(file)}: ${UNREVIEWED}`));
+    const { unreviewed } = input;
+    lines.push(
+      "",
+      ...unreviewed.files.map(
+        (file) => `- ${linked(file)}: not reviewed: ${reasonOf(unreviewed, file)}`,
+      ),
+    );
   }
   const kept = input.factsOnly?.notRejudged ?? [];
   if (kept.length > 0) {

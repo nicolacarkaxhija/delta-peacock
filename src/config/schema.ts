@@ -16,7 +16,7 @@ export const ModelSchema = z.strictObject({
   timeoutSeconds: z.number().positive().default(60),
   /** Model id fragments that reject a temperature; the parameter is left out for these. */
   omitTemperatureFor: z.array(z.string().min(1)).default(["haiku-5-5"]),
-  /** How hard the model may reason. */
+  /** Bounds the model's hidden reasoning where the provider supports it (Bedrock); unset leaves the model's own default. */
   reasoningEffort: z.enum(["low", "medium", "high"]).optional(),
 });
 
@@ -67,8 +67,12 @@ export const ReviewSchema = z.strictObject({
   maxFilesPerBatch: z.number().int().positive().default(25),
   /** Attention budget: a batch never reviews more (approximate) tokens than this, independent of windowTokens. */
   maxTokensPerBatch: z.number().int().positive().default(30_000),
-  /** Ceiling on one pass's reply. */
-  maxOutputTokens: z.number().int().positive().default(4000),
+  /**
+   * Ceiling on one pass's reply, reasoning included. A pass asks for a
+   * headroom for reasoning plus an allowance per file, never more than this;
+   * a reply that stops on the cap with no text is asked once more at twice it.
+   */
+  maxOutputTokens: z.number().int().positive().default(16_000),
   /** The reviewer's name on the pull request: summary heading, commit status, insights report. */
   displayName: z.string().trim().min(1).max(40).default(DEFAULT_DISPLAY_NAME),
   /** Repository doc explaining how reviews work; a blocked summary links it when the file exists. */

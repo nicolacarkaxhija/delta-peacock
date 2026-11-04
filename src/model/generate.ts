@@ -110,6 +110,7 @@ export async function completeWith(
   request: ModelRequest,
   marker?: CacheMarker,
   omitTemperature = false,
+  providerOptions?: CacheMarker,
 ): Promise<ModelReply> {
   const rounds = request.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   let spent: ModelUsage | undefined;
@@ -121,6 +122,7 @@ export async function completeWith(
     ...(omitTemperature ? {} : { temperature: request.temperature ?? 0 }),
     // bound the reply so runaway output cannot outrun the cost estimate
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    ...(providerOptions !== undefined ? { providerOptions } : {}),
     // the port's retry policy owns retries, so the SDK makes one call
     maxRetries: 0,
     // a call that fails mid tool loop still paid for the steps it finished
@@ -161,6 +163,7 @@ export async function completeWith(
     text:
       result.text.trim() !== "" ? result.text : result.steps.map((step) => step.text).join("\n"),
     usage: normalizeUsage(result.usage),
+    finishReason: result.finishReason,
     ...(toolCalls > 0 ? { toolCalls } : {}),
     ...(transcript !== "" ? { transcript } : {}),
   };

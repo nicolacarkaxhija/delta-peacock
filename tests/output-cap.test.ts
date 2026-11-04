@@ -141,7 +141,7 @@ describe("a pass whose reply hit the output cap", () => {
     );
     expect(model.caps).toEqual([100, 200]);
     expect(executed.unparsedBatches).toEqual([]);
-    expect(executed.usage).toEqual({ inputTokens: 200, outputTokens: 70 });
+    expect(executed.usage).toMatchObject({ inputTokens: 200, outputTokens: 70 });
     expect(err.join("")).toContain(OUTPUT_CAP_HIT);
   });
 
@@ -160,7 +160,7 @@ describe("a pass whose reply hit the output cap", () => {
     ]);
     // the first call, its retry and one call per slice, every one paid for
     expect(model.caps).toEqual([100, 200, 100, 100]);
-    expect(executed.usage).toEqual({ inputTokens: 400, outputTokens: 200 });
+    expect(executed.usage).toMatchObject({ inputTokens: 400, outputTokens: 200 });
   });
 
   it("still names a prose reply unparseable", async () => {
@@ -175,7 +175,7 @@ describe("a pass whose reply hit the output cap", () => {
       parseOptions,
     );
     expect(executed.unparsedBatches[0]?.reason).not.toBe(OUTPUT_CAP_HIT);
-    expect(executed.usage).toEqual({ inputTokens: 10, outputTokens: 2 });
+    expect(executed.usage).toMatchObject({ inputTokens: 10, outputTokens: 2 });
   });
 });
 

@@ -1,15 +1,9 @@
 import type { Config } from "../config/schema.js";
 import { approximateTokens } from "../context/port.js";
-import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelRequest } from "../model/port.js";
+import type { ModelRequest } from "../model/port.js";
 import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { costExplorerMonthToDate, type CostExplorerSend } from "./cost-explorer.js";
 import { defaultCounterPath, monthKey, readMonthSpend } from "./counter.js";
-
-/**
- * The response we have not paid for yet, priced at the reply's hard ceiling so
- * the estimate is an upper bound rather than a guess (see the model port).
- */
-export const ESTIMATED_OUTPUT_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS;
 
 export interface CostGuardDecision {
   /** Whether the review may proceed. */
@@ -64,7 +58,8 @@ export async function checkCostGuard(
   const perStrategy = computeCost(
     {
       inputTokens: approximateTokens(request.system) * batches + approximateTokens(request.user),
-      outputTokens: ESTIMATED_OUTPUT_TOKENS * batches,
+      // the response we have not paid for yet, priced at the reply ceiling so the estimate is an upper bound
+      outputTokens: config.review.maxOutputTokens * batches,
     },
     rates,
   ).total;
