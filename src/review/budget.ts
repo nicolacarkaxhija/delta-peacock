@@ -15,6 +15,9 @@ export interface BudgetInput {
 /** Share of the window left free for estimate error and for files the model fetches. */
 const WINDOW_MARGIN = 0.15;
 
+/** A split cuts a diff into this many slices. */
+const HALVES = 2;
+
 /** The tokens a prompt may take in a window once the reply and a margin have room. */
 export function promptBudget(windowTokens: number, replyTokens: number): number {
   return Math.max(1, Math.floor(windowTokens * (1 - WINDOW_MARGIN)) - replyTokens);
@@ -232,12 +235,12 @@ export function halveDiff(diff: string): string[] {
     for (const [index, chunk] of chunks.slice(0, -1).entries()) {
       sum += approximateTokens(chunk);
       cut = index + 1;
-      if (sum * 2 >= total) break;
+      if (sum * HALVES >= total) break;
     }
     return [chunks.slice(0, cut).join(""), chunks.slice(cut).join("")];
   }
   const { header, hunks } = hunksOf(diff);
   if (hunks.length < 2) return [diff];
-  const middle = Math.ceil(hunks.length / 2);
+  const middle = Math.ceil(hunks.length / HALVES);
   return [header + hunks.slice(0, middle).join(""), header + hunks.slice(middle).join("")];
 }
