@@ -61,8 +61,9 @@ from a clean checkout; a red line blocks it.
   file over the batch budget is cut at its hunks, a reply with no readable JSON is asked again
   and then as two smaller slices, and the files still unread are named as not reviewed in the log,
   the report, the summary and the status, which follows `fallback.status` while `gate.failOn`
-  still gates the reviewed files; the near-limit backtest case gets every batch answered. On its
-  own: `pnpm exec vitest run tests/budget-chunk tests/run-passes tests/unreviewed-files tests/near-limit-backtest tests/review-e2e tests/review-root-causes`.
+  still gates the reviewed files; the near-limit backtest case gets every batch answered, and the
+  reasoning-fills-output-cap case gets every file reviewed after the doubled retry. On its
+  own: `pnpm exec vitest run tests/budget-chunk tests/run-passes tests/unreviewed-files tests/near-limit-backtest tests/output-cap tests/output-cap-backtest tests/review-e2e tests/review-root-causes`.
 - `batch cost`: a change reviewed in batches sends no more input tokens than the same files
   reviewed as separate changes, each batch carries only its own files' context, the shared prefix
   carries a cache marker on Anthropic and on Anthropic models on Bedrock, and no cached token is

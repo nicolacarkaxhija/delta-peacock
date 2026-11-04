@@ -475,13 +475,19 @@ files of a slice that still cannot be read are not reviewed; every other batch's
 The log says `reviewed 1 of 2 files; not reviewed: reply unparseable: src/a.ts`, the report lists
 each batch with its `files` under `unparsedBatches`, and the summary opens with:
 
-> Reviewed 1 of 2 changed files, no findings. 1 file not reviewed: reply unparseable. Merging needs
-> a person's approval.
+> Reviewed 1 of 2 changed files, no findings. 1 file not reviewed: reply unparseable.
 
-followed by one `- src/a.ts: not reviewed: reply unparseable` line per file. The step never fails
+with "Merging needs a person's approval." added only when `fallback.status` is `pending` and the gate passed, followed by one `- src/a.ts: not reviewed: reply unparseable` line per file. The step never fails
 for this: `gate.failOn` judges the findings of the reviewed files as in any review, and the status
 follows `fallback.status`, `success` by default or `pending` to make the merge wait for a person.
 Comments and tasks an earlier run left on a file not reviewed stay as they are.
+
+A model that reasons before it answers can spend its whole reply cap thinking and return no text
+with the finish reason `length`. Each pass asks for a reasoning headroom plus an allowance per
+file, never more than `review.maxOutputTokens`. Such a reply is named `output cap hit`, not
+`reply unparseable`, and is asked once more at twice the cap before the slice fallback.
+`model.reasoningEffort` (`low`, `medium`, `high`) bounds the reasoning on Bedrock; other providers
+ignore it. Every call is counted in the cost line, failed ones included.
 
 ## The sentence each check quotes
 
