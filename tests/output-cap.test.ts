@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config/loader.js";
 import { createBedrockPort } from "../src/model/bedrock.js";
 import { withResponseCache } from "../src/model/cache.js";
-import type { ModelPort, ModelReply } from "../src/model/port.js";
+import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelPort, type ModelReply } from "../src/model/port.js";
 import {
   OUTPUT_CAP_HIT,
+  OUTPUT_CAP_RETRY_FACTOR,
   REASONING_HEADROOM_TOKENS,
   REPLY_TOKENS_PER_FILE,
   hitOutputCap,
@@ -55,10 +56,16 @@ function capLimitedModel(threshold: number): { port: ModelPort; caps: (number | 
   };
 }
 
-const passOf = (files: string[], maxOutputTokens: number, slices?: PlannedPass[]): PlannedPass => ({
+const passOf = (
+  files: string[],
+  maxOutputTokens: number,
+  slices?: PlannedPass[],
+  outputCeiling = 1_000_000,
+): PlannedPass => ({
   label: "batch 1/1",
   request: { system: "rules", user: files.join(","), maxOutputTokens },
   files,
+  outputCeiling,
   ...(slices !== undefined ? { slices: () => Promise.resolve(slices) } : {}),
 });
 
@@ -104,6 +111,7 @@ describe("the output cap of a planned pass", () => {
       REASONING_HEADROOM_TOKENS + REPLY_TOKENS_PER_FILE,
       7000,
     ]);
+    expect(passes.map((pass) => pass.outputCeiling)).toEqual([7000, 7000]);
   });
 
   it("defaults to a ceiling above what reasoning alone consumed", () => {
@@ -114,15 +122,28 @@ describe("the output cap of a planned pass", () => {
 
 describe("retryRequest", () => {
   it("doubles the cap after a reply that ran out of output and does not replay an empty reply", () => {
-    const retry = retryRequest({ system: "s", user: "u", maxOutputTokens: 5000 }, CAPPED);
+    const retry = retryRequest({ system: "s", user: "u", maxOutputTokens: 5000 }, CAPPED, 16_000);
     expect(retry.maxOutputTokens).toBe(10_000);
     expect(retry.user).not.toContain("<reply>");
+  });
+
+  it("never raises the cap of a retry above the ceiling", () => {
+    const retry = retryRequest({ system: "s", user: "u", maxOutputTokens: 12_000 }, CAPPED, 16_000);
+    expect(retry.maxOutputTokens).toBe(16_000);
+  });
+
+  it("doubles the plain reply cap when the request named none, under the ceiling", () => {
+    expect(retryRequest({ system: "s", user: "u" }, CAPPED, 16_000).maxOutputTokens).toBe(
+      DEFAULT_MAX_OUTPUT_TOKENS * OUTPUT_CAP_RETRY_FACTOR,
+    );
+    expect(retryRequest({ system: "s", user: "u" }, CAPPED, 5000).maxOutputTokens).toBe(5000);
   });
 
   it("keeps the cap after a reply that held prose", () => {
     const retry = retryRequest(
       { system: "s", user: "u", maxOutputTokens: 5000 },
       { text: "thinking aloud", finishReason: "stop" },
+      16_000,
     );
     expect(retry.maxOutputTokens).toBe(5000);
     expect(retry.user).toContain("thinking aloud");
@@ -143,6 +164,17 @@ describe("a pass whose reply hit the output cap", () => {
     expect(executed.unparsedBatches).toEqual([]);
     expect(executed.usage).toMatchObject({ inputTokens: 200, outputTokens: 70 });
     expect(err.join("")).toContain(OUTPUT_CAP_HIT);
+  });
+
+  it("is asked once more at the ceiling when twice the cap would pass it", async () => {
+    const model = capLimitedModel(Number.POSITIVE_INFINITY);
+    await runPasses(
+      { err: () => undefined },
+      model.port,
+      [passOf(["a.js"], 100, undefined, 150)],
+      parseOptions,
+    );
+    expect(model.caps).toEqual([100, 150]);
   });
 
   it("names the files as output cap hit, not unparseable, once the slices fail too", async () => {

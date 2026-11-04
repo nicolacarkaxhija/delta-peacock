@@ -906,6 +906,8 @@ export interface PlannedPass {
   request: ModelRequest;
   /** The files of the batch, named when no model could review them. */
   files: string[];
+  /** review.maxOutputTokens: no call of this pass, its retry included, asks for more. */
+  outputCeiling?: number;
   /** The batch cut in two, asked once when its reply cannot be read; empty when it cannot be cut. */
   slices?: () => Promise<PlannedPass[]>;
 }
@@ -1269,7 +1271,10 @@ async function answerPass(
         `${pass.label}: ${(error as Error).message}; asking once more for the JSON answer\n`,
       );
       const first = reply;
-      reply = await completeOrFail(modelPort, retryRequest(pass.request, first));
+      reply = await completeOrFail(
+        modelPort,
+        retryRequest(pass.request, first, Number.POSITIVE_INFINITY),
+      );
       spent = sumUsage(first.usage, reply.usage);
       reply = {
         ...reply,
@@ -1432,7 +1437,12 @@ async function completeOrFail(port: ModelPort, request: ModelRequest): Promise<M
  * the tool results the model had fetched as text, its own reply, and one
  * instruction to answer in the requested shape. No tools, so it must answer.
  */
-export function retryRequest(request: ModelRequest, reply: ModelReply): ModelRequest {
+export function retryRequest(
+  request: ModelRequest,
+  reply: ModelReply,
+  _ceiling: number,
+): ModelRequest {
+  void _ceiling;
   const capped = hitOutputCap(reply);
   const cap = request.maxOutputTokens;
   const answerNow =
