@@ -7,6 +7,9 @@ import type { ToolSet } from "ai";
  */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 4000;
 
+/** Default ceiling on one review pass's reply, reasoning included: well above the plain reply cap, which hidden reasoning alone could fill, and low enough that the cost estimate stays a usable bound. */
+export const DEFAULT_REVIEW_OUTPUT_CEILING = 16_000;
+
 /** Default bound on agentic tool rounds: enough to open the few files a diff points to, few enough that resending the prompt each round stays cheap. */
 export const DEFAULT_MAX_TOOL_ROUNDS = 6;
 
