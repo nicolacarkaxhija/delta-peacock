@@ -179,6 +179,10 @@ describe("promptBudget", () => {
   it("never falls below one token when the reply alone fills the window", () => {
     expect(promptBudget(150, 4000)).toBe(1);
   });
+
+  it("leaves a smaller prompt budget for a larger reply ceiling", () => {
+    expect(promptBudget(100_000, 16_000)).toBe(69_000);
+  });
 });
 
 describe("halveDiff", () => {
@@ -280,6 +284,15 @@ describe("planBatches", () => {
     expect(plan.notices).toEqual([]);
     expect(plan.degraded).toBe(false);
     for (const batchContext of plan.batchContexts) expect(batchContext).toBe(context);
+  });
+
+  it("reviews a diff that fits only without its context in one pass without context", () => {
+    const diff = "d".repeat(200); // 50 tokens
+    const whole = planBudget({ prefix, context, diff, budgetTokens });
+    const plan = planBatches(whole, diff, context, prefix, budgetTokens, slackAttentionBudget);
+    expect(plan.diffBatches).toEqual([diff]);
+    expect(plan.batchContexts).toEqual([""]);
+    expect(plan.degraded).toBe(true);
   });
 
   it("does not batch at all when the whole diff already fits", () => {

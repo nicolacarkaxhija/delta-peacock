@@ -70,7 +70,7 @@ async function replay(benchCase: BacktestCase, port: ModelPort) {
 describe("the near-limit backtest case", () => {
   const [nearLimit] = loadBacktestCases(BACKTEST, [CASE]);
   if (nearLimit === undefined) throw new Error(`${CASE} is missing`);
-  const windowTokens = loadConfig({ root: nearLimit.baseDir }).review.windowTokens;
+  const { windowTokens, maxOutputTokens } = loadConfig({ root: nearLimit.baseDir }).review;
 
   it("keeps every prompt under the budget with room for the reply, so the finding stands", async () => {
     const model = nearLimitModel(windowTokens);
@@ -80,7 +80,7 @@ describe("the near-limit backtest case", () => {
     expect(run.log).toContain("exceeds the prompt budget");
     for (const request of model.requests) {
       expect(promptTokens(request)).toBeLessThanOrEqual(
-        promptBudget(windowTokens, DEFAULT_MAX_OUTPUT_TOKENS),
+        promptBudget(windowTokens, maxOutputTokens),
       );
     }
     expect(report.unparsedBatches).toBeUndefined();
