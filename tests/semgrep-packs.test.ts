@@ -48,10 +48,13 @@ describe("the shipped semgrep rules", () => {
         const version = resolvePack(repoRoot, `packs/${pack}`).manifest.version ?? "none";
         const key = `${pack}@${version}`;
         const digest = digestOf(pack);
-        return lock[key] === digest
-          ? []
+        if (lock[key] === digest) return [];
+        return lock[key] === undefined
+          ? [
+              `${key}: no lock entry; add "${key}": "${digest}" to tests/fixtures/semgrep-rules.lock.json`,
+            ]
           : [
-              `${key}: rules changed; bump the pack version and the rules' guidelines-version, then add "${key}": "${digest}" to tests/fixtures/semgrep-rules.lock.json`,
+              `${key}: rules changed without a new guideline set version; bump the pack version and every rule's guidelines-version`,
             ];
       });
     expect(stale).toEqual([]);

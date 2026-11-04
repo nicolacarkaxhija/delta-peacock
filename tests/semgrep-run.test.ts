@@ -135,6 +135,23 @@ describe("semgrepRunner", () => {
     });
   }
 
+  it("reads a run that lists no errors", async () => {
+    const output = { version: SEMGREP_PIN, results: [] };
+    const fake = fakeSemgrep(`process.stdout.write(${JSON.stringify(JSON.stringify(output))});`);
+    const run = await semgrepRunner({ command: fake.command, timeoutMs: 20_000 })("", FILES);
+    expect(run).toEqual({ ok: true, version: SEMGREP_PIN, hits: [], warnings: [] });
+  });
+
+  it("fails with the reason when the command cannot start", async () => {
+    const fake = fakeSemgrep("");
+    chmodSync(fake.command, 0o644);
+    const run = await semgrepRunner({ command: fake.command, timeoutMs: 1000 })("", FILES);
+    expect(run).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining(`${fake.command} could not start: `) as string,
+    });
+  });
+
   it("fails with the install hint when the command is not there", async () => {
     const run = await semgrepRunner({ command: "/nowhere/osemgrep", timeoutMs: 1000 })("", FILES);
     expect(run).toEqual({

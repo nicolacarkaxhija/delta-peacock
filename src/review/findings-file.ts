@@ -63,7 +63,7 @@ export function renderFindingsFile(
       (finding) => finding.baselined !== true && finding.unplaced !== true && finding.line > 0,
     )
     .map((finding) => ({
-      producer: FINDINGS_PRODUCER,
+      producer: (finding.kind === "violation" ? finding.producer : undefined) ?? FINDINGS_PRODUCER,
       rule: finding.kind === "violation" ? finding.guidelineId : "observation",
       severity: ENGINE_SEVERITIES[finding.severity],
       file: finding.file,

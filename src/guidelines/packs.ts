@@ -4,7 +4,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { ToolError } from "../errors.js";
 import { runGit } from "../git/git.js";
-import { markdownFilesUnder, type GuidelineFile } from "./loader.js";
+import { markdownFilesUnder, readGuidelineFile, type GuidelineFile } from "./loader.js";
 
 export const PACK_MANIFEST_NAME = "pack.yaml";
 
@@ -105,8 +105,11 @@ export function resolvePack(cwd: string, spec: string): ResolvedPack {
   }
   const manifest = readManifest(dir, spec);
   const files = markdownFilesUnder(dir).map((filePath) => ({
-    displayPath: `${manifest.name}:${path.relative(dir, filePath).replaceAll("\\", "/")}`,
-    content: readFileSync(filePath, "utf8"),
+    ...readGuidelineFile(
+      filePath,
+      `${manifest.name}:${path.relative(dir, filePath).replaceAll("\\", "/")}`,
+    ),
+    ...(manifest.version !== undefined ? { version: manifest.version } : {}),
   }));
   return { manifest, dir, files };
 }

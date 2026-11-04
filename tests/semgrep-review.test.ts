@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
+import type { InsightReport, ScmPort } from "../src/scm/port.js";
 import type { SemgrepRun, SemgrepRunner } from "../src/review/semgrep/run.js";
-import { startFakeBitbucket } from "./helpers/fake-bitbucket.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 const SENTENCE = "A log call never chains on getLogger.";
@@ -134,10 +134,33 @@ interface Reviewed {
   semgrepCalls: number;
 }
 
+/** A pull request host that keeps the Code Insights reports it is handed. */
+function insightsHost(): { scm: ScmPort; reports: InsightReport[] } {
+  const reports: InsightReport[] = [];
+  return {
+    reports,
+    scm: {
+      listInlineComments: () => Promise.resolve([]),
+      createInlineComment: () => Promise.resolve(),
+      updateComment: () => Promise.resolve(),
+      deleteComment: () => Promise.resolve(),
+      listSummaryComments: () => Promise.resolve([]),
+      createSummaryComment: () => Promise.resolve(),
+      updateSummaryComment: () => Promise.resolve(),
+      postStatus: () => Promise.resolve(),
+      publishInsights: (report) => {
+        reports.push(report);
+        return Promise.resolve();
+      },
+    },
+  };
+}
+
 async function review(
   repo: string,
   run: SemgrepRun,
   env: Record<string, string> = {},
+  scmPort?: ScmPort,
 ): Promise<Reviewed> {
   const model = recordingModel();
   const semgrep = recordingRunner(run);
@@ -151,6 +174,7 @@ async function review(
     },
     modelPort: model.port,
     semgrepRunner: semgrep.runner,
+    ...(scmPort !== undefined ? { scmPort } : {}),
   });
   const report = JSON.parse(readFileSync(path.join(repo, "report.json"), "utf8")) as ReviewReport;
   return { code, stderr, requests: model.requests, report, semgrepCalls: semgrep.calls };
@@ -260,35 +284,34 @@ describe("the semgrep pre pass in a review", () => {
   });
 
   it("posts the rule finding in the Code Insights report and writes its producer to the findings file", async () => {
-    const fake = await startFakeBitbucket();
-    try {
-      const repo = scenario(GIFT_HIT);
-      const reviewed = await review(repo, HIT, {
+    const repo = scenario(GIFT_HIT);
+    const host = insightsHost();
+    const reviewed = await review(
+      repo,
+      HIT,
+      {
         DELTA_PEACOCK_SCM_PROVIDER: "bitbucket",
         DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
         DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
-        DELTA_PEACOCK_SCM_BASE_URL: fake.baseUrl,
         DELTA_PEACOCK_OUTPUT_FINDINGS_DIR: "findings",
-        BITBUCKET_TOKEN: "test-token",
-      });
-      expect(reviewed.code).toBe(0);
-      expect(fake.insightAnnotations).toEqual([
-        expect.objectContaining({
-          title: SENTENCE,
-          path: "cartridges/app_shop_core/cartridge/scripts/gift.js",
-          line: 3,
-        }),
-      ]);
-      const written = JSON.parse(
-        readFileSync(path.join(repo, "findings", "reviewer.json"), "utf8"),
-      ) as {
-        findings: { producer: string; rule: string }[];
-      };
-      expect(written.findings.map((finding) => [finding.producer, finding.rule])).toEqual([
-        ["semgrep", "logger-assigned-once"],
-      ]);
-    } finally {
-      await fake.close();
-    }
+      },
+      host.scm,
+    );
+    expect(reviewed.code).toBe(0);
+    expect(host.reports).toHaveLength(1);
+    expect(host.reports[0]?.annotations).toEqual([
+      expect.objectContaining({
+        title: SENTENCE,
+        path: "cartridges/app_shop_core/cartridge/scripts/gift.js",
+        line: 3,
+        severity: "MAJOR",
+      }),
+    ]);
+    const written = JSON.parse(
+      readFileSync(path.join(repo, "findings", "reviewer.json"), "utf8"),
+    ) as { findings: { producer: string; rule: string }[] };
+    expect(written.findings.map((finding) => [finding.producer, finding.rule])).toEqual([
+      ["semgrep", "logger-assigned-once"],
+    ]);
   });
 });

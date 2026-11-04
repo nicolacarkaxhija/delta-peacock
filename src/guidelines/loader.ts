@@ -9,6 +9,7 @@ import { runGit } from "../git/git.js";
 import { readDeclaredCheck } from "../review/checks/pattern.js";
 import { readExclusions } from "../review/exclusions.js";
 import { assertSafeRef } from "../git/diff.js";
+import { rulesFileOf } from "../review/semgrep/rules.js";
 import { resolvePack } from "./packs.js";
 
 export interface GuidelineFile {
@@ -89,6 +90,7 @@ export function parseGuidelineContent(
   content: string,
   displayPath: string,
   contract: FrontmatterContract = "lenient",
+  sibling: Pick<GuidelineFile, "semgrep" | "version"> = {},
 ): ParsedGuideline {
   const split = splitFrontmatter(content);
   if (split === undefined) return { problem: `${displayPath}: no frontmatter header` };
@@ -176,7 +178,15 @@ export function parseGuidelineContent(
   const title = deriveTitle(record, body, displayPath);
   const check =
     record["check"] !== undefined
-      ? readDeclaredCheck(record["check"], { id: trimmedId, title, body })
+      ? readDeclaredCheck(
+          record["check"],
+          { id: trimmedId, title, body },
+          {
+            name: path.basename(rulesFileOf(displayPath)),
+            ...(sibling.semgrep !== undefined ? { text: sibling.semgrep } : {}),
+            ...(sibling.version !== undefined ? { version: sibling.version } : {}),
+          },
+        )
       : undefined;
   if (typeof check === "string") return { problem: `${displayPath}: ${check}` };
   const exclusions = readExclusions(record["exclusions"], { id: trimmedId, title, body });
@@ -218,7 +228,7 @@ export function loadGuidelinesFromFiles(
   let disabled = 0;
   const seen = new Map<string, string>();
   for (const file of files) {
-    const parsed = parseGuidelineContent(file.content, file.displayPath, contract);
+    const parsed = parseGuidelineContent(file.content, file.displayPath, contract, file);
     if ("problem" in parsed) {
       problems.push(parsed.problem);
       continue;
@@ -258,10 +268,17 @@ export function readWorkingTreeGuidelines(dir: string): GuidelineFile[] {
       `guidelines directory not found: ${dir}; check review.guidelinesDir or run init`,
     );
   }
-  return markdownFilesUnder(dir).map((filePath) => ({
-    displayPath: filePath,
+  return markdownFilesUnder(dir).map((filePath) => readGuidelineFile(filePath, filePath));
+}
+
+/** A guideline file on disk with the rule file next to it, when there is one. */
+export function readGuidelineFile(filePath: string, displayPath: string): GuidelineFile {
+  const rules = rulesFileOf(filePath);
+  return {
+    displayPath,
     content: readFileSync(filePath, "utf8"),
-  }));
+    ...(existsSync(rules) ? { semgrep: readFileSync(rules, "utf8") } : {}),
+  };
 }
 
 /** Guideline files as they exist on a git ref; undefined when the ref holds none. */
@@ -273,12 +290,17 @@ export function readGitRefGuidelines(
   assertSafeRef(ref);
   // -z gives raw NUL-separated paths, so quoted non-ASCII names cannot slip through
   const listing = runGit(cwd, ["ls-tree", "-r", "--name-only", "-z", ref, "--", dir]);
-  const paths = listing.split("\0").filter((line) => line.endsWith(".md"));
+  const listed = new Set(listing.split("\0"));
+  const paths = [...listed].filter((line) => line.endsWith(".md"));
   if (paths.length === 0) return undefined;
-  return paths.map((filePath) => ({
-    displayPath: `${ref}:${filePath}`,
-    content: runGit(cwd, ["show", `${ref}:${filePath}`]),
-  }));
+  return paths.map((filePath) => {
+    const rules = rulesFileOf(filePath);
+    return {
+      displayPath: `${ref}:${filePath}`,
+      content: runGit(cwd, ["show", `${ref}:${filePath}`]),
+      ...(listed.has(rules) ? { semgrep: runGit(cwd, ["show", `${ref}:${rules}`]) } : {}),
+    };
+  });
 }
 
 export function loadGuidelines(

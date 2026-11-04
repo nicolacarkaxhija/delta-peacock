@@ -79,7 +79,7 @@ function input(
     input: {
       guidelines,
       diff: GIFT + APP,
-      read: (file) => SOURCES[file],
+      read: (file) => SOURCES[file]?.split("\n"),
       generalPass: false,
       runner: (config, files) => {
         calls.push({ config, files: [...files.keys()] });
@@ -141,6 +141,21 @@ describe("runPrepass", () => {
     if (check?.type !== "semgrep") throw new Error("no check");
     const { input: given } = input([{ ...packed, check: { ...check, version: "0.2.0" } }], ok([]));
     expect((await runPrepass(given))?.ruleSets).toEqual(["sfra 0.2.0"]);
+  });
+
+  it("names a pack rule set with no version as unversioned", async () => {
+    const { input: given } = input([ruled("logger-assigned-once", { pack: "house" })], ok([]));
+    expect((await runPrepass(given))?.ruleSets).toEqual(["house unversioned"]);
+  });
+
+  it("counts a hit on a file the diff does not hold as off the change", async () => {
+    const { input: given } = input(
+      [ruled("logger-assigned-once")],
+      ok([hit({ path: "cartridges/other.js" })]),
+    );
+    const outcome = await runPrepass(given);
+    expect(outcome?.findings).toEqual([]);
+    expect(outcome?.notices).toEqual(["semgrep: 1 hit(s) off the change"]);
   });
 
   it("places a hit that spans lines on its first added line and skips a hit off the change", async () => {
