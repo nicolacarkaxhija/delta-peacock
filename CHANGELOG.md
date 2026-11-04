@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.1](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.10.0...delta-peacock-v0.10.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **cost:** count each review pass at its reply cap, up to four times the old estimate per batch ([68c8285](https://github.com/nicolacarkaxhija/delta-peacock/commit/68c8285c4c8fe10874604033a0c955787ef5c6e5))
+* **review:** bound the retry of a cap hit by review.maxOutputTokens ([978abe6](https://github.com/nicolacarkaxhija/delta-peacock/commit/978abe62c57ae9cb27909b795a643fcbf94b614c))
+* **review:** name the output ceiling and give each cap constant its reason ([2c4e5c2](https://github.com/nicolacarkaxhija/delta-peacock/commit/2c4e5c2eecf3144a8727f41091e520f3f5859761))
+* **review:** retry an output cap hit at twice the cap and size the cap per pass ([eae74f5](https://github.com/nicolacarkaxhija/delta-peacock/commit/eae74f5c100a34bd9fcc068cffb26d6a4022dbe8))
+* **review:** retry an output cap hit at twice the cap and size the cap per pass ([3fa431d](https://github.com/nicolacarkaxhija/delta-peacock/commit/3fa431d15071c0eaebe0854b6691537b5ea7b04c))
+
 ## [0.10.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.6...delta-peacock-v0.10.0) (2026-11-04)
 
 
