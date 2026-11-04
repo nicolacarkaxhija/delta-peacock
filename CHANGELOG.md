@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.10.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.6...delta-peacock-v0.10.0) (2026-11-04)
+
+
+### Features
+
+* **backtest:** add an intake that turns the engine's false positives into cases ([a0750c1](https://github.com/nicolacarkaxhija/delta-peacock/commit/a0750c12ff10046ee4100f54998929968833e889))
+* **review:** add a script that checks the vendored findings schema against the engine's ([cbc12f9](https://github.com/nicolacarkaxhija/delta-peacock/commit/cbc12f996139056f023057662ea253b5cf7b91b5))
+* **review:** write findings for the editor and add the false positive intake ([2eeb930](https://github.com/nicolacarkaxhija/delta-peacock/commit/2eeb930a0d2302d84ddc78ad2c16fe9ad50542c5))
+* **review:** write the findings file for the editor with --findings ([f6ad338](https://github.com/nicolacarkaxhija/delta-peacock/commit/f6ad3383eabfa68c8d652a3206bc894675a9a170))
+* **review:** write the reviewer's own fingerprint and judge only the marked finding ([f19f933](https://github.com/nicolacarkaxhija/delta-peacock/commit/f19f93374abd524e603ee8821ed4ae690452eb73))
+
+
+### Bug Fixes
+
+* **review:** keep reply headroom in every batch and report unreadable replies per file ([68d791b](https://github.com/nicolacarkaxhija/delta-peacock/commit/68d791b2ed1af16738d0a9fff250a4091f92140d))
+* **review:** record finding fingerprints, mask the patch and write an empty findings file first ([4933cd0](https://github.com/nicolacarkaxhija/delta-peacock/commit/4933cd0c7163cebe8fa02440cc5d669e1c57261d))
+* **review:** write an empty findings file on early returns and check what a record names ([033ebe9](https://github.com/nicolacarkaxhija/delta-peacock/commit/033ebe9343c07434df13f99ec41df671ab118363))
+* Split near-limit diffs into smaller review batches and report unreviewed files ([230f566](https://github.com/nicolacarkaxhija/delta-peacock/commit/230f5662331fb0a4f26f337a844f76bd24e65afb))
+
 ## [0.9.6](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.9.5...delta-peacock-v0.9.6) (2026-10-30)
 
 
