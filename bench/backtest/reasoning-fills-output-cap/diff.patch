@@ -1,0 +1,65 @@
+diff --git a/src/panels/panel0.js b/src/panels/panel0.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/panels/panel0.js
+@@ -0,0 +1,7 @@
++import { logger } from "./logger.js";
++
++export function panelStep0(state) {
++  const visible = (state.items ?? []).slice(0, 2);
++  logger.info("panel step 0");
++  return { ...state, visible };
++}
+diff --git a/src/panels/panel1.js b/src/panels/panel1.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/panels/panel1.js
+@@ -0,0 +1,7 @@
++import { logger } from "./logger.js";
++
++export function panelStep1(state) {
++  const visible = (state.items ?? []).slice(0, 3);
++  logger.info("panel step 1");
++  return { ...state, visible };
++}
+diff --git a/src/panels/panel2.js b/src/panels/panel2.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/panels/panel2.js
+@@ -0,0 +1,7 @@
++import { logger } from "./logger.js";
++
++export function panelStep2(state) {
++  const visible = (state.items ?? []).slice(0, 4);
++  logger.info("panel step 2");
++  return { ...state, visible };
++}
+diff --git a/src/panels/panel3.js b/src/panels/panel3.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/panels/panel3.js
+@@ -0,0 +1,7 @@
++import { logger } from "./logger.js";
++
++export function panelStep3(state) {
++  const visible = (state.items ?? []).slice(0, 5);
++  console.log("panel step 3", visible.length);
++  return { ...state, visible };
++}
+diff --git a/src/panels/panel4.js b/src/panels/panel4.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/panels/panel4.js
+@@ -0,0 +1,7 @@
++import { logger } from "./logger.js";
++
++export function panelStep4(state) {
++  const visible = (state.items ?? []).slice(0, 6);
++  logger.info("panel step 4");
++  return { ...state, visible };
++}

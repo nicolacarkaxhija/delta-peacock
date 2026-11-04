@@ -39,6 +39,8 @@ export interface ModelRef {
   id: string;
   baseUrl?: string | undefined;
   omitTemperatureFor?: readonly string[] | undefined;
+  /** Honoured by the bedrock adapter only. */
+  reasoningEffort?: "low" | "medium" | "high" | undefined;
 }
 
 /** True when the config names no model: a review checks facts only. */
@@ -77,6 +79,7 @@ export function buildModelPort(
       id: modelId,
       ...(config.model.baseUrl !== undefined ? { baseUrl: config.model.baseUrl } : {}),
       omitTemperatureFor: config.model.omitTemperatureFor,
+      reasoningEffort: config.model.reasoningEffort,
     },
     credentials,
     config.model.timeoutSeconds,
@@ -139,6 +142,7 @@ function adapterFor(ref: ModelRef, credentials: Credentials, timeoutSeconds?: nu
           : {}),
         modelId,
         ...(ref.baseUrl !== undefined ? { baseUrl: ref.baseUrl } : {}),
+        ...(ref.reasoningEffort !== undefined ? { reasoningEffort: ref.reasoningEffort } : {}),
         ...timed,
         ...omit,
       });

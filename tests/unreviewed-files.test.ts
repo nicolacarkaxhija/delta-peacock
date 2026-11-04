@@ -35,9 +35,43 @@ const input = (overrides: Partial<SummaryInput>): SummaryInput => ({
 });
 
 describe("stateLine", () => {
-  it("counts the reviewed files and asks for a person's approval", () => {
-    expect(stateLine(input({}))).toBe(
+  it("counts the reviewed files and asks for a person's approval when the status posted is pending", () => {
+    expect(
+      stateLine(input({ unreviewed: { files: ["src/a.js", "src/c.js"], status: "pending" } })),
+    ).toBe(
       "Reviewed 1 of 3 changed files, no findings. 2 files not reviewed: reply unparseable. Merging needs a person's approval.",
+    );
+  });
+
+  it("says nothing of approval when the status posted is success", () => {
+    expect(stateLine(input({}))).toBe(
+      "Reviewed 1 of 3 changed files, no findings. 2 files not reviewed: reply unparseable.",
+    );
+  });
+
+  it("says nothing of approval when the gate failed, so the posted status is failed", () => {
+    expect(
+      stateLine(input({ gate: FAILING, unreviewed: { files: ["src/a.js"], status: "pending" } })),
+    ).not.toContain("approval");
+  });
+
+  it("names a file the output cap cut off as such", () => {
+    expect(
+      stateLine(
+        input({ unreviewed: { files: ["src/a.js"], capHit: ["src/a.js"], status: "success" } }),
+      ),
+    ).toBe("Reviewed 2 of 3 changed files, no findings. 1 file not reviewed: output cap hit.");
+  });
+
+  it("names both reasons when the files differ", () => {
+    expect(
+      stateLine(
+        input({
+          unreviewed: { files: ["src/a.js", "src/c.js"], capHit: ["src/a.js"], status: "success" },
+        }),
+      ),
+    ).toBe(
+      "Reviewed 1 of 3 changed files, no findings. 2 files not reviewed: reply unparseable or output cap hit.",
     );
   });
 
@@ -46,7 +80,7 @@ describe("stateLine", () => {
     expect(
       stateLine(input({ findings, unreviewed: { files: ["src/a.js"], status: "success" } })),
     ).toBe(
-      "Reviewed 2 of 3 changed files, 2 findings: 1 major, 1 minor. 1 file not reviewed: reply unparseable. Merging needs a person's approval.",
+      "Reviewed 2 of 3 changed files, 2 findings: 1 major, 1 minor. 1 file not reviewed: reply unparseable.",
     );
   });
 
@@ -54,7 +88,7 @@ describe("stateLine", () => {
     const unknown = input({});
     delete unknown.changedFiles;
     expect(stateLine(unknown)).toBe(
-      "Reviewed 0 of 2 changed files, no findings. 2 files not reviewed: reply unparseable. Merging needs a person's approval.",
+      "Reviewed 0 of 2 changed files, no findings. 2 files not reviewed: reply unparseable.",
     );
   });
 
@@ -78,6 +112,14 @@ describe("statusLine", () => {
     expect(statusLine(unknown)).toBe(
       "Passed. Reviewed 0 of 2 changed files; 2 not reviewed: reply unparseable.",
     );
+  });
+
+  it("names the output cap in the status", () => {
+    expect(
+      statusLine(
+        input({ unreviewed: { files: ["src/a.js"], capHit: ["src/a.js"], status: "success" } }),
+      ),
+    ).toBe("Passed. Reviewed 2 of 3 changed files; 1 not reviewed: output cap hit.");
   });
 
   it("asks for a person's approval with fallback.status pending", () => {
@@ -110,14 +152,15 @@ describe("renderSummaryBody", () => {
     const body = renderSummaryBody(
       input({
         scope: { changed: 3, excluded: [], outsideInclude: 0 },
+        unreviewed: { files: ["src/a.js", "src/c.js"], capHit: ["src/c.js"], status: "success" },
       }),
     );
     expect(body).toBe(
       [
-        "Reviewed 1 of 3 changed files, no findings. 2 files not reviewed: reply unparseable. Merging needs a person's approval.",
+        "Reviewed 1 of 3 changed files, no findings. 2 files not reviewed: reply unparseable or output cap hit.",
         "",
         "- src/a.js: not reviewed: reply unparseable",
-        "- src/c.js: not reviewed: reply unparseable",
+        "- src/c.js: not reviewed: output cap hit",
         "",
         "<!-- delta-peacock:summary -->",
       ].join("\n"),

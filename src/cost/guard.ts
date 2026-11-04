@@ -5,12 +5,6 @@ import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { costExplorerMonthToDate, type CostExplorerSend } from "./cost-explorer.js";
 import { defaultCounterPath, monthKey, readMonthSpend } from "./counter.js";
 
-/**
- * The response we have not paid for yet, priced at the reply's hard ceiling so
- * the estimate is an upper bound rather than a guess (see the model port).
- */
-export const ESTIMATED_OUTPUT_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS;
-
 export interface CostGuardDecision {
   /** Whether the review may proceed. */
   allowed: boolean;
@@ -35,6 +29,8 @@ export function modelCallCount(config: Config): number {
 export interface CostGuardOptions {
   /** Planned diff batches; each is its own call carrying the system prefix. */
   batches?: number;
+  /** The reply cap of each planned pass, priced in place of one cap per batch. */
+  outputCaps?: readonly number[];
   /** `estimate` blocks on the priced estimate; `actual` only on a month already at its cap. */
   basis?: "estimate" | "actual";
   /** Injected for tests; production reads the real Cost Explorer. */
@@ -64,7 +60,11 @@ export async function checkCostGuard(
   const perStrategy = computeCost(
     {
       inputTokens: approximateTokens(request.system) * batches + approximateTokens(request.user),
-      outputTokens: ESTIMATED_OUTPUT_TOKENS * batches,
+      // the response we have not paid for yet, priced at each call's reply cap so the estimate is an upper bound
+      outputTokens:
+        options.outputCaps !== undefined
+          ? options.outputCaps.reduce((sum, cap) => sum + cap, 0)
+          : (request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS) * batches,
     },
     rates,
   ).total;

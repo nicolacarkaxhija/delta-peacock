@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
+import type { ScmPort } from "../src/scm/port.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 const GUIDELINE = `---
@@ -848,6 +849,70 @@ describe("partial batch parse failures", () => {
     expect(report.unparsedBatches).toHaveLength(1);
     expect(report.unparsedBatches?.[0]?.of).toBe(2);
     expect(report.unparsedBatches?.[0]?.reason).toContain("JSON");
+  });
+
+  it("names a capped file and an unparseable file each by its own reason", async () => {
+    const repo = makeTwoBatchScenario();
+    // src/a.js's batch runs out of output before any text; src/b.js's answers in prose
+    const mixed: ModelPort = {
+      complete: (request) =>
+        Promise.resolve(
+          request.user.includes("+++ b/src/a.js")
+            ? { text: "", finishReason: "length" }
+            : { text: "Nope, no findings here.", finishReason: "stop" },
+        ),
+    };
+    const summaries: string[] = [];
+    const statuses: string[] = [];
+    const scmPort: ScmPort = {
+      listInlineComments: () => Promise.resolve([]),
+      createInlineComment: () => Promise.resolve(),
+      updateComment: () => Promise.resolve(),
+      deleteComment: () => Promise.resolve(),
+      listSummaryComments: () => Promise.resolve([]),
+      createSummaryComment: (body) => {
+        summaries.push(body);
+        return Promise.resolve();
+      },
+      updateSummaryComment: () => Promise.resolve(),
+      postStatus: (_state, description) => {
+        statuses.push(description);
+        return Promise.resolve();
+      },
+    };
+    let stderr = "";
+    const code = await runCli(["review", "--report", "r.json"], {
+      cwd: repo,
+      env: {
+        DELTA_PEACOCK_REVIEW_WINDOW_TOKENS: "150",
+        DELTA_PEACOCK_SCM_PROVIDER: "github",
+        DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+        DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+      },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: mixed,
+      scmPort,
+      wait: () => Promise.resolve(),
+    });
+    expect(code).toBe(0);
+    expect(stderr).toContain(
+      "reviewed 0 of 2 files; not reviewed: reply unparseable: src/b.js; output cap hit: src/a.js",
+    );
+    const summary = summaries.join("\n");
+    expect(summary).toContain("2 files not reviewed: reply unparseable or output cap hit.");
+    expect(summary).toContain("src/a.js: not reviewed: output cap hit");
+    expect(summary).toContain("src/b.js: not reviewed: reply unparseable");
+    expect(statuses.join("\n")).toContain("2 not reviewed: reply unparseable or output cap hit.");
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    const reasons = new Map(
+      (report.unparsedBatches ?? []).map((entry) => [entry.files.join(","), entry.reason]),
+    );
+    expect(reasons.get("src/a.js")).toBe("output cap hit");
+    expect(reasons.get("src/b.js")).toBeDefined();
+    expect(reasons.get("src/b.js")).not.toContain("output cap");
   });
 
   it("passes and names every file not reviewed when every batch's reply is unparseable", async () => {

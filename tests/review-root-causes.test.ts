@@ -296,7 +296,7 @@ describe("a reply with no JSON", () => {
       expect(model.requests).toHaveLength(2);
       expect(stderr).not.toContain("every batch's reply failed to parse");
       expect(summaryOf(fake)).toMatch(
-        /^Reviewed 0 of 1 changed file, no findings\. 1 file not reviewed: reply unparseable\. Merging needs a person's approval\.\n\n- .*tests\/smoke\/homepage\.spec\.ts.*: not reviewed: reply unparseable$/,
+        /^Reviewed 0 of 1 changed file, no findings\. 1 file not reviewed: reply unparseable\.\n\n- .*tests\/smoke\/homepage\.spec\.ts.*: not reviewed: reply unparseable$/,
       );
       expect(fake.statuses.at(-1)).toMatchObject({
         state: "SUCCESSFUL",

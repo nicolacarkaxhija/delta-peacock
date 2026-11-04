@@ -41,6 +41,12 @@ import {
   ratesFor,
   type CostRates,
 } from "../model/usage.js";
+import {
+  OUTPUT_CAP_HIT,
+  OUTPUT_CAP_RETRY_FACTOR,
+  hitOutputCap,
+  outputCapFor,
+} from "./output-cap.js";
 import { ceilingReason, metered, spendCeiling } from "../cost/ceiling.js";
 import { checkCostGuard, guardActive } from "../cost/guard.js";
 import { defaultCounterPath, monthKey, readMonthSpend, recordSpend } from "../cost/counter.js";
@@ -261,6 +267,14 @@ export async function runReview(
   if (!factsOnly && guardActive(config)) {
     const decision = await checkCostGuard(config, request, now, {
       batches: batchCount,
+      // an ensemble sends the whole request at the plain cap; passes ask for their own
+      ...(config.ensemble.enabled
+        ? {}
+        : {
+            outputCaps: passes.map((pass) =>
+              outputCapFor(pass.files.length, config.review.maxOutputTokens),
+            ),
+          }),
       basis: config.ensemble.enabled ? "estimate" : "actual",
     });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
@@ -515,11 +529,21 @@ export async function runReview(
   const cachedResponse = executed.cachedResponse;
   const unparsedBatches = executed.unparsedBatches;
   // no reply could be read for these: the run names them and passes or warns per fallback.status
+  const cappedFiles = [
+    ...new Set(
+      unparsedBatches.filter((entry) => entry.reason === OUTPUT_CAP_HIT).flatMap((e) => e.files),
+    ),
+  ];
   const unparsedFiles = [...new Set(unparsedBatches.flatMap((entry) => entry.files))];
   if (unparsedFiles.length > 0) {
     const of = changedFiles.length;
+    const unreadable = unparsedFiles.filter((file) => !cappedFiles.includes(file));
+    const named = [
+      ...(unreadable.length > 0 ? [`reply unparseable: ${unreadable.join(", ")}`] : []),
+      ...(cappedFiles.length > 0 ? [`${OUTPUT_CAP_HIT}: ${cappedFiles.join(", ")}`] : []),
+    ];
     deps.err(
-      `reviewed ${String(of - unparsedFiles.length)} of ${String(of)} file${of === 1 ? "" : "s"}; not reviewed: reply unparseable: ${unparsedFiles.join(", ")}\n`,
+      `reviewed ${String(of - unparsedFiles.length)} of ${String(of)} file${of === 1 ? "" : "s"}; not reviewed: ${named.join("; ")}\n`,
     );
   }
 
@@ -735,7 +759,13 @@ export async function runReview(
       dryRun: isDryRun(config),
       ...(facts !== undefined ? { factsOnly: factsScope(facts, config) } : {}),
       ...(unparsedFiles.length > 0
-        ? { unreviewed: { files: unparsedFiles, status: config.fallback.status } }
+        ? {
+            unreviewed: {
+              files: unparsedFiles,
+              ...(cappedFiles.length > 0 ? { capHit: cappedFiles } : {}),
+              status: config.fallback.status,
+            },
+          }
         : {}),
     },
     sources,
@@ -884,6 +914,8 @@ export interface PlannedPass {
   request: ModelRequest;
   /** The files of the batch, named when no model could review them. */
   files: string[];
+  /** review.maxOutputTokens: no call of this pass, its retry included, asks for more. */
+  outputCeiling: number;
   /** The batch cut in two, asked once when its reply cannot be read; empty when it cannot be cut. */
   slices?: () => Promise<PlannedPass[]>;
 }
@@ -906,15 +938,22 @@ export function planPasses(
   promptOf: PromptOf,
   contextOf?: ContextOf,
 ): PlannedPass[] {
-  const pass = (diffText: string, context: string, label: string): PlannedPass => ({
-    label,
-    request: attachContextTools(
-      promptOf(diffText, context),
-      contextTools,
-      config.context.maxToolRounds,
-    ),
-    files: changedFilesFromDiff(diffText),
-  });
+  const pass = (diffText: string, context: string, label: string): PlannedPass => {
+    const files = changedFilesFromDiff(diffText);
+    return {
+      label,
+      request: {
+        ...attachContextTools(
+          promptOf(diffText, context),
+          contextTools,
+          config.context.maxToolRounds,
+        ),
+        maxOutputTokens: outputCapFor(files.length, config.review.maxOutputTokens),
+      },
+      files,
+      outputCeiling: config.review.maxOutputTokens,
+    };
+  };
   return diffBatches.map((batchDiff, index) => {
     const label = `batch ${String(index + 1)}/${String(diffBatches.length)}`;
     const context = batchContexts[index] ?? "";
@@ -998,7 +1037,7 @@ async function assembleReview(
   // one place weighs prefix + context + diff against the window and degrades
   const prefix = promptOf("", "").system;
   // the reply and a margin need room in the window too
-  const budgetTokens = promptBudget(config.review.windowTokens, DEFAULT_MAX_OUTPUT_TOKENS);
+  const budgetTokens = promptBudget(config.review.windowTokens, config.review.maxOutputTokens);
   const plan = planBudget({
     prefix,
     context: projectContext,
@@ -1160,12 +1199,8 @@ function factsScope(facts: FactsOnly, config: Config): FactsScope {
   };
 }
 
-/** The review's model behind the response cache; the open passes and the judge share it. */
+/** The review's model behind the response cache; the open passes and the judge share it. Every caller runs only when the config names a model. */
 function reviewPort(deps: ReviewDeps, config: Config): ModelPort {
-  // an injected port must not slip past a config that names no model
-  if (noModel(config)) {
-    throw new ToolError("model.provider is none: no model is built and none is called");
-  }
   return withResponseCache(
     deps.modelPort ?? buildModelPort(config, deps.credentials, retryOf(deps)),
     config,
@@ -1182,10 +1217,34 @@ const PASS_CONCURRENCY = 4;
 
 type Answer =
   | { ok: true; parsed: ParsedReview; reply: ModelReply }
-  | { ok: false; reason: string; outage?: ModelOutage };
+  | {
+      ok: false;
+      reason: string;
+      outage?: ModelOutage;
+      /** What the calls that produced no answer cost. */
+      spent?: ModelUsage;
+    };
 
 /** One answer and where it came from: the batch and the files it covered. */
-type PassOutcome = Answer & { batch: number; files: string[] };
+type PassOutcome = Answer & {
+  batch: number;
+  files: string[];
+  /** What earlier calls of the same pass cost, when this answer is a slice's. */
+  carried?: ModelUsage;
+};
+
+const sumUsage = (a: ModelUsage | undefined, b: ModelUsage | undefined): ModelUsage | undefined =>
+  a === undefined ? b : b === undefined ? a : addUsage(a, b);
+
+/** Every call of an outcome was paid for, the ones that gave no answer included. */
+const usageOfOutcome = (outcome: PassOutcome): ModelUsage | undefined =>
+  sumUsage(outcome.ok ? outcome.reply.usage : outcome.spent, outcome.carried);
+
+/** The parse of a reply; one that stopped on the output cap with no text is named for that. */
+function readReply(reply: ModelReply, parseOptions: ParseOptions): ParsedReview {
+  if (hitOutputCap(reply)) throw new Error(OUTPUT_CAP_HIT);
+  return parseReviewResponse(reply.text, parseOptions);
+}
 
 /**
  * One call and its parse. askAgain adds one more answering step when the
@@ -1205,9 +1264,11 @@ async function answerPass(
     if (!(error instanceof ModelUnavailableError)) throw error;
     return { ok: false, reason: error.message, outage: { why: error.why, detail: error.message } };
   }
+  // what the replies read so far cost, kept for when none of them answers
+  let spent = reply.usage;
   try {
     try {
-      return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
+      return { ok: true, parsed: readReply(reply, parseOptions), reply };
     } catch (error) {
       if (!askAgain) throw error;
       // one more answering step, tools off, with what the model fetched replayed as text
@@ -1215,23 +1276,26 @@ async function answerPass(
         `${pass.label}: ${(error as Error).message}; asking once more for the JSON answer\n`,
       );
       const first = reply;
-      reply = await completeOrFail(modelPort, retryRequest(pass.request, first));
+      reply = await completeOrFail(
+        modelPort,
+        retryRequest(pass.request, first, pass.outputCeiling),
+      );
+      spent = sumUsage(first.usage, reply.usage);
       reply = {
         ...reply,
-        ...(first.usage !== undefined
-          ? { usage: reply.usage ? addUsage(first.usage, reply.usage) : first.usage }
-          : {}),
+        ...(spent !== undefined ? { usage: spent } : {}),
         ...(first.toolCalls !== undefined ? { toolCalls: first.toolCalls } : {}),
       };
-      return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
+      return { ok: true, parsed: readReply(reply, parseOptions), reply };
     }
   } catch (error) {
     const reason = (error as Error).message;
+    const paid = spent !== undefined ? { spent } : {};
     // an outage on the second answering step is an outage, not an unreadable reply
     if (error instanceof ModelUnavailableError) {
-      return { ok: false, reason, outage: { why: error.why, detail: reason } };
+      return { ok: false, reason, outage: { why: error.why, detail: reason }, ...paid };
     }
-    return { ok: false, reason };
+    return { ok: false, reason, ...paid };
   }
 }
 
@@ -1256,12 +1320,20 @@ async function runPass(
   }
   deps.err(`${pass.label}: retrying with a smaller slice\n`);
   const outcomes: PassOutcome[] = [];
+  const spentBefore = answer.spent;
   for (const slice of slices) {
     const sliced = await answerPass(deps, modelPort, slice, parseOptions, false);
     if (!sliced.ok && sliced.outage === undefined) {
       deps.err(`${slice.label}: ${sliced.reason}; skipping this slice's findings\n`);
     }
-    outcomes.push({ ...sliced, batch, files: slice.files });
+    // the whole batch's failed calls are paid once, by its first slice
+    const carried = outcomes.length === 0 ? spentBefore : undefined;
+    outcomes.push({
+      ...sliced,
+      batch,
+      files: slice.files,
+      ...(carried !== undefined ? { carried } : {}),
+    });
   }
   return outcomes;
 }
@@ -1292,7 +1364,10 @@ export async function runPasses(
     throw new ModelUnavailableError(firstOutage.why, firstOutage.detail);
   }
   const merged: Finding[] = [];
-  let usage: ModelUsage | undefined;
+  const usage: ModelUsage | undefined = outcomes.reduce<ModelUsage | undefined>(
+    (sum, outcome) => sumUsage(sum, usageOfOutcome(outcome)),
+    undefined,
+  );
   let toolCalls: number | undefined;
   let cachedResponse = false;
   const counts = { uncited: 0, outOfScope: 0, adjusted: 0, malformed: 0, misquoted: 0 };
@@ -1317,7 +1392,6 @@ export async function runPasses(
     counts.malformed += parsed.droppedMalformed;
     counts.misquoted += parsed.droppedMisquoted;
     rejected.push(...parsed.rejected);
-    usage = usage ? (reply.usage ? addUsage(usage, reply.usage) : usage) : reply.usage;
     if (reply.toolCalls !== undefined && reply.toolCalls > 0) {
       toolCalls = (toolCalls ?? 0) + reply.toolCalls;
     }
@@ -1367,22 +1441,45 @@ async function completeOrFail(port: ModelPort, request: ModelRequest): Promise<M
  * The retry of an answering step whose reply held no JSON: the same prompt,
  * the tool results the model had fetched as text, its own reply, and one
  * instruction to answer in the requested shape. No tools, so it must answer.
+ * A reply that ran out of output gets twice its cap, never more than ceiling.
  */
-export function retryRequest(request: ModelRequest, reply: ModelReply): ModelRequest {
+export function retryRequest(
+  request: ModelRequest,
+  reply: ModelReply,
+  ceiling: number,
+): ModelRequest {
+  const capped = hitOutputCap(reply);
+  const cap = request.maxOutputTokens;
+  const answerNow =
+    'Reply now with the JSON object only, in the shape requested above; if nothing violates a guideline reply {"findings": []}.';
   return {
     system: request.system,
     user: [
       withFetched(request.user, reply.transcript),
       "",
-      "Your previous reply:",
-      "<reply>",
-      reply.text,
-      "</reply>",
-      "",
-      'That reply held no JSON answer. Reply now with the JSON object only, in the shape requested above; if nothing violates a guideline reply {"findings": []}.',
+      ...(capped
+        ? [`Your previous reply ran out of output before any answer. Reason briefly. ${answerNow}`]
+        : [
+            "Your previous reply:",
+            "<reply>",
+            reply.text,
+            "</reply>",
+            "",
+            `That reply held no JSON answer. ${answerNow}`,
+          ]),
     ].join("\n"),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-    ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
+    // a reply that ran out of output is asked again with twice the room, never above the ceiling
+    ...(capped
+      ? {
+          maxOutputTokens: Math.min(
+            ceiling,
+            (cap ?? DEFAULT_MAX_OUTPUT_TOKENS) * OUTPUT_CAP_RETRY_FACTOR,
+          ),
+        }
+      : cap !== undefined
+        ? { maxOutputTokens: cap }
+        : {}),
   };
 }
 
