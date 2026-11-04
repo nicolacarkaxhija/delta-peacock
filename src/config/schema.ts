@@ -16,6 +16,8 @@ export const ModelSchema = z.strictObject({
   timeoutSeconds: z.number().positive().default(60),
   /** Model id fragments that reject a temperature; the parameter is left out for these. */
   omitTemperatureFor: z.array(z.string().min(1)).default(["haiku-5-5"]),
+  /** How hard the model may reason. */
+  reasoningEffort: z.enum(["low", "medium", "high"]).optional(),
 });
 
 export const ReviewSchema = z.strictObject({
@@ -65,6 +67,8 @@ export const ReviewSchema = z.strictObject({
   maxFilesPerBatch: z.number().int().positive().default(25),
   /** Attention budget: a batch never reviews more (approximate) tokens than this, independent of windowTokens. */
   maxTokensPerBatch: z.number().int().positive().default(30_000),
+  /** Ceiling on one pass's reply. */
+  maxOutputTokens: z.number().int().positive().default(4000),
   /** The reviewer's name on the pull request: summary heading, commit status, insights report. */
   displayName: z.string().trim().min(1).max(40).default(DEFAULT_DISPLAY_NAME),
   /** Repository doc explaining how reviews work; a blocked summary links it when the file exists. */

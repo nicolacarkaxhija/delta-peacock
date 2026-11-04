@@ -308,6 +308,8 @@ export interface SummaryInput {
 /** Files whose model reply could not be read, so no model judged them. */
 export interface UnreviewedFiles {
   files: readonly string[];
+  /** The files whose reply ran out of output. */
+  capHit?: readonly string[];
   /** The status the run posts while the gate passes. */
   status: Config["fallback"]["status"];
 }

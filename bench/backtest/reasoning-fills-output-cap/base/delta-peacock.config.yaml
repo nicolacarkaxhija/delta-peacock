@@ -1,0 +1,21 @@
+# A synthetic regression case: hidden reasoning fills the reply cap before any text.
+model:
+  provider: bedrock
+  id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
+context:
+  providers: []
+review:
+  target: main
+  guidelinesDir: guidelines
+  generalPass: false
+  repoConfigPath: ""
+  maxOutputTokens: 3000
+gate:
+  failOn: MAJOR
+calibration:
+  enabled: false
+cost:
+  rateInputPer1M: 1.10
+  rateOutputPer1M: 5.50
+stats:
+  enabled: false

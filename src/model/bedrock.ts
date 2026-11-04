@@ -15,6 +15,8 @@ export interface BedrockPortOptions {
   omitTemperatureFor?: readonly string[];
   /** Test seam; also useful for VPC endpoints. */
   baseUrl?: string;
+  /** How hard the model may reason. */
+  reasoningEffort?: "low" | "medium" | "high";
   fetch?: typeof globalThis.fetch;
 }
 

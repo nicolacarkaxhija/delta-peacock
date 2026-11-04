@@ -1,0 +1,12 @@
+{
+  "findings": [
+    {
+      "file": "src/panels/panel3.js",
+      "line": 5,
+      "guidelineId": "no-debug-output",
+      "severity": "MAJOR",
+      "why": "a console.log call in shipped code; the case exists to prove a reply whose reasoning fills the output cap is retried and still reviewed"
+    }
+  ],
+  "noFinding": []
+}
