@@ -1,6 +1,6 @@
 import type { Config } from "../config/schema.js";
 import { approximateTokens } from "../context/port.js";
-import type { ModelRequest } from "../model/port.js";
+import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelRequest } from "../model/port.js";
 import { anyRateConfigured, computeCost, modelRates } from "../model/usage.js";
 import { costExplorerMonthToDate, type CostExplorerSend } from "./cost-explorer.js";
 import { defaultCounterPath, monthKey, readMonthSpend } from "./counter.js";
@@ -60,8 +60,11 @@ export async function checkCostGuard(
   const perStrategy = computeCost(
     {
       inputTokens: approximateTokens(request.system) * batches + approximateTokens(request.user),
-      // the response we have not paid for yet, priced at the reply ceiling so the estimate is an upper bound
-      outputTokens: config.review.maxOutputTokens * batches,
+      // the response we have not paid for yet, priced at each call's reply cap so the estimate is an upper bound
+      outputTokens:
+        options.outputCaps !== undefined
+          ? options.outputCaps.reduce((sum, cap) => sum + cap, 0)
+          : (request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS) * batches,
     },
     rates,
   ).total;

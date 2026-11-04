@@ -397,7 +397,9 @@ person, calibration is skipped, and the report carries `budget.stopped` with the
 limit. A month already at its cap blocks every call: the review checks facts only and the report
 carries `budget.blocked`. Either way every check runs and its fact findings are posted, counted
 and gated like in any other fallback. An ensemble sends its calls as one wave, so for an ensemble
-`cost.maxPerReview` still compares the estimate with the cap before any call.
+`cost.maxPerReview` still compares the estimate with the cap before any call. The estimate prices
+each call at the reply cap it asks for: a review pass at its own cap, sized as described under
+"When a reply cannot be read", every other call at the plain reply cap.
 
 Any other failure fails the run as before, and so do the ensemble and calibration calls, which
 keep their own handling. An unreadable reply is not a failure; see

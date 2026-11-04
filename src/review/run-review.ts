@@ -267,6 +267,14 @@ export async function runReview(
   if (!factsOnly && guardActive(config)) {
     const decision = await checkCostGuard(config, request, now, {
       batches: batchCount,
+      // an ensemble sends the whole request at the plain cap; passes ask for their own
+      ...(config.ensemble.enabled
+        ? {}
+        : {
+            outputCaps: passes.map((pass) =>
+              outputCapFor(pass.files.length, config.review.maxOutputTokens),
+            ),
+          }),
       basis: config.ensemble.enabled ? "estimate" : "actual",
     });
     for (const notice of decision.notices) deps.err(`${notice}\n`);
