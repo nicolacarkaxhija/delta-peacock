@@ -1,0 +1,16 @@
+rules:
+  - id: test-id-outside-named-locator
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: "A test id literal appears once, as a readonly named locator on the page object that owns it."
+    metadata:
+      guidelines-version: "0.2.0"
+    patterns:
+      - pattern: $RECEIVER.getByTestId("$ID")
+      - pattern-not-inside: |
+          class $CLASS {
+            ...
+            readonly $FIELD = $RECEIVER.getByTestId("$ID");
+            ...
+          }
+      - pattern-not-inside: this.$FIELD = $RECEIVER.getByTestId("$ID");

@@ -1,0 +1,16 @@
+diff --git a/cartridges/app_shop_core/cartridge/app_shop_core.properties b/cartridges/app_shop_core/cartridge/app_shop_core.properties
+index 80f5250..b073eb9 100644
+--- a/cartridges/app_shop_core/cartridge/app_shop_core.properties
++++ b/cartridges/app_shop_core/cartridge/app_shop_core.properties
+@@ -1 +1,2 @@
+ demandware.cartridges.app_shop_core.id=app_shop_core
++demandware.cartridges.app_shop_core.multipleLanguageStorefront=true
+diff --git a/cartridges/app_shop_gifts/cartridge/app_shop_gifts.properties b/cartridges/app_shop_gifts/cartridge/app_shop_gifts.properties
+new file mode 100644
+index 0000000..9cff407
+--- /dev/null
++++ b/cartridges/app_shop_gifts/cartridge/app_shop_gifts.properties
+@@ -0,0 +1,3 @@
++## cartridge.properties for cartridge app_shop_gifts
++demandware.cartridges.app_shop_gifts.multipleLanguageStorefront=true
++demandware.cartridges.app_shop_gifts.id=app_shop_gifts

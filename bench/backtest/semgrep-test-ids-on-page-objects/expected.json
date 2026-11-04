@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "tests/specs/notes.spec.ts",
+      "line": 7,
+      "guidelineId": "test-ids-on-page-objects",
+      "severity": "MAJOR",
+      "why": "the spec writes a test id literal instead of using a named locator of the page object"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "tests/pages/notes-page.ts",
+      "line": 5,
+      "guidelineId": "test-ids-on-page-objects",
+      "why": "a readonly field on the page object is the named locator the guideline asks for"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+rules:
+  - id: cartridge-declared
+    languages: [generic]
+    severity: WARNING
+    message: "A change never adds a cartridge: new code goes into an existing custom cartridge."
+    metadata:
+      guidelines-version: "0.2.0"
+    pattern-regex: demandware\.cartridges\.[\w.-]+\.id=

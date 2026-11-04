@@ -1,0 +1,26 @@
+diff --git a/tests/pages/notes-page.ts b/tests/pages/notes-page.ts
+index 78b2f75..b91ac56 100644
+--- a/tests/pages/notes-page.ts
++++ b/tests/pages/notes-page.ts
+@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
+ 
+ export class NotesPage {
+   readonly add = this.page.getByTestId("notes-add");
++  readonly remove = this.page.getByTestId("notes-remove");
+ 
+   constructor(private readonly page: Page) {}
+ }
+diff --git a/tests/specs/notes.spec.ts b/tests/specs/notes.spec.ts
+new file mode 100644
+index 0000000..a5fcb0a
+--- /dev/null
++++ b/tests/specs/notes.spec.ts
+@@ -0,0 +1,8 @@
++import { test } from "@playwright/test";
++import { NotesPage } from "../pages/notes-page";
++
++test("adds a note", async ({ page }) => {
++  const notes = new NotesPage(page);
++  await notes.add.click();
++  await page.getByTestId("notes-list").waitFor();
++});

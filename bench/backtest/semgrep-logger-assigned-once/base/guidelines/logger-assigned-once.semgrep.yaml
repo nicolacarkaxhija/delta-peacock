@@ -1,0 +1,14 @@
+rules:
+  - id: chained-logger-call
+    languages: [javascript]
+    severity: WARNING
+    message: "A log call never chains on getLogger: the logger is assigned once and every call goes through it."
+    metadata:
+      guidelines-version: "0.2.0"
+    patterns:
+      - pattern-either:
+          - pattern: $LOGGER.getLogger(...).$LEVEL(...)
+          - pattern: getLogger(...).$LEVEL(...)
+      - metavariable-regex:
+          metavariable: $LEVEL
+          regex: ^(debug|info|warn|error|fatal)$

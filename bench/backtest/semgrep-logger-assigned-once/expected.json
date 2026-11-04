@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/giftPack.js",
+      "line": 6,
+      "guidelineId": "logger-assigned-once",
+      "severity": "MINOR",
+      "why": "the error call chains on getLogger instead of the module's logger"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/scripts/giftPack.js",
+      "line": 7,
+      "guidelineId": "logger-assigned-once",
+      "why": "the call goes through the logger the module assigns once"
+    }
+  ]
+}
