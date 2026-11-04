@@ -9,7 +9,7 @@ review:
   guidelinesDir: guidelines
   generalPass: false
   repoConfigPath: ""
-  maxOutputTokens: 3000
+  maxOutputTokens: 20000
 gate:
   failOn: MAJOR
 calibration:

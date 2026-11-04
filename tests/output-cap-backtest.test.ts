@@ -13,10 +13,10 @@ import { testDeps } from "./helpers/deps.js";
 const BACKTEST = fileURLToPath(new URL("../bench/backtest", import.meta.url));
 const CASE = "reasoning-fills-output-cap";
 const DEBUG_LINE = '  console.log("panel step 3", visible.length);';
-const STARVED_CAP = 4000;
+const STARVED_CAP = 9000;
 const INPUT_TOKENS = 1000;
 
-/** A model whose hidden reasoning eats a reply cap of 4000 tokens or less, leaving no text. */
+/** A model whose hidden reasoning eats a reply cap of 9000 tokens or less, leaving no text. */
 function starvedModel(): { port: ModelPort; requests: ModelRequest[] } {
   const requests: ModelRequest[] = [];
   return {
