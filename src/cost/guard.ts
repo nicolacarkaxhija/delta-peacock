@@ -29,6 +29,8 @@ export function modelCallCount(config: Config): number {
 export interface CostGuardOptions {
   /** Planned diff batches; each is its own call carrying the system prefix. */
   batches?: number;
+  /** The reply cap of each planned pass, priced in place of one cap per batch. */
+  outputCaps?: readonly number[];
   /** `estimate` blocks on the priced estimate; `actual` only on a month already at its cap. */
   basis?: "estimate" | "actual";
   /** Injected for tests; production reads the real Cost Explorer. */

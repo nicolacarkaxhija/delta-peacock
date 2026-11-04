@@ -7,7 +7,7 @@ import { costExplorerMonthToDate } from "../src/cost/cost-explorer.js";
 import { monthKey, readMonthSpend, recordSpend } from "../src/cost/counter.js";
 import { checkCostGuard } from "../src/cost/guard.js";
 import { runCli } from "../src/index.js";
-import type { ModelPort } from "../src/model/port.js";
+import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelPort } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
@@ -277,6 +277,52 @@ describe("per-review cap", () => {
     expect(code).toBe(0);
     expect(requests).toBe(1);
     expect(stderr).toContain("no rates are configured");
+  });
+});
+
+describe("the output estimate", () => {
+  /** USD per output token at the scenario's rate of 15 per million. */
+  const OUTPUT_RATE = 15 / 1_000_000;
+  const priced = () =>
+    loadConfig({
+      root: makeScenario(),
+      env: {
+        DELTA_PEACOCK_COST_RATE_INPUT_PER_1M: "3",
+        DELTA_PEACOCK_COST_RATE_OUTPUT_PER_1M: "15",
+      },
+    });
+
+  it("prices a call at its own reply cap, the plain cap when it names none, never the review ceiling", async () => {
+    const config = priced();
+    const now = new Date();
+    const unnamed = await checkCostGuard(config, { system: "s", user: "u" }, now);
+    const plain = await checkCostGuard(
+      config,
+      { system: "s", user: "u", maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS },
+      now,
+    );
+    const larger = await checkCostGuard(
+      config,
+      { system: "s", user: "u", maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS + 1000 },
+      now,
+    );
+    expect(unnamed.estimated).toBeCloseTo(plain.estimated, 8);
+    expect(larger.estimated - plain.estimated).toBeCloseTo(1000 * OUTPUT_RATE, 8);
+  });
+
+  it("prices each planned pass at its own reply cap", async () => {
+    const config = priced();
+    const now = new Date();
+    const request = { system: "s", user: "u" };
+    const small = await checkCostGuard(config, request, now, {
+      batches: 2,
+      outputCaps: [1000, 1000],
+    });
+    const mixed = await checkCostGuard(config, request, now, {
+      batches: 2,
+      outputCaps: [1000, 3000],
+    });
+    expect(mixed.estimated - small.estimated).toBeCloseTo(2000 * OUTPUT_RATE, 8);
   });
 });
 
