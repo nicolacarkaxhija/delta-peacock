@@ -5,6 +5,7 @@ import type { EmbeddingPort } from "./context/embedding.js";
 import type { ModelRef } from "./model/build.js";
 import type { ModelPort } from "./model/port.js";
 import type { ScmPort } from "./scm/port.js";
+import type { SemgrepRunner } from "./review/semgrep/run.js";
 
 /**
  * The dependencies every command runs against; tests inject all of them.
@@ -41,4 +42,6 @@ export interface RuntimeDeps {
   readLine?: () => Promise<string | null>;
   /** Embedding seam for the rag embeddings backend; real adapters otherwise. */
   embeddingPort?: EmbeddingPort;
+  /** The Semgrep seam: tests inject a scripted run; the CLI child process otherwise. */
+  semgrepRunner?: SemgrepRunner;
 }

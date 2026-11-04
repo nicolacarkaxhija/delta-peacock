@@ -46,11 +46,14 @@ describe("the shipped packs and the static checks", () => {
     expect(implied.map(([check]) => check).filter((check) => !owned.has(check))).toEqual([]);
   });
 
-  it("leave every other pack rule marked as judged by the model, and no checked rule marked", () => {
+  it("leave every other pack rule marked as judged by the model, and no sentence checked rule marked", () => {
     const wrong = guidelines
-      .filter(
-        (guideline) => (impliedCheck(guideline) === undefined) !== guideline.tags.includes(JUDGED),
-      )
+      .filter((guideline) => {
+        const judged = guideline.tags.includes(JUDGED);
+        // a semgrep rule may also be judged: the rule takes the mechanical half, the model the rest
+        if (guideline.check?.type === "semgrep") return false;
+        return (impliedCheck(guideline) === undefined && guideline.check === undefined) !== judged;
+      })
       .map((guideline) => guideline.id);
     expect(wrong).toEqual([]);
   });

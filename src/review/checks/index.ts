@@ -35,7 +35,9 @@ export function splitChecked(
   const bound: BoundGuideline[] = [];
   const free: Guideline[] = [];
   for (const guideline of guidelines) {
-    const check = bindings[guideline.id] ?? guideline.check?.type ?? impliedCheck(guideline);
+    // a semgrep rule runs in the pre pass, before the model; no check here owns it
+    const declared = guideline.check?.type === "semgrep" ? undefined : guideline.check?.type;
+    const check = bindings[guideline.id] ?? declared ?? impliedCheck(guideline);
     if (check === undefined) free.push(guideline);
     else bound.push({ guideline, check });
   }

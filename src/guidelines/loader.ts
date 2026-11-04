@@ -15,6 +15,10 @@ export interface GuidelineFile {
   /** Path shown in problems and sources; repo-relative where possible. */
   displayPath: string;
   content: string;
+  /** The Semgrep rule file next to the guideline, when there is one. */
+  semgrep?: string;
+  /** The version of the guideline set the file belongs to; absent outside a pack. */
+  version?: string;
 }
 
 /**
