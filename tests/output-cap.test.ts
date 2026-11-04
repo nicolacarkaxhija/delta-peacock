@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config/loader.js";
 import { createBedrockPort } from "../src/model/bedrock.js";
+import { buildModelPort } from "../src/model/build.js";
 import { withResponseCache } from "../src/model/cache.js";
 import { DEFAULT_MAX_OUTPUT_TOKENS, type ModelPort, type ModelReply } from "../src/model/port.js";
 import {
@@ -272,6 +273,44 @@ describe("reasoning effort on Bedrock", () => {
 
   it("sends nothing when no effort is named", async () => {
     expect((await sentBody())["additionalModelRequestFields"]).toBeUndefined();
+  });
+
+  it("sends the effort model.reasoningEffort names through the port builder", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const credentials = {
+      AWS_REGION: "eu-central-1",
+      AWS_ACCESS_KEY_ID: "AKIA_TEST",
+      AWS_SECRET_ACCESS_KEY: "secret",
+    };
+    const config = loadConfig({
+      root: makeRepo(),
+      env: {
+        DELTA_PEACOCK_MODEL_PROVIDER: "bedrock",
+        DELTA_PEACOCK_MODEL_ID: "eu.anthropic.claude-test",
+        DELTA_PEACOCK_MODEL_REASONING_EFFORT: "medium",
+      },
+    });
+    vi.stubGlobal("fetch", (_input: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            output: { message: { role: "assistant", content: [{ text: "{}" }] } },
+            stopReason: "end_turn",
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    });
+    try {
+      await buildModelPort(config, credentials).complete({ system: "s", user: "u" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(bodies[0]?.["additionalModelRequestFields"]).toMatchObject({
+      output_config: { effort: "medium" },
+    });
   });
 });
 
