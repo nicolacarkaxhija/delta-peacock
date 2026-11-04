@@ -25,6 +25,16 @@ from a clean checkout; a red line blocks it.
 - `packs agree with the checks`: every sentence a static check quotes is said by a shipped pack
   rule, every check owns one, every other pack rule is marked `judged`, and every shipped pack
   lints clean. On its own: `pnpm exec vitest run tests/pack-rules.test.ts tests/pack-lint.test.ts`.
+- `semgrep pre pass`: a rule match on a changed line is a finding with producer semgrep in the
+  report, the findings file and Code Insights; the model prompt leaves out the guideline the rule
+  settles and the hunk it settles; a clean hunk reaches the model unchanged; `semgrep.enabled:
+false` restores the review without the pre pass; a Semgrep failure warns and sends the whole
+  diff. On its own: `pnpm exec vitest run tests/semgrep-`.
+- `semgrep rules`: every shipped rule flags its violating fixture and passes its clean one on the
+  pinned Semgrep, carries its pack version and changes only with a new pack version, and each
+  rule's backtest case passes with no model. On its own: `node scripts/semgrep-install.mjs`, then
+  `pnpm exec vitest run tests/semgrep-packs.test.ts`, then `pnpm build` and
+  `PATH="$(node scripts/semgrep-install.mjs):$PATH" node dist/cli.js backtest --cases bench/backtest --only semgrep-logger-assigned-once,semgrep-no-new-cartridges,semgrep-test-ids-on-page-objects --provider none`.
 - `pack facts on the bench`: with no model the bench finds every planted breach of a pack rule a
   check owns and exits 0, its aggregate at 100 % precision and recall. The aggregate counts only the
   breaches a check owns; the breaches of judged rules are not found and count under

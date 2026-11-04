@@ -204,6 +204,124 @@ rule does not take (`unknown key(s) limit for the empty-catch rule`), a missing 
 parameter (`"limit" must be a whole number of at least 1`), an invalid regex, and on a `message`
 the guideline does not say word for word; a review skips such a guideline with the same words.
 
+## A Semgrep rule next to the guideline
+
+A rule a pattern of the code states better than a regex, such as a call chained on another call
+across lines or a literal that may only sit in one kind of class field, is a Semgrep rule. The
+guideline declares `type: semgrep` under `check:`, and the rule file sits next to it with the same
+name and the `.semgrep.yaml` extension. The rules run in a pre pass before the model, on every
+review.
+
+```markdown
+---
+id: logger-assigned-once
+severity: MINOR
+languages: [javascript]
+paths: ["cartridges/**"]
+check:
+  type: semgrep
+  files: ["cartridges/**/*.js"]
+  message: "A log call never chains on getLogger: the logger is assigned once and every call goes through it."
+---
+
+# Assign the logger once
+
+A log call never chains on getLogger: the logger is assigned once and every call goes through it.
+```
+
+`logger-assigned-once.semgrep.yaml`:
+
+```yaml
+rules:
+  - id: chained-logger-call
+    languages: [javascript]
+    severity: WARNING
+    message: "A log call never chains on getLogger: the logger is assigned once and every call goes through it."
+    patterns:
+      - pattern: $LOGGER.getLogger(...).$LEVEL(...)
+      - metavariable-regex:
+          metavariable: $LEVEL
+          regex: ^(debug|info|warn|error|fatal)$
+```
+
+| Key       | Meaning                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------ |
+| `type`    | `semgrep`                                                                                                    |
+| `files`   | path globs on top of the guideline's own `paths` and `languages`; left out, every file the guideline covers  |
+| `message` | the guideline sentence every finding quotes and the finding's title; the guideline must say it word for word |
+
+Every rule in the file carries the check's `message` as its own, so the rule and the guideline
+cannot drift: a rule with another message, a rule file that is missing, unreadable or empty, and a
+rule with no `id` skip the guideline with the reason, in a review and in `guidelines lint`. The
+rule file is read from the same place as the guideline, the target ref included, so a pull request
+cannot weaken the rule that judges it.
+
+### What the pre pass does
+
+1. It runs every rule of the guidelines that apply to the change in one Semgrep call, over copies
+   of the changed files as the reviewed commit holds them.
+2. A match on an added or edited line is a finding under its guideline, with the guideline's
+   severity, its `message` as the title and the rule id in the body. The finding carries
+   `producer: semgrep` in the report and in the findings file, and it is posted, annotated in Code
+   Insights and gated like any other finding. A model finding on the same file, line and guideline
+   is the same finding and is dropped.
+3. A guideline whose rule decides it is settled: the model prompt leaves it out and names only the
+   guidelines it must judge. A hunk that holds a rule match is withheld from the model when no
+   guideline the model judges covers its file and the general pass is off; a file with no hunk left
+   leaves the model input whole. When every applicable guideline is settled, no model call is made.
+   A clean hunk goes to the model as it is.
+4. The log names the findings and the withheld hunks
+   (`semgrep pre pass: 1 finding(s), 1 hunk(s) withheld from the model`), and the report's
+   `semgrep` block holds the Semgrep version, the rule sets with the guideline set version they came
+   from, the finding count and the withheld hunks.
+
+A Semgrep error, a timeout (`semgrep.timeoutSeconds`), a missing binary or a version other than the
+pin is a warning in the log and a `failure` in the report's `semgrep` block, never a silent pass:
+the model then receives the whole diff and judges the rule guidelines as well.
+
+### Mechanical or judgement
+
+A guideline with a Semgrep check and no `judged` tag is mechanical: the rule settles it and the
+model never sees it. A guideline that has a mechanical half and a judgement half carries both the
+check and `tags: [judged]`: the rule reports its matches, the model still judges the guideline on
+every hunk, and a model finding on a line the rule already flagged is dropped as the same finding.
+With `model.provider: none` the rules still run; only the judged guidelines are named under
+`factsOnly.notReviewed`.
+
+### The pinned Semgrep
+
+The reviewer runs the open source Semgrep CLI as a child process, offline: rules from the local
+file only, metrics off, no version check, no login. `package.json` pins the release under `semgrep`,
+with one wheel and its sha256 per platform; `node scripts/semgrep-install.mjs` downloads the wheel
+for the platform, checks the digest, unpacks the binary into `.delta-peacock-cache/semgrep/` and
+prints the folder to put on the `PATH`. Behind a proxy, run it with `NODE_USE_ENV_PROXY=1`. A
+review refuses any other version as a failure of the pre pass.
+
+```yaml
+semgrep:
+  enabled: true # false turns the pre pass off: the model reviews every guideline over the whole diff
+  command: osemgrep # the installed binary, or a semgrep on the PATH
+  timeoutSeconds: 60
+```
+
+The environment variables `DELTA_PEACOCK_SEMGREP_ENABLED`, `DELTA_PEACOCK_SEMGREP_COMMAND` and
+`DELTA_PEACOCK_SEMGREP_TIMEOUT_SECONDS` set the same keys.
+
+### Adding a rule
+
+1. Write the guideline: one sentence the rule enforces, the `check:` block with `type: semgrep`
+   and that sentence as `message`, and `tags: [judged]` only when the model judges the rest.
+2. Write the rule file next to it, every rule with the same `message`. In a shipped pack every rule
+   also carries `metadata: { guidelines-version: "<pack version>" }`, the version of the guideline
+   set it was derived from; a rule with another version skips its guideline.
+3. Add a violating and a clean fixture row to `tests/semgrep-packs.test.ts`, and a backtest case
+   under `bench/backtest/semgrep-<guideline id>` whose diff breaks the rule once and keeps the clean
+   form once (`expected.json` lists the finding and the clean line as `noFinding`). The case runs
+   with no model: `delta-peacock backtest --cases bench/backtest --only semgrep-<id> --provider none`.
+4. A change to a shipped rule file needs a new pack version: `tests/semgrep-packs.test.ts` holds a
+   digest of each pack's rule files per version in `tests/fixtures/semgrep-rules.lock.json` and
+   fails on rules that changed under a version already locked.
+
 ## Findings on changed lines
 
 A review judges the change, not the file around it. A finding the model reports under a
