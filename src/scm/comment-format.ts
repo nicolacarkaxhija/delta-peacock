@@ -275,6 +275,7 @@ export function isSummaryBody(body: string, presentation: Presentation): boolean
     first.startsWith(FACTS_LEAD) ||
     first.startsWith(FALLBACK_LEAD) ||
     first.startsWith(PARTIAL_LEAD) ||
+    REVIEWED_LEAD.test(first) ||
     COUNT_LEAD.test(first) ||
     Object.values(NOT_REVIEWED).some((line) => line === first)
   );
@@ -300,6 +301,15 @@ export interface SummaryInput {
   scope?: ChangeScope;
   /** The reviewed commit, full hash: named on a clean summary and on the comment of a finding it resolved, and where file links point. */
   reviewedCommit?: string;
+  /** Set when no model reply could be read for some files; the rest were reviewed. */
+  unreviewed?: UnreviewedFiles;
+}
+
+/** Files whose model reply could not be read, so no model judged them. */
+export interface UnreviewedFiles {
+  files: readonly string[];
+  /** The status the run posts while the gate passes. */
+  status: Config["fallback"]["status"];
 }
 
 /** What a run with no model left out: candidates for a person, guidelines no check owns. */
@@ -321,6 +331,8 @@ export interface FactsScope {
 const FACTS_LEAD = "This review checked facts only, with no model: ";
 const FALLBACK_LEAD = "The model could not run (";
 const PARTIAL_LEAD = "The model reviewed ";
+/** The opening of a summary whose run left some files unreviewed. */
+const REVIEWED_LEAD = /^Reviewed \d+ of \d+ changed files?, /;
 
 /** Why the model could not run, in the summary's words and the status's short ones. */
 const FALLBACK_REASONS: Readonly<Record<ModelUnavailability, { long: string; short: string }>> = {
@@ -418,7 +430,7 @@ const sentence = (text: string): string => `${text.replace(/[.\s]+$/, "")}.`;
 
 /** The one line that says how the run ended. */
 export function stateLine(
-  input: Pick<SummaryInput, "findings" | "outcome" | "factsOnly">,
+  input: Pick<SummaryInput, "findings" | "outcome" | "factsOnly" | "unreviewed" | "changedFiles">,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
@@ -426,8 +438,18 @@ export function stateLine(
   if (outcome.kind === "failed") return `${FAILED_LEAD}${sentence(outcome.reason)}`;
   if (outcome.kind === "capped") return `${CAPPED_LEAD}${sentence(outcome.reason)}`;
   if (input.factsOnly !== undefined) return factsLine(input.findings.length, input.factsOnly);
+  if (input.unreviewed !== undefined) {
+    const { files } = input.unreviewed;
+    const of = input.changedFiles ?? files.length;
+    const found =
+      input.findings.length === 0 ? "no findings" : countLine(input.findings, presentation);
+    return `Reviewed ${String(of - files.length)} of ${plural(of, "changed file")}, ${found}. ${plural(files.length, "file")} ${UNREVIEWED}. Merging needs a person's approval.`;
+  }
   return countLine(input.findings, presentation);
 }
+
+/** What a file no model reply could be read for is called, in the summary and the status. */
+const UNREVIEWED = "not reviewed: reply unparseable";
 
 /** Room a host leaves for a status description; Bitbucket and GitHub cut near here. */
 const STATUS_MAX = 140;
@@ -441,7 +463,7 @@ function clip(text: string): string {
  * "Passed. No findings in 4 changed files." or "3 findings, 1 major. See the comments."
  */
 export function statusLine(
-  input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles" | "factsOnly"> &
+  input: Pick<SummaryInput, "findings" | "outcome" | "changedFiles" | "factsOnly" | "unreviewed"> &
     Partial<Pick<SummaryInput, "gate">>,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
@@ -461,13 +483,32 @@ export function statusLine(
   if (input.factsOnly !== undefined) {
     return factsStatus(input.findings.length, input.factsOnly, input.gate);
   }
+  if (input.unreviewed !== undefined) {
+    const { files, status } = input.unreviewed;
+    const of = input.changedFiles ?? files.length;
+    const lead =
+      input.findings.length === 0 ? "Passed." : findingsLead(input.findings, presentation);
+    const approval =
+      status === "pending" && input.gate?.failed !== true ? " Needs a person's approval." : "";
+    return clip(
+      `${lead} Reviewed ${String(of - files.length)} of ${plural(of, "changed file")}; ${String(files.length)} ${UNREVIEWED}.${approval}`,
+    );
+  }
   if (input.findings.length === 0) {
     return input.changedFiles === undefined
       ? "Passed. No findings in this change."
       : `Passed. No findings in ${plural(input.changedFiles, "changed file")}.`;
   }
-  const major = input.findings.filter((finding) => meetsThreshold(finding.severity, "MAJOR"));
-  return `${plural(input.findings.length, "finding")}, ${String(major.length)} ${lowerWord("MAJOR", presentation)}. See the comments.`;
+  return `${findingsLead(input.findings, presentation)} See the comments.`;
+}
+
+/** "3 findings, 2 major." */
+function findingsLead(
+  findings: readonly Finding[],
+  presentation: Pick<Presentation, "severityScale">,
+): string {
+  const major = findings.filter((finding) => meetsThreshold(finding.severity, "MAJOR"));
+  return `${plural(findings.length, "finding")}, ${String(major.length)} ${lowerWord("MAJOR", presentation)}.`;
 }
 
 function plural(count: number, word: string): string {
@@ -564,7 +605,12 @@ const SCOPED_REASONS: readonly string[] = [NOT_REVIEWED.nothingInScope, NOT_REVI
  */
 function cleanLine(input: SummaryInput, presentation: Presentation): string | undefined {
   const { scope, outcome = { kind: "reviewed" } } = input;
-  if (scope === undefined || input.findings.length > 0 || input.factsOnly !== undefined) {
+  if (
+    scope === undefined ||
+    input.findings.length > 0 ||
+    input.factsOnly !== undefined ||
+    input.unreviewed !== undefined
+  ) {
     return undefined;
   }
   const reviewed = outcome.kind === "reviewed";
@@ -636,6 +682,13 @@ export function renderSummaryBody(
   }
   if (input.findings.length > 0) {
     lines.push("", ...input.findings.map((finding) => listItem(finding, presentation)));
+  }
+  if (input.unreviewed !== undefined) {
+    const linked = (file: string): string => {
+      const url = presentation.reviewedFileLink?.(file);
+      return url === undefined ? file : `[${file}](${url})`;
+    };
+    lines.push("", ...input.unreviewed.files.map((file) => `- ${linked(file)}: ${UNREVIEWED}`));
   }
   const kept = input.factsOnly?.notRejudged ?? [];
   if (kept.length > 0) {

@@ -399,8 +399,9 @@ carries `budget.blocked`. Either way every check runs and its fact findings are 
 and gated like in any other fallback. An ensemble sends its calls as one wave, so for an ensemble
 `cost.maxPerReview` still compares the estimate with the cap before any call.
 
-Any other failure, an unreadable reply among them, fails the run as before, and so do the
-ensemble and calibration calls, which keep their own handling. The log says
+Any other failure fails the run as before, and so do the ensemble and calibration calls, which
+keep their own handling. An unreadable reply is not a failure; see
+[when a reply cannot be read](#when-a-reply-cannot-be-read). The log says
 `model unavailable (<cause>): <what the call said>; falling back to facts only`, and the review
 goes on as above: facts are findings, the rest is left to a person, and the report's
 `factsOnly.fallback` names the cause. The summary opens with:
@@ -462,6 +463,25 @@ fallback:
   credentialRefused: fallback
   outage: fail
 ```
+
+## When a reply cannot be read
+
+Each batch's prompt fits `review.windowTokens` with room left for the reply and a margin, so a
+change that nearly fills the window is reviewed in more, smaller batches; a file too large for one
+batch is cut at its hunks. A reply that holds no readable JSON is asked once more for the answer,
+then its batch is asked once more as two smaller slices, by file, or by hunk for a single file. The
+files of a slice that still cannot be read are not reviewed; every other batch's findings stand.
+
+The log says `reviewed 1 of 2 files; not reviewed: reply unparseable: src/a.ts`, the report lists
+each batch with its `files` under `unparsedBatches`, and the summary opens with:
+
+> Reviewed 1 of 2 changed files, no findings. 1 file not reviewed: reply unparseable. Merging needs
+> a person's approval.
+
+followed by one `- src/a.ts: not reviewed: reply unparseable` line per file. The step never fails
+for this: `gate.failOn` judges the findings of the reviewed files as in any review, and the status
+follows `fallback.status`, `success` by default or `pending` to make the merge wait for a person.
+Comments and tasks an earlier run left on a file not reviewed stay as they are.
 
 ## The sentence each check quotes
 

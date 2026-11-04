@@ -381,6 +381,7 @@ async function reconcileInlineComments(
   settled: ReadonlySet<string> = new Set(),
   reviewedCommit?: string,
   notRejudged?: KeptComment[],
+  unjudged: ReadonlySet<string> = new Set(),
 ): Promise<{ commentIds: Map<string, string>; anchors: Map<string, string> }> {
   const commentIds = new Map<string, string>();
   const anchors = new Map<string, string>();
@@ -418,6 +419,11 @@ async function reconcileInlineComments(
       continue;
     }
     if (fingerprint === undefined || finding === undefined) {
+      // no model judged this file on this run, so its comment stays as it is
+      if (comment.path !== undefined && unjudged.has(comment.path)) {
+        outcome.unchanged += 1;
+        continue;
+      }
       if (notRejudged !== undefined) {
         // a fallback run cannot tell whether a model's finding still holds
         const where = comment.line !== undefined ? `:${String(comment.line)}` : "";
@@ -551,9 +557,10 @@ async function resolveStaleTasks(
   desired: ReadonlyMap<string, Finding>,
   lineTextOf: (file: string, line: number) => string | undefined,
   outcome: PublishOutcome,
+  unjudged: ReadonlySet<string>,
 ): Promise<void> {
   for (const entry of own) {
-    if (entry.task.resolved) continue;
+    if (entry.task.resolved || unjudged.has(entry.file)) continue;
     const stands =
       desired.has(entry.fingerprint) &&
       lineDigest(lineTextOf(entry.file, entry.line)) === entry.digest;
@@ -611,9 +618,11 @@ function statusState(input: SummaryInput): StatusState {
   if (kind === "capped") return input.gate.threshold === "none" ? "success" : "failure";
   if (input.gate.failed) return "failure";
   // fallback.status pending keeps a fallback from reading as a pass
-  return input.factsOnly?.fallback !== undefined && input.factsOnly.fallbackStatus === "pending"
-    ? "pending"
-    : "success";
+  if (input.factsOnly?.fallback !== undefined && input.factsOnly.fallbackStatus === "pending") {
+    return "pending";
+  }
+  // and files no reply could be read for, the same way
+  return input.unreviewed?.status === "pending" ? "pending" : "success";
 }
 
 /** The one place every command asks whether a write is suppressed; nothing else reads config.scm.dryRun directly. */
@@ -663,6 +672,7 @@ export async function publishReview(
   const notRejudged: KeptComment[] | undefined =
     input.factsOnly?.fallback !== undefined ? [] : undefined;
   let summaryInput: SummaryInput = input;
+  const unjudged = new Set(input.unreviewed?.files ?? []);
   if (input.comments !== false) {
     // a broken run knows nothing about the code, so earlier inline comments stay as they are
     if (!failed) {
@@ -692,7 +702,7 @@ export async function publishReview(
           if (entry.task.resolved && entry.task.resolvedBy !== me) settled.add(entry.fingerprint);
         }
         if (notRejudged === undefined) {
-          await resolveStaleTasks(taskApi, own, blocking, lineTextOf, outcome);
+          await resolveStaleTasks(taskApi, own, blocking, lineTextOf, outcome, unjudged);
         }
       }
       const { commentIds, anchors } = await reconcileInlineComments(
@@ -703,6 +713,7 @@ export async function publishReview(
         settled,
         input.reviewedCommit,
         notRejudged,
+        unjudged,
       );
       for (const [fingerprint, id] of anchors) {
         const finding = desired.get(fingerprint);
@@ -728,7 +739,8 @@ export async function publishReview(
       !failed &&
       cardCarries &&
       input.summaryWhenClean !== true &&
-      input.factsOnly === undefined;
+      input.factsOnly === undefined &&
+      input.unreviewed === undefined;
     const render = quiet ? renderSummaryLine : renderSummaryBody;
     await upsertSummary(scm, presentation, render(summaryInput, presentation));
   }

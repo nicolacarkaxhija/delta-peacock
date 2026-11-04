@@ -4,7 +4,13 @@ import { describe, expect, it } from "vitest";
 import { approximateTokens } from "../src/context/port.js";
 import { chunkSource } from "../src/context/chunk.js";
 import { changedFilesFromDiff } from "../src/git/diff.js";
-import { planBatches, planBudget, splitDiffByFile } from "../src/review/budget.js";
+import {
+  halveDiff,
+  planBatches,
+  planBudget,
+  promptBudget,
+  splitDiffByFile,
+} from "../src/review/budget.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelRequest } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
@@ -91,7 +97,7 @@ describe("boundary-aware chunking", () => {
 describe("the budget planner", () => {
   const prefix = "x".repeat(400); // ~100 tokens
   it("does not degrade when everything fits", () => {
-    const plan = planBudget({ prefix, context: "ctx", diff: "diff", windowTokens: 1000 });
+    const plan = planBudget({ prefix, context: "ctx", diff: "diff", budgetTokens: 1000 });
     expect(plan.dropContext).toBe(false);
     expect(plan.batchDiff).toBe(false);
     expect(plan.notices).toEqual([]);
@@ -102,7 +108,7 @@ describe("the budget planner", () => {
       prefix,
       context: "y".repeat(4000), // ~1000 tokens of context
       diff: "d".repeat(400),
-      windowTokens: 200,
+      budgetTokens: 200,
     });
     expect(plan.dropContext).toBe(true);
     expect(plan.batchDiff).toBe(false);
@@ -114,7 +120,7 @@ describe("the budget planner", () => {
       prefix,
       context: "",
       diff: "d".repeat(8000), // ~2000 tokens, over a 200-token window
-      windowTokens: 200,
+      budgetTokens: 200,
     });
     expect(plan.batchDiff).toBe(true);
     expect(plan.notices[0]).toContain("splitting the diff");
@@ -139,12 +145,80 @@ describe("splitDiffByFile", () => {
     // an empty diff yields the single empty batch, never zero
     expect(splitDiffByFile("", 10)).toEqual([""]);
   });
+
+  it("splits one file over the budget at its hunks, each piece under the file's own header", () => {
+    const header = "diff --git a/big.js b/big.js\n--- a/big.js\n+++ b/big.js\n";
+    const hunks = [1, 40, 80].map(
+      (start) => `@@ -${String(start)},1 +${String(start)},1 @@\n+${"h".repeat(200)}\n`,
+    );
+    const batches = splitDiffByFile(header + hunks.join(""), 70);
+    expect(batches).toEqual(hunks.map((hunk) => header + hunk));
+  });
+
+  it("keeps the hunks of an oversized file together while they still fit", () => {
+    const header = "diff --git a/big.js b/big.js\n";
+    const small = (start: number) =>
+      `@@ -${String(start)} +${String(start)} @@\n+${"s".repeat(40)}\n`;
+    const large = `@@ -90 +90 @@\n+${"l".repeat(400)}\n`;
+    const batches = splitDiffByFile(header + small(1) + small(10) + large, 60);
+    expect(batches).toEqual([header + small(1) + small(10), header + large]);
+  });
+
+  it("lets a file with one hunk over the budget ride alone", () => {
+    const one = `diff --git a/one.js b/one.js\n@@ -1 +1 @@\n+${"o".repeat(800)}\n`;
+    expect(splitDiffByFile(one, 20)).toEqual([one]);
+  });
+});
+
+describe("promptBudget", () => {
+  it("keeps room for the reply and a margin out of the window", () => {
+    expect(promptBudget(100_000, 4000)).toBe(81_000);
+    expect(promptBudget(24_000, 4000)).toBe(16_400);
+  });
+
+  it("never falls below one token when the reply alone fills the window", () => {
+    expect(promptBudget(150, 4000)).toBe(1);
+  });
+});
+
+describe("halveDiff", () => {
+  const file = (name: string, size: number) =>
+    `diff --git a/${name}.js b/${name}.js\n@@ -0,0 +1 @@\n+${"x".repeat(size)}\n`;
+
+  it("cuts a diff of several files into two halves of about equal size, by file", () => {
+    const diff = file("a", 400) + file("b", 400) + file("c", 400) + file("d", 400);
+    expect(halveDiff(diff)).toEqual([
+      file("a", 400) + file("b", 400),
+      file("c", 400) + file("d", 400),
+    ]);
+  });
+
+  it("gives a large first file a half of its own", () => {
+    const diff = file("a", 2000) + file("b", 100) + file("c", 100);
+    expect(halveDiff(diff)).toEqual([file("a", 2000), file("b", 100) + file("c", 100)]);
+  });
+
+  it("cuts a single file at its hunks, the header on both halves", () => {
+    const header = "diff --git a/one.js b/one.js\n";
+    const hunk = (start: number) =>
+      `@@ -${String(start)} +${String(start)} @@\n+${"y".repeat(200)}\n`;
+    expect(halveDiff(header + hunk(1) + hunk(20) + hunk(40))).toEqual([
+      header + hunk(1) + hunk(20),
+      header + hunk(40),
+    ]);
+  });
+
+  it("returns a single hunk whole, since nothing smaller is a diff", () => {
+    const one = file("a", 400);
+    expect(halveDiff(one)).toEqual([one]);
+    expect(halveDiff("+a loose line\n")).toEqual(["+a loose line\n"]);
+  });
 });
 
 describe("planBatches", () => {
   const prefix = "p".repeat(40); // 10 tokens
   const context = "c".repeat(200); // 50 tokens
-  const windowTokens = 100;
+  const budgetTokens = 100;
   // generous enough that it never binds: these cases are about window-driven
   // packing, not the attention budget, which gets its own describe block below
   const slackAttentionBudget = { maxFiles: 1000, maxTokens: 1_000_000 };
@@ -158,10 +232,10 @@ describe("planBatches", () => {
       "",
     );
     const diff = normalFiles + fileDiff("huge", 400);
-    const whole = planBudget({ prefix, context, diff, windowTokens });
+    const whole = planBudget({ prefix, context, diff, budgetTokens });
     expect(whole.batchDiff).toBe(true); // sanity: this fixture does need batching
 
-    const plan = planBatches(whole, diff, context, prefix, windowTokens, slackAttentionBudget);
+    const plan = planBatches(whole, diff, context, prefix, budgetTokens, slackAttentionBudget);
 
     // budget-driven, not a fixed/small count: 10 small files pack two-per-batch
     // plus the oversized file riding alone
@@ -175,7 +249,7 @@ describe("planBatches", () => {
     // and each of those batches, reassembled with prefix + context, provably
     // fits the window -- not just asserted by field name
     for (const batchDiff of plan.diffBatches.slice(0, 5)) {
-      const reassembled = planBudget({ prefix, context, diff: batchDiff, windowTokens });
+      const reassembled = planBudget({ prefix, context, diff: batchDiff, budgetTokens });
       expect(reassembled.batchDiff).toBe(false);
       expect(reassembled.dropContext).toBe(false);
     }
@@ -198,10 +272,10 @@ describe("planBatches", () => {
     // big to share a batch with its neighbors once packing reserves room for
     // prefix + context -- batching by itself is not degradation
     const diff = Array.from({ length: 10 }, (_, i) => fileDiff(`f${String(i)}`, 16)).join("");
-    const whole = planBudget({ prefix, context, diff, windowTokens });
+    const whole = planBudget({ prefix, context, diff, budgetTokens });
     expect(whole.batchDiff).toBe(true);
 
-    const plan = planBatches(whole, diff, context, prefix, windowTokens, slackAttentionBudget);
+    const plan = planBatches(whole, diff, context, prefix, budgetTokens, slackAttentionBudget);
     expect(plan.diffBatches.length).toBeGreaterThan(1);
     expect(plan.notices).toEqual([]);
     expect(plan.degraded).toBe(false);
@@ -214,7 +288,7 @@ describe("planBatches", () => {
       "diff",
       context,
       prefix,
-      windowTokens,
+      budgetTokens,
       slackAttentionBudget,
     );
     expect(plan.diffBatches).toEqual(["diff"]);
@@ -230,7 +304,7 @@ describe("planBatches — attention budget", () => {
   // count long before the token limit binds, so the batch itself needs a cap
   const prefix = "p".repeat(40); // 10 tokens
   const context = "c".repeat(200); // 50 tokens
-  const windowTokens = 100_000;
+  const budgetTokens = 100_000;
   const attentionBudget = { maxFiles: 25, maxTokens: 30_000 };
 
   function fileDiff(name: string): string {
@@ -240,11 +314,11 @@ describe("planBatches — attention budget", () => {
   it("splits many small files into attention-sized batches even though the whole diff fits the window", () => {
     const fileCount = 60; // past the 25-file cap, nowhere near the 100k window
     const diff = Array.from({ length: fileCount }, (_, i) => fileDiff(`f${String(i)}`)).join("");
-    const whole = planBudget({ prefix, context, diff, windowTokens });
+    const whole = planBudget({ prefix, context, diff, budgetTokens });
     // sanity: the window alone has no reason to batch this diff
     expect(whole.batchDiff).toBe(false);
 
-    const plan = planBatches(whole, diff, context, prefix, windowTokens, attentionBudget);
+    const plan = planBatches(whole, diff, context, prefix, budgetTokens, attentionBudget);
 
     // the attention cap, not the window, drives the split
     expect(plan.diffBatches.length).toBeGreaterThan(1);

@@ -57,6 +57,12 @@ from a clean checkout; a red line blocks it.
   dropped before the exclusion check and counted in the report, the log, the summary comment and
   the backtest, unless its guideline declares `scope: file`. On its own:
   `pnpm exec vitest run tests/changed-lines tests/backtest.test.ts`.
+- `unreadable replies`: every batch's prompt leaves the window room for the reply and a margin, a
+  file over the batch budget is cut at its hunks, a reply with no readable JSON is asked again
+  and then as two smaller slices, and the files still unread are named as not reviewed in the log,
+  the report, the summary and the status, which follows `fallback.status` while `gate.failOn`
+  still gates the reviewed files; the near-limit backtest case gets every batch answered. On its
+  own: `pnpm exec vitest run tests/budget-chunk tests/run-passes tests/unreviewed-files tests/near-limit-backtest tests/review-e2e tests/review-root-causes`.
 - `batch cost`: a change reviewed in batches sends no more input tokens than the same files
   reviewed as separate changes, each batch carries only its own files' context, the shared prefix
   carries a cache marker on Anthropic and on Anthropic models on Bedrock, and no cached token is

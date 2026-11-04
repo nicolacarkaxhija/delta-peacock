@@ -236,11 +236,11 @@ describe("review end to end (local mode)", () => {
     expect(report.findings).toEqual([]);
   });
 
-  it("maps a malformed model response to the tool-error exit code", async () => {
+  it("passes on a malformed model response and names the file not reviewed", async () => {
     const repo = makeScenario();
     const { code, stderr } = await review(repo, scriptedModel("I refuse to answer in JSON.").port);
-    expect(code).toBe(1);
-    expect(stderr).toContain("JSON");
+    expect(code).toBe(0);
+    expect(stderr).toContain("reviewed 0 of 1 file; not reviewed: reply unparseable: src/app.js");
   });
 
   it("honors an incremental anchor passed through the cli", async () => {
@@ -850,7 +850,7 @@ describe("partial batch parse failures", () => {
     expect(report.unparsedBatches?.[0]?.reason).toContain("JSON");
   });
 
-  it("still fails the run when every batch's reply is unparseable", async () => {
+  it("passes and names every file not reviewed when every batch's reply is unparseable", async () => {
     const repo = makeTwoBatchScenario();
     const allBroken: ModelPort = {
       complete: () => Promise.resolve({ text: "Nope, no findings here." }),
@@ -865,8 +865,133 @@ describe("partial batch parse failures", () => {
       },
       modelPort: allBroken,
     });
-    expect(code).toBe(1); // every batch failing to parse is a genuine failure, not a clean pass
-    expect(stderr).toContain("every batch");
-    expect(existsSync(path.join(repo, "r.json"))).toBe(false); // no partial report on total failure
+    expect(code).toBe(0);
+    expect(stderr).not.toContain("every batch's reply failed to parse");
+    expect(stderr).toContain(
+      "reviewed 0 of 2 files; not reviewed: reply unparseable: src/a.js, src/b.js",
+    );
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings).toEqual([]);
+    expect(report.unparsedBatches?.flatMap((entry) => entry.files)).toEqual([
+      "src/a.js",
+      "src/b.js",
+    ]);
+  });
+});
+
+describe("a batch reply that cannot be parsed", () => {
+  /** Two files small enough to share one batch. */
+  function makeSharedBatchScenario(): string {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "add guidelines");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/a.js", "console.log('a');\n");
+    write(repo, "src/b.js", "console.log('b');\n");
+    commitAll(repo, "add logging");
+    return repo;
+  }
+
+  /** Prose while a request names a refused file, findings for each file otherwise. */
+  function refusingPort(refuses: (files: string[]) => boolean): {
+    port: ModelPort;
+    requests: ModelRequest[];
+  } {
+    const requests: ModelRequest[] = [];
+    return {
+      requests,
+      port: {
+        complete(request) {
+          requests.push(request);
+          const files = [...request.user.matchAll(/\+\+\+ b\/(.+)/g)].map((m) => m[1] ?? "");
+          if (refuses(files)) return Promise.resolve({ text: "Let me look at more files." });
+          return Promise.resolve({
+            text: JSON.stringify({
+              findings: files.map((file) => ({
+                guidelineId: "no-console",
+                file,
+                line: 1,
+                title: "Console call added",
+                body: "Replace with the logger.",
+                guidelineQuote: "No console statements",
+              })),
+            }),
+          });
+        },
+      },
+    };
+  }
+
+  async function review(repo: string, port: ModelPort): Promise<{ code: number; stderr: string }> {
+    let stderr = "";
+    const code = await runCli(["review", "--report", "r.json"], {
+      cwd: repo,
+      env: {},
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: port,
+    });
+    return { code, stderr };
+  }
+
+  it("is retried once as two smaller slices whose findings stand", async () => {
+    const repo = makeSharedBatchScenario();
+    const { port, requests } = refusingPort((files) => files.length > 1);
+    const { code, stderr } = await review(repo, port);
+    expect(code).toBe(0);
+    // the batch, its request for the JSON answer, then one call per half
+    expect(requests).toHaveLength(4);
+    expect(stderr).toContain("batch 1/1: retrying with a smaller slice");
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings.map((finding) => finding.file)).toEqual(["src/a.js", "src/b.js"]);
+    expect(report.unparsedBatches).toBeUndefined();
+  });
+
+  it("reports the files of a slice that still fails as not reviewed, the other slice's findings kept", async () => {
+    const repo = makeSharedBatchScenario();
+    const { port, requests } = refusingPort((files) => files.includes("src/a.js"));
+    const { code, stderr } = await review(repo, port);
+    expect(code).toBe(0);
+    expect(requests).toHaveLength(4);
+    expect(stderr).toContain("reviewed 1 of 2 files; not reviewed: reply unparseable: src/a.js");
+    const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings.map((finding) => finding.file)).toEqual(["src/b.js"]);
+    expect(report.unparsedBatches).toEqual([
+      expect.objectContaining({ batch: 1, of: 1, files: ["src/a.js"] }),
+    ]);
+  });
+
+  it("still fails the gate on a finding in the files that were reviewed", async () => {
+    const repo = makeSharedBatchScenario();
+    const { port } = refusingPort((files) => files.includes("src/a.js"));
+    let stderr = "";
+    const code = await runCli(["review"], {
+      cwd: repo,
+      env: { DELTA_PEACOCK_GATE_FAIL_ON: "MAJOR" },
+      out: () => undefined,
+      err: (text) => {
+        stderr += text;
+      },
+      modelPort: port,
+    });
+    expect(code).toBe(2);
+    expect(stderr).toContain("reviewed 1 of 2 files");
+  });
+
+  it("is not sliced when its diff is one hunk of one file", async () => {
+    const repo = makeRepo();
+    write(repo, "guidelines/no-console.md", GUIDELINE);
+    commitAll(repo, "add guidelines");
+    git(repo, "checkout", "-q", "-b", "feature");
+    write(repo, "src/a.js", "console.log('a');\n");
+    commitAll(repo, "add logging");
+    const { port, requests } = refusingPort(() => true);
+    const { code, stderr } = await review(repo, port);
+    expect(code).toBe(0);
+    expect(requests).toHaveLength(2);
+    expect(stderr).not.toContain("smaller slice");
+    expect(stderr).toContain("reviewed 0 of 1 file; not reviewed: reply unparseable: src/a.js");
   });
 });

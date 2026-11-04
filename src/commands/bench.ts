@@ -178,6 +178,10 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       const executed = await runPasses(deps, port, passes, parseOptions);
       // a score over the batches that answered would read as a weak model
       if (executed.outage !== undefined) throw new ToolError(executed.outage.detail);
+      // an unreadable reply would score as a clean case
+      const [unparsed] = executed.unparsedBatches;
+      if (unparsed !== undefined)
+        throw new ToolError(`the reply failed to parse: ${unparsed.reason}`);
       addTo(usage, config.model.id ?? config.model.provider, executed.usage);
       parsed = executed.parsed;
     } else {

@@ -278,25 +278,52 @@ describe("a reply with no JSON", () => {
     }
   });
 
-  it("posts a could-not-complete summary and a failed status after the retry fails", async () => {
+  it("passes, names the file not reviewed and keeps earlier comments after the retry fails", async () => {
+    const fake = await startFakeBitbucket();
+    try {
+      const repo = consumerRepo();
+      const finding = { ...WRONG_FINDING, quote: "    await home.open();", suggestion: undefined };
+      await reviewOnBitbucket(
+        fake,
+        repo,
+        scripted({ text: JSON.stringify({ findings: [finding] }) }).port,
+      );
+      const [earlier] = inlineOf(fake);
+      expect(earlier).toBeDefined();
+      const model = scripted({ text: "I need to look at more files first." });
+      const { code, stderr } = await reviewOnBitbucket(fake, repo, model.port);
+      expect(code).toBe(0);
+      expect(model.requests).toHaveLength(2);
+      expect(stderr).not.toContain("every batch's reply failed to parse");
+      expect(summaryOf(fake)).toMatch(
+        /^Reviewed 0 of 1 changed file, no findings\. 1 file not reviewed: reply unparseable\. Merging needs a person's approval\.\n\n- .*tests\/smoke\/homepage\.spec\.ts.*: not reviewed: reply unparseable$/,
+      );
+      expect(fake.statuses.at(-1)).toMatchObject({
+        state: "SUCCESSFUL",
+        description: "Passed. Reviewed 0 of 1 changed file; 1 not reviewed: reply unparseable.",
+      });
+      // no model judged the file again, so its earlier comment stays as it is
+      expect(inlineOf(fake)).toEqual([earlier]);
+      expect(fake.writes.map((write) => write.url)).not.toContain(
+        `/repositories/acme/e2e/pullrequests/1/comments/${String(earlier?.id)}`,
+      );
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("posts a pending status for files not reviewed when fallback.status is pending", async () => {
     const fake = await startFakeBitbucket();
     try {
       const model = scripted({ text: "I need to look at more files first." });
-      const { code, stderr } = await reviewOnBitbucket(fake, consumerRepo(), model.port);
-      expect(code).toBe(1);
-      expect(model.requests).toHaveLength(2);
-      expect(stderr).toContain("every batch's reply failed to parse");
-      expect(summaryOf(fake)).toBe(
-        [
-          "The review could not complete: the model's reply held no readable findings, twice.",
-          "",
-          "Nothing was reviewed on this run. Run the pipeline again to retry.",
-        ].join("\n"),
-      );
+      const { code } = await reviewOnBitbucket(fake, consumerRepo(), model.port, {
+        DELTA_PEACOCK_FALLBACK_STATUS: "pending",
+      });
+      expect(code).toBe(0);
       expect(fake.statuses.at(-1)).toMatchObject({
-        state: "FAILED",
+        state: "INPROGRESS",
         description:
-          "Failed. The review could not complete: the model's reply held no readable findings, twice.",
+          "Passed. Reviewed 0 of 1 changed file; 1 not reviewed: reply unparseable. Needs a person's approval.",
       });
     } finally {
       await fake.close();

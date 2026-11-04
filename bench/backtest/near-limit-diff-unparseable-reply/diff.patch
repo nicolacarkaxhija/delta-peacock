@@ -1,0 +1,1278 @@
+diff --git a/src/widgets/badge.js b/src/widgets/badge.js
+new file mode 100644
+index 0000000..ecf5dca
+--- /dev/null
++++ b/src/widgets/badge.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function badgeStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function badgeStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function badgeStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function badgeStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function badgeStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function badgeStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function badgeStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function badgeStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("badge step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/banner.js b/src/widgets/banner.js
+new file mode 100644
+index 0000000..78a4dee
+--- /dev/null
++++ b/src/widgets/banner.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function bannerStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function bannerStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function bannerStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function bannerStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function bannerStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function bannerStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function bannerStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function bannerStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("banner step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/card.js b/src/widgets/card.js
+new file mode 100644
+index 0000000..98fb2ae
+--- /dev/null
++++ b/src/widgets/card.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function cardStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function cardStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function cardStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function cardStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function cardStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function cardStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function cardStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function cardStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("card step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/chip.js b/src/widgets/chip.js
+new file mode 100644
+index 0000000..6712e20
+--- /dev/null
++++ b/src/widgets/chip.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function chipStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function chipStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function chipStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function chipStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function chipStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function chipStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function chipStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function chipStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("chip step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/dialog.js b/src/widgets/dialog.js
+new file mode 100644
+index 0000000..1581188
+--- /dev/null
++++ b/src/widgets/dialog.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function dialogStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function dialogStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function dialogStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function dialogStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function dialogStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function dialogStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function dialogStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function dialogStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("dialog step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/drawer.js b/src/widgets/drawer.js
+new file mode 100644
+index 0000000..22a55e6
+--- /dev/null
++++ b/src/widgets/drawer.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function drawerStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function drawerStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function drawerStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function drawerStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function drawerStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function drawerStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function drawerStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function drawerStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("drawer step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/filter.js b/src/widgets/filter.js
+new file mode 100644
+index 0000000..9aa2915
+--- /dev/null
++++ b/src/widgets/filter.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function filterStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function filterStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function filterStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function filterStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function filterStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function filterStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function filterStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function filterStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("filter step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/gallery.js b/src/widgets/gallery.js
+new file mode 100644
+index 0000000..03b5113
+--- /dev/null
++++ b/src/widgets/gallery.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function galleryStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("gallery step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function galleryStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("gallery step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function galleryStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("gallery step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function galleryStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  console.log("gallery step 3", visible.length);
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function galleryStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("gallery step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function galleryStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("gallery step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function galleryStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("gallery step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function galleryStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("gallery step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/grid.js b/src/widgets/grid.js
+new file mode 100644
+index 0000000..dde5467
+--- /dev/null
++++ b/src/widgets/grid.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function gridStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function gridStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function gridStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function gridStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function gridStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function gridStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function gridStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function gridStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("grid step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/list.js b/src/widgets/list.js
+new file mode 100644
+index 0000000..6892e61
+--- /dev/null
++++ b/src/widgets/list.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function listStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function listStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function listStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function listStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function listStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function listStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function listStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function listStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("list step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/menu.js b/src/widgets/menu.js
+new file mode 100644
+index 0000000..59fc0a7
+--- /dev/null
++++ b/src/widgets/menu.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function menuStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function menuStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function menuStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function menuStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function menuStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function menuStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function menuStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function menuStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("menu step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/pager.js b/src/widgets/pager.js
+new file mode 100644
+index 0000000..bdeb437
+--- /dev/null
++++ b/src/widgets/pager.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function pagerStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function pagerStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function pagerStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function pagerStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function pagerStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function pagerStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function pagerStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function pagerStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("pager step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/panel.js b/src/widgets/panel.js
+new file mode 100644
+index 0000000..7b19654
+--- /dev/null
++++ b/src/widgets/panel.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function panelStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function panelStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function panelStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function panelStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function panelStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function panelStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function panelStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function panelStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("panel step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/rating.js b/src/widgets/rating.js
+new file mode 100644
+index 0000000..d3ff6fc
+--- /dev/null
++++ b/src/widgets/rating.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function ratingStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function ratingStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function ratingStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function ratingStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function ratingStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function ratingStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function ratingStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function ratingStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("rating step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/slider.js b/src/widgets/slider.js
+new file mode 100644
+index 0000000..7cb7c44
+--- /dev/null
++++ b/src/widgets/slider.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function sliderStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function sliderStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function sliderStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function sliderStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function sliderStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function sliderStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function sliderStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function sliderStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("slider step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/stepper.js b/src/widgets/stepper.js
+new file mode 100644
+index 0000000..03beae4
+--- /dev/null
++++ b/src/widgets/stepper.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function stepperStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function stepperStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function stepperStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function stepperStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function stepperStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function stepperStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function stepperStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function stepperStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("stepper step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/tabs.js b/src/widgets/tabs.js
+new file mode 100644
+index 0000000..be615bf
+--- /dev/null
++++ b/src/widgets/tabs.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function tabsStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function tabsStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function tabsStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function tabsStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function tabsStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function tabsStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function tabsStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function tabsStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("tabs step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}
+diff --git a/src/widgets/toast.js b/src/widgets/toast.js
+new file mode 100644
+index 0000000..f6d8474
+--- /dev/null
++++ b/src/widgets/toast.js
+@@ -0,0 +1,65 @@
++import { logger } from "./logger.js";
++
++export function toastStep0(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 0");
++  return { ...state, visible, page: (state.page ?? 0) + 0 };
++}
++
++export function toastStep1(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 1");
++  return { ...state, visible, page: (state.page ?? 0) + 1 };
++}
++
++export function toastStep2(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 2");
++  return { ...state, visible, page: (state.page ?? 0) + 2 };
++}
++
++export function toastStep3(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 3");
++  return { ...state, visible, page: (state.page ?? 0) + 3 };
++}
++
++export function toastStep4(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 4");
++  return { ...state, visible, page: (state.page ?? 0) + 4 };
++}
++
++export function toastStep5(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 5");
++  return { ...state, visible, page: (state.page ?? 0) + 5 };
++}
++
++export function toastStep6(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 6");
++  return { ...state, visible, page: (state.page ?? 0) + 6 };
++}
++
++export function toastStep7(state, options = {}) {
++  const items = Array.isArray(state.items) ? state.items : [];
++  const limit = Number.isInteger(options.limit) ? options.limit : items.length;
++  const visible = items.slice(0, limit).map((item, index) => ({ ...item, index }));
++  logger.info("toast step 7");
++  return { ...state, visible, page: (state.page ?? 0) + 7 };
++}

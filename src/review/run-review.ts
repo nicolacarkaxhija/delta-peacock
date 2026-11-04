@@ -26,7 +26,13 @@ import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines, type ResolvedGuidelines } from "../guidelines/loader.js";
 import { guidelineSources } from "./guideline-sources.js";
 import { buildModelPort, noModel } from "../model/build.js";
-import type { ModelPort, ModelReply, ModelRequest, ModelUsage } from "../model/port.js";
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  type ModelPort,
+  type ModelReply,
+  type ModelRequest,
+  type ModelUsage,
+} from "../model/port.js";
 import { withFetched } from "../model/generate.js";
 import {
   anyRateConfigured,
@@ -51,7 +57,7 @@ import { withResponseCache } from "../model/cache.js";
 import { renderCodeQuality, renderSarif } from "./artifacts.js";
 import { fingerprintsOf, writeFindingsFile } from "./findings-file.js";
 import { writeReviewRecord } from "./review-record.js";
-import { planBatches, planBudget } from "./budget.js";
+import { halveDiff, planBatches, planBudget, promptBudget } from "./budget.js";
 import { detectLinters, linterInstruction } from "./linters.js";
 import { loadBaseline, splitByBaseline, writeBaseline } from "./baseline.js";
 import { calibrate } from "./calibrate.js";
@@ -508,6 +514,14 @@ export async function runReview(
   const toolCalls = executed.toolCalls;
   const cachedResponse = executed.cachedResponse;
   const unparsedBatches = executed.unparsedBatches;
+  // no reply could be read for these: the run names them and passes or warns per fallback.status
+  const unparsedFiles = [...new Set(unparsedBatches.flatMap((entry) => entry.files))];
+  if (unparsedFiles.length > 0) {
+    const of = changedFiles.length;
+    deps.err(
+      `reviewed ${String(of - unparsedFiles.length)} of ${String(of)} file${of === 1 ? "" : "s"}; not reviewed: reply unparseable: ${unparsedFiles.join(", ")}\n`,
+    );
+  }
 
   const finalized = await finalizeFindings(
     deps,
@@ -720,6 +734,9 @@ export async function runReview(
       comments: config.scm.comments,
       dryRun: isDryRun(config),
       ...(facts !== undefined ? { factsOnly: factsScope(facts, config) } : {}),
+      ...(unparsedFiles.length > 0
+        ? { unreviewed: { files: unparsedFiles, status: config.fallback.status } }
+        : {}),
     },
     sources,
   );
@@ -867,13 +884,19 @@ export interface PlannedPass {
   request: ModelRequest;
   /** The files of the batch, named when no model could review them. */
   files: string[];
+  /** The batch cut in two, asked once when its reply cannot be read; empty when it cannot be cut. */
+  slices?: () => Promise<PlannedPass[]>;
 }
 
 export type PromptOf = (diffText: string, context: string) => ModelRequest;
 
+/** The context of a slice of the diff. */
+export type ContextOf = (diffText: string) => Promise<string>;
+
 /**
  * Every call a review makes, in order. Each batch carries its own context and
  * the same tools, so no batch is where a strategy silently stops running.
+ * With contextOf, each batch can be cut into slices that carry their own context.
  */
 export function planPasses(
   config: Config,
@@ -881,16 +904,37 @@ export function planPasses(
   batchContexts: readonly string[],
   contextTools: ToolSet | undefined,
   promptOf: PromptOf,
+  contextOf?: ContextOf,
 ): PlannedPass[] {
-  return diffBatches.map((batchDiff, index) => ({
-    label: `batch ${String(index + 1)}/${String(diffBatches.length)}`,
+  const pass = (diffText: string, context: string, label: string): PlannedPass => ({
+    label,
     request: attachContextTools(
-      promptOf(batchDiff, batchContexts[index] ?? ""),
+      promptOf(diffText, context),
       contextTools,
       config.context.maxToolRounds,
     ),
-    files: changedFilesFromDiff(batchDiff),
-  }));
+    files: changedFilesFromDiff(diffText),
+  });
+  return diffBatches.map((batchDiff, index) => {
+    const label = `batch ${String(index + 1)}/${String(diffBatches.length)}`;
+    const context = batchContexts[index] ?? "";
+    const planned = pass(batchDiff, context, label);
+    if (contextOf === undefined) return planned;
+    const slices = async (): Promise<PlannedPass[]> => {
+      const halves = halveDiff(batchDiff);
+      if (halves.length < 2) return [];
+      return Promise.all(
+        halves.map(async (half, part) =>
+          pass(
+            half,
+            context === "" ? "" : await contextOf(half),
+            `${label}, slice ${String(part + 1)}/${String(halves.length)}`,
+          ),
+        ),
+      );
+    };
+    return { ...planned, slices };
+  });
 }
 
 interface AssembledReview {
@@ -953,11 +997,13 @@ async function assembleReview(
     });
   // one place weighs prefix + context + diff against the window and degrades
   const prefix = promptOf("", "").system;
+  // the reply and a margin need room in the window too
+  const budgetTokens = promptBudget(config.review.windowTokens, DEFAULT_MAX_OUTPUT_TOKENS);
   const plan = planBudget({
     prefix,
     context: projectContext,
     diff: redacted.text,
-    windowTokens: config.review.windowTokens,
+    budgetTokens,
   });
   for (const notice of plan.notices) deps.err(`${notice}\n`);
   // splitting (when needed) happens regardless of contextTools: agentic tools
@@ -966,32 +1012,25 @@ async function assembleReview(
   // room for prefix + context in every batch, so each batch gets its own
   // context decision instead of one drop-for-everyone verdict, and splitting
   // the diff is not, by itself, a reason to call the review degraded.
-  const batches = planBatches(
-    plan,
-    redacted.text,
-    projectContext,
-    prefix,
-    config.review.windowTokens,
-    {
-      maxFiles: config.review.maxFilesPerBatch,
-      maxTokens: config.review.maxTokensPerBatch,
-    },
-  );
+  const batches = planBatches(plan, redacted.text, projectContext, prefix, budgetTokens, {
+    maxFiles: config.review.maxFilesPerBatch,
+    maxTokens: config.review.maxTokensPerBatch,
+  });
   for (const notice of batches.notices) deps.err(`${notice}\n`);
   const { diffBatches, degraded: budgetDegraded } = batches;
+  const contextOf: ContextOf = (diffText) =>
+    resolvedContext.scoped({
+      cwd: deps.cwd,
+      diff: diffText,
+      changedFiles: changedFilesFromDiff(diffText),
+    });
   // each batch carries the context of its own files, never the whole change's again
   const batchContexts =
     diffBatches.length < 2
       ? batches.batchContexts
       : await Promise.all(
           diffBatches.map((batchDiff, index) =>
-            batches.batchContexts[index] === ""
-              ? Promise.resolve("")
-              : resolvedContext.scoped({
-                  cwd: deps.cwd,
-                  diff: batchDiff,
-                  changedFiles: changedFilesFromDiff(batchDiff),
-                }),
+            batches.batchContexts[index] === "" ? Promise.resolve("") : contextOf(batchDiff),
           ),
         );
 
@@ -1008,7 +1047,7 @@ async function assembleReview(
   return {
     redacted,
     request,
-    passes: planPasses(config, diffBatches, batchContexts, contextTools, promptOf),
+    passes: planPasses(config, diffBatches, batchContexts, contextTools, promptOf, contextOf),
     batchCount: diffBatches.length,
     parseOptions,
     budgetDegraded,
@@ -1141,14 +1180,96 @@ function reviewPort(deps: ReviewDeps, config: Config): ModelPort {
 /** Passes in flight at once; a focused review fans out one call per guideline, and four stays fast without tripping the provider rate limits that retries would then pay for. */
 const PASS_CONCURRENCY = 4;
 
-type PassOutcome =
+type Answer =
   | { ok: true; parsed: ParsedReview; reply: ModelReply }
   | { ok: false; reason: string; outage?: ModelOutage };
 
+/** One answer and where it came from: the batch and the files it covered. */
+type PassOutcome = Answer & { batch: number; files: string[] };
+
+/**
+ * One call and its parse. askAgain adds one more answering step when the
+ * reply holds no JSON; an outage on either step is an outage, not a bad reply.
+ */
+async function answerPass(
+  deps: Pick<ReviewDeps, "err">,
+  modelPort: ModelPort,
+  pass: PlannedPass,
+  parseOptions: ParseOptions,
+  askAgain: boolean,
+): Promise<Answer> {
+  let reply: ModelReply;
+  try {
+    reply = await completeOrFail(modelPort, pass.request);
+  } catch (error) {
+    if (!(error instanceof ModelUnavailableError)) throw error;
+    return { ok: false, reason: error.message, outage: { why: error.why, detail: error.message } };
+  }
+  try {
+    try {
+      return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
+    } catch (error) {
+      if (!askAgain) throw error;
+      // one more answering step, tools off, with what the model fetched replayed as text
+      deps.err(
+        `${pass.label}: ${(error as Error).message}; asking once more for the JSON answer\n`,
+      );
+      const first = reply;
+      reply = await completeOrFail(modelPort, retryRequest(pass.request, first));
+      reply = {
+        ...reply,
+        ...(first.usage !== undefined
+          ? { usage: reply.usage ? addUsage(first.usage, reply.usage) : first.usage }
+          : {}),
+        ...(first.toolCalls !== undefined ? { toolCalls: first.toolCalls } : {}),
+      };
+      return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
+    }
+  } catch (error) {
+    const reason = (error as Error).message;
+    // an outage on the second answering step is an outage, not an unreadable reply
+    if (error instanceof ModelUnavailableError) {
+      return { ok: false, reason, outage: { why: error.why, detail: reason } };
+    }
+    return { ok: false, reason };
+  }
+}
+
+/**
+ * One planned pass to its outcomes. A reply with no readable JSON is asked
+ * once more, then the batch is asked once as two smaller slices; whatever
+ * still cannot be read costs only its own files.
+ */
+async function runPass(
+  deps: Pick<ReviewDeps, "err">,
+  modelPort: ModelPort,
+  pass: PlannedPass,
+  batch: number,
+  parseOptions: ParseOptions,
+): Promise<PassOutcome[]> {
+  const answer = await answerPass(deps, modelPort, pass, parseOptions, true);
+  if (answer.ok || answer.outage !== undefined) return [{ ...answer, batch, files: pass.files }];
+  const slices = (await pass.slices?.()) ?? [];
+  if (slices.length === 0) {
+    deps.err(`${pass.label}: ${answer.reason}; skipping this batch's findings\n`);
+    return [{ ...answer, batch, files: pass.files }];
+  }
+  deps.err(`${pass.label}: retrying with a smaller slice\n`);
+  const outcomes: PassOutcome[] = [];
+  for (const slice of slices) {
+    const sliced = await answerPass(deps, modelPort, slice, parseOptions, false);
+    if (!sliced.ok && sliced.outage === undefined) {
+      deps.err(`${slice.label}: ${sliced.reason}; skipping this slice's findings\n`);
+    }
+    outcomes.push({ ...sliced, batch, files: slice.files });
+  }
+  return outcomes;
+}
+
 /**
  * Runs every planned pass and folds the replies into one parsed result. A
- * reply with no parseable JSON gets one more answering step, then costs only
- * its own pass's findings: the others were paid for and stand beside it.
+ * reply that cannot be read costs only its own files' findings: the others
+ * were paid for and stand beside it, and the files are named as not reviewed.
  */
 export async function runPasses(
   deps: Pick<ReviewDeps, "err">,
@@ -1156,52 +1277,14 @@ export async function runPasses(
   passes: readonly PlannedPass[],
   parseOptions: ParseOptions,
 ): Promise<Omit<ExecuteResult, "ensembleMembers">> {
-  const outcomes = await inPool(
-    passes.map((pass) => async (): Promise<PassOutcome> => {
-      let reply: ModelReply;
-      try {
-        reply = await completeOrFail(modelPort, pass.request);
-      } catch (error) {
-        if (!(error instanceof ModelUnavailableError)) throw error;
-        return {
-          ok: false,
-          reason: error.message,
-          outage: { why: error.why, detail: error.message },
-        };
-      }
-      try {
-        try {
-          return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
-        } catch (error) {
-          // one more answering step, tools off, with what the model fetched replayed as text
-          deps.err(
-            `${pass.label}: ${(error as Error).message}; asking once more for the JSON answer\n`,
-          );
-          const first = reply;
-          reply = await completeOrFail(modelPort, retryRequest(pass.request, first));
-          reply = {
-            ...reply,
-            ...(first.usage !== undefined
-              ? { usage: reply.usage ? addUsage(first.usage, reply.usage) : first.usage }
-              : {}),
-            ...(first.toolCalls !== undefined ? { toolCalls: first.toolCalls } : {}),
-          };
-          return { ok: true, parsed: parseReviewResponse(reply.text, parseOptions), reply };
-        }
-      } catch (error) {
-        const reason = (error as Error).message;
-        // an outage on the second answering step is an outage, not an unreadable reply
-        if (error instanceof ModelUnavailableError) {
-          return { ok: false, reason, outage: { why: error.why, detail: reason } };
-        }
-        deps.err(`${pass.label}: ${reason}; skipping this batch's findings\n`);
-        return { ok: false, reason };
-      }
-    }),
-    PASS_CONCURRENCY,
-  );
-  const outages = outcomes.flatMap((outcome, index) =>
-    !outcome.ok && outcome.outage !== undefined ? [{ outage: outcome.outage, index }] : [],
+  const outcomes = (
+    await inPool(
+      passes.map((pass, index) => () => runPass(deps, modelPort, pass, index + 1, parseOptions)),
+      PASS_CONCURRENCY,
+    )
+  ).flat();
+  const outages = outcomes.flatMap((outcome) =>
+    !outcome.ok && outcome.outage !== undefined ? [{ outage: outcome.outage, outcome }] : [],
   );
   const firstOutage = outages[0]?.outage;
   // no batch answered: the whole review falls back
@@ -1215,10 +1298,15 @@ export async function runPasses(
   const counts = { uncited: 0, outOfScope: 0, adjusted: 0, malformed: 0, misquoted: 0 };
   const rejected: RejectedCandidate[] = [];
   const unparsedBatches: UnparsedBatch[] = [];
-  for (const [index, outcome] of outcomes.entries()) {
+  for (const outcome of outcomes) {
     if (!outcome.ok && outcome.outage !== undefined) continue;
     if (!outcome.ok) {
-      unparsedBatches.push({ batch: index + 1, of: passes.length, reason: outcome.reason });
+      unparsedBatches.push({
+        batch: outcome.batch,
+        of: passes.length,
+        reason: outcome.reason,
+        files: outcome.files,
+      });
       continue;
     }
     const { parsed, reply } = outcome;
@@ -1237,19 +1325,6 @@ export async function runPasses(
   }
   if (toolCalls !== undefined) {
     deps.err(`agentic context: ${String(toolCalls)} tool call(s) served\n`);
-  }
-  if (unparsedBatches.length === passes.length) {
-    // every pass failed to parse: zero findings here would read as a clean
-    // pass, so this must surface exactly like the old single-batch failure did
-    throw new ToolError(
-      [
-        "every batch's reply failed to parse; nothing to review with",
-        ...unparsedBatches.map(
-          (entry) =>
-            `${passes[entry.batch - 1]?.label ?? `pass ${String(entry.batch)}`}: ${entry.reason}`,
-        ),
-      ].join("\n"),
-    );
   }
   return {
     parsed: {
@@ -1270,7 +1345,7 @@ export async function runPasses(
     ...(firstOutage !== undefined
       ? {
           outage: firstOutage,
-          unjudgedFiles: outages.flatMap(({ index }) => passes[index]?.files ?? []),
+          unjudgedFiles: outages.flatMap(({ outcome }) => outcome.files),
         }
       : {}),
   };
