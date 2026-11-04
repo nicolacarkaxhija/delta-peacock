@@ -907,7 +907,7 @@ export interface PlannedPass {
   /** The files of the batch, named when no model could review them. */
   files: string[];
   /** review.maxOutputTokens: no call of this pass, its retry included, asks for more. */
-  outputCeiling?: number;
+  outputCeiling: number;
   /** The batch cut in two, asked once when its reply cannot be read; empty when it cannot be cut. */
   slices?: () => Promise<PlannedPass[]>;
 }
@@ -943,6 +943,7 @@ export function planPasses(
         maxOutputTokens: outputCapFor(files.length, config.review.maxOutputTokens),
       },
       files,
+      outputCeiling: config.review.maxOutputTokens,
     };
   };
   return diffBatches.map((batchDiff, index) => {
@@ -1273,7 +1274,7 @@ async function answerPass(
       const first = reply;
       reply = await completeOrFail(
         modelPort,
-        retryRequest(pass.request, first, Number.POSITIVE_INFINITY),
+        retryRequest(pass.request, first, pass.outputCeiling),
       );
       spent = sumUsage(first.usage, reply.usage);
       reply = {
@@ -1436,13 +1437,13 @@ async function completeOrFail(port: ModelPort, request: ModelRequest): Promise<M
  * The retry of an answering step whose reply held no JSON: the same prompt,
  * the tool results the model had fetched as text, its own reply, and one
  * instruction to answer in the requested shape. No tools, so it must answer.
+ * A reply that ran out of output gets twice its cap, never more than ceiling.
  */
 export function retryRequest(
   request: ModelRequest,
   reply: ModelReply,
-  _ceiling: number,
+  ceiling: number,
 ): ModelRequest {
-  void _ceiling;
   const capped = hitOutputCap(reply);
   const cap = request.maxOutputTokens;
   const answerNow =
@@ -1464,9 +1465,14 @@ export function retryRequest(
           ]),
     ].join("\n"),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-    // a reply that ran out of output is asked again with twice the room
+    // a reply that ran out of output is asked again with twice the room, never above the ceiling
     ...(capped
-      ? { maxOutputTokens: (cap ?? DEFAULT_MAX_OUTPUT_TOKENS) * OUTPUT_CAP_RETRY_FACTOR }
+      ? {
+          maxOutputTokens: Math.min(
+            ceiling,
+            (cap ?? DEFAULT_MAX_OUTPUT_TOKENS) * OUTPUT_CAP_RETRY_FACTOR,
+          ),
+        }
       : cap !== undefined
         ? { maxOutputTokens: cap }
         : {}),
