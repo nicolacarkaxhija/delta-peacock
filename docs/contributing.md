@@ -54,6 +54,12 @@ as a template, to copy into `.github/workflows/` when Actions return.
 
 A red check names the rule it applied. Fix the title or the description, then rerun the job.
 
+## Dependency updates
+
+Dependabot opens one pull request a week for the minor and patch updates and one pull request per
+major update. The ignore list in `.github/dependabot.yml` keeps Playwright out, since it moves
+only with the pinned image. A dependency pull request is reviewed and squash merged like any other.
+
 ## Settings an admin makes once
 
 Allow only squash merging, default the squash message to the pull request title, turn on
