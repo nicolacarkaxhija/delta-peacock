@@ -1049,7 +1049,8 @@ async function assembleReview(
   const contextInput = {
     cwd: deps.cwd,
     diff: toModel,
-    changedFiles: changedFilesFromDiff(toModel),
+    // paths come from the diff before redaction, as they did before the pre pass
+    changedFiles: changedFilesFromDiff(modelDiff),
   };
   const resolvedContext = await resolveContext(
     config,

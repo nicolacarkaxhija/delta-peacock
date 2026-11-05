@@ -5,7 +5,7 @@ import { newLineTexts } from "../../git/diff.js";
 import { appliesTo } from "../../guidelines/languages.js";
 import { withholdSettled, type Withheld } from "./hunks.js";
 import { combinedRules } from "./rules.js";
-import type { SemgrepRunner } from "./run.js";
+import type { SemgrepRun, SemgrepRunner } from "./run.js";
 
 export interface PrepassInput {
   /** The guidelines that apply to the change. */
@@ -79,7 +79,11 @@ export async function runPrepass(input: PrepassInput): Promise<PrepassOutcome | 
   if (targets.size === 0) return { settled, findings: [], notices: [], ...untouched };
 
   const { config, owners } = combinedRules(ruled);
-  const run = await input.runner(config, targets);
+  // any failure of the pass degrades to the model path, never to a failed review
+  const run = await input.runner(config, targets).catch((error: unknown): SemgrepRun => ({
+    ok: false,
+    reason: `semgrep pre pass threw: ${error instanceof Error ? error.message : String(error)}`,
+  }));
   if (!run.ok) {
     return { settled: [], findings: [], notices: [], failure: run.reason, ...untouched };
   }

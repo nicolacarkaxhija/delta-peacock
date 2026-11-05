@@ -262,6 +262,14 @@ describe("runPrepass", () => {
     });
   });
 
+  it("names a thrown value that is no error", async () => {
+    const { input: given } = input([ruled("logger-assigned-once")], ok([]), {
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      runner: () => Promise.reject("quota"),
+    });
+    expect((await runPrepass(given))?.failure).toBe("semgrep pre pass threw: quota");
+  });
+
   it("hands the model the whole diff and settles nothing when semgrep fails", async () => {
     const { input: given } = input([ruled("logger-assigned-once")], {
       ok: false,

@@ -86,11 +86,19 @@ export function semgrepRunner(options: RunnerOptions): SemgrepRunner {
     const root = mkdtempSync(path.join(tmpdir(), "peacock-semgrep-"));
     const configPath = path.join(root, "rules.yaml");
     const targets = path.join(root, "targets");
-    writeFileSync(configPath, config);
-    for (const [file, text] of files) {
-      const full = path.join(targets, file);
-      mkdirSync(path.dirname(full), { recursive: true });
-      writeFileSync(full, text);
+    try {
+      writeFileSync(configPath, config);
+      for (const [file, text] of files) {
+        const full = path.join(targets, file);
+        mkdirSync(path.dirname(full), { recursive: true });
+        writeFileSync(full, text);
+      }
+    } catch (error) {
+      rmSync(root, { recursive: true, force: true });
+      return Promise.resolve({
+        ok: false,
+        reason: `semgrep could not stage the changed files: ${(error as Error).message}`,
+      });
     }
     const args = [
       "scan",
