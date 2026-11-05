@@ -4,7 +4,7 @@ import { parse as parseYaml } from "yaml";
 import type { RuntimeDeps } from "../deps.js";
 import { ToolError } from "../errors.js";
 import { runLintScaffold } from "./lint-scaffold.js";
-import { loadGuidelinesFromFiles, markdownFilesUnder } from "./loader.js";
+import { loadGuidelinesFromFiles, markdownFilesUnder, readGuidelineFile } from "./loader.js";
 import { PACK_MANIFEST_NAME } from "./packs.js";
 
 export interface PackLintOptions {
@@ -12,7 +12,12 @@ export interface PackLintOptions {
 }
 
 /** Manifest fields worth having, checked without failing the whole pack. */
-function manifestProblems(dir: string): { problems: string[]; warnings: string[]; name?: string } {
+function manifestProblems(dir: string): {
+  problems: string[];
+  warnings: string[];
+  name?: string;
+  version?: string;
+} {
   const manifestPath = path.join(dir, PACK_MANIFEST_NAME);
   if (!existsSync(manifestPath)) {
     return { problems: [`${PACK_MANIFEST_NAME} not found in ${dir}`], warnings: [] };
@@ -48,6 +53,7 @@ function manifestProblems(dir: string): { problems: string[]; warnings: string[]
     problems,
     warnings,
     ...(typeof record["name"] === "string" ? { name: record["name"] } : {}),
+    ...(typeof record["version"] === "string" ? { version: record["version"] } : {}),
   };
 }
 
@@ -61,9 +67,10 @@ export function runGuidelinesPackLint(deps: RuntimeDeps, options: PackLintOption
   const manifest = manifestProblems(dir);
   for (const warning of manifest.warnings) deps.err(`warning: ${warning}\n`);
 
+  // the rule files and the set version load as they do in a review
   const files = markdownFilesUnder(dir).map((filePath) => ({
-    displayPath: path.relative(dir, filePath).replaceAll("\\", "/"),
-    content: readFileSync(filePath, "utf8"),
+    ...readGuidelineFile(filePath, path.relative(dir, filePath).replaceAll("\\", "/")),
+    ...(manifest.version !== undefined ? { version: manifest.version } : {}),
   }));
   const loaded = loadGuidelinesFromFiles(files);
   const problems = [...manifest.problems, ...loaded.problems];

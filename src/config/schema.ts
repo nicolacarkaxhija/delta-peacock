@@ -158,6 +158,19 @@ export const CalibrationSchema = z.strictObject({
   model: ModelRefSchema.optional(),
 });
 
+/** Seconds a Semgrep run may take before it counts as hung; the model then reviews the whole diff. */
+const SEMGREP_TIMEOUT_SECONDS = 60;
+
+/** The pre pass that runs the guidelines' Semgrep rules before the model. */
+export const SemgrepSchema = z.strictObject({
+  /** On by default; it only runs when a guideline declares a semgrep check. */
+  enabled: z.boolean().default(true),
+  /** The Semgrep CLI to run: the pinned osemgrep from scripts/semgrep-install.mjs, or a semgrep on the path. */
+  command: z.string().min(1).default("osemgrep"),
+  /** A run that takes longer is stopped; the model then reviews the whole diff. */
+  timeoutSeconds: z.number().int().positive().default(SEMGREP_TIMEOUT_SECONDS),
+});
+
 /** The check that holds model findings against a guideline's listed exclusions. */
 export const ExclusionsSchema = z.strictObject({
   /** A model for the verdict calls only; the review model serves when unset. */
@@ -288,6 +301,7 @@ export const ConfigSchema = z
     ensemble: EnsembleSchema.prefault({}),
     calibration: CalibrationSchema.prefault({}),
     exclusions: ExclusionsSchema.prefault({}),
+    semgrep: SemgrepSchema.prefault({}),
     cache: CacheSchema.prefault({}),
     stats: StatsSchema.prefault({}),
     tickets: TicketsSchema.prefault({}),

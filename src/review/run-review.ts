@@ -107,6 +107,7 @@ import {
   buildReport,
   type FactsOnly,
   type ReviewReport,
+  type SemgrepTally,
   type UnparsedBatch,
   type WaivedFinding,
 } from "./report.js";
@@ -117,6 +118,8 @@ import { appendRecord, attributionOf, ledgerRecords, type Attribution } from "..
 import { checkSentenceProblems, dropChecked, runChecks, splitChecked } from "./checks/index.js";
 import type { ModelOutage } from "./checks/judge.js";
 import { ConfigError } from "../config/loader.js";
+import { runPrepass, type PrepassOutcome } from "./semgrep/prepass.js";
+import { MS_PER_SECOND, semgrepRunner } from "./semgrep/run.js";
 
 export type ReviewDeps = RuntimeDeps;
 
@@ -249,13 +252,41 @@ export async function runReview(
   // a checked guideline yields findings only on the lines its static check flags;
   // the open prompt still shows it, so the open review reads the same corpus
   const { bound, free } = splitChecked(guidelines, config.review.checks);
+  // an API diff means the checkout is not the pull request; only the diff knows its lines
+  const fromApi = acquired.targetRef === "scm api";
+  const linesFrom =
+    (texts: ReadonlyMap<string, ReadonlyMap<number, string>>) =>
+    (file: string): readonly string[] | undefined => {
+      const known = texts.get(file);
+      if (fromApi) return known === undefined ? undefined : linesFromDiff(known);
+      return linesAtHead(deps.cwd, file, known, options.staged === true);
+    };
+  // the rules run before the model; what they settle the model never receives
+  const prepass = config.semgrep.enabled
+    ? await runPrepass({
+        guidelines,
+        diff,
+        read: linesFrom(newLineTexts(diff)),
+        generalPass: config.review.generalPass,
+        runner:
+          deps.semgrepRunner ??
+          semgrepRunner({
+            command: config.semgrep.command,
+            timeoutMs: config.semgrep.timeoutSeconds * MS_PER_SECOND,
+          }),
+      })
+    : undefined;
+  if (prepass !== undefined) logPrepass(deps, prepass);
+  const settled = new Set(prepass?.settled ?? []);
+  const judged = guidelines.filter((guideline) => !settled.has(guideline.id));
+  const modelFree = free.filter((guideline) => !settled.has(guideline.id));
   const factsOnly = noModel(config);
   const { redacted, request, passes, batchCount, parseOptions, budgetDegraded, linters } = factsOnly
     ? assembleFacts(deps, config, diff, guidelines)
-    : await assembleReview(deps, config, diff, guidelines, changedFiles, declared);
+    : await assembleReview(deps, config, diff, prepass?.modelDiff ?? diff, judged, declared);
   if (factsOnly) {
     deps.err(
-      `facts only: model.provider is none; ${String(bound.length)} checked guideline(s) reviewed, ${String(free.length)} not reviewed${free.length > 0 ? `: ${free.map((one) => one.id).join(", ")}` : ""}\n`,
+      `facts only: model.provider is none; ${String(bound.length + settled.size)} checked guideline(s) reviewed, ${String(modelFree.length)} not reviewed${modelFree.length > 0 ? `: ${modelFree.map((one) => one.id).join(", ")}` : ""}\n`,
     );
   }
 
@@ -313,7 +344,8 @@ export async function runReview(
 
   let executed: ExecuteResult;
   // with every applicable guideline checked, an open call could only produce what is dropped
-  const allChecked = free.length === 0 && bound.length > 0 && !config.review.generalPass;
+  const allChecked =
+    modelFree.length === 0 && bound.length + settled.size > 0 && !config.review.generalPass;
   // set when a configured model cannot run: the review falls back to facts only
   let fallback: ModelOutage | undefined;
   // what a model reviewed before it could not run; unset when it reviewed nothing
@@ -350,13 +382,7 @@ export async function runReview(
   // the model counts line numbers by hand and drifts; each finding moves to
   // the line it quotes, or to no line at all, before anything keys on line
   const diffLines = newLineTexts(redacted.text);
-  // an API diff means the checkout is not the pull request; only the diff knows its lines
-  const fromApi = acquired.targetRef === "scm api";
-  const linesOfFile = (file: string): readonly string[] | undefined => {
-    const known = diffLines.get(file);
-    if (fromApi) return known === undefined ? undefined : linesFromDiff(known);
-    return linesAtHead(deps.cwd, file, known, options.staged === true);
-  };
+  const linesOfFile = linesFrom(diffLines);
   const open = dropChecked(executed.parsed.findings, bound);
   if (open.dropped.length > 0) {
     deps.err(
@@ -455,7 +481,8 @@ export async function runReview(
     cwd: deps.cwd,
     ...(declared !== undefined ? { tags: declared } : {}),
   });
-  const relocated = dedupeFindings([...held.kept, ...checked]);
+  // a rule finding goes first, so it stands where the model found the same line
+  const relocated = dedupeFindings([...(prepass?.findings ?? []), ...held.kept, ...checked]);
   // deterministic and therefore allowed to drop outright (ADR 0008, unlike
   // calibration below): refutes a finding whose structural claim -- "this is
   // a loop", "this is top level" -- the AST itself contradicts. Reads source
@@ -516,7 +543,7 @@ export async function runReview(
     factsOnly || fallback !== undefined
       ? {
           leftToPerson: checks?.left ?? [],
-          notReviewed: noOpenReview ? free.map((one) => one.id) : [],
+          notReviewed: noOpenReview ? modelFree.map((one) => one.id) : [],
           ...(fallback !== undefined ? { fallback: fallback.why } : {}),
           ...(modelReviewed !== undefined ? { modelReviewed } : {}),
           ...(executed.unjudgedFiles !== undefined
@@ -582,7 +609,11 @@ export async function runReview(
   }));
   const { violations, observations, proposals } = lanesOf(kept, config);
   // the gate judges what calibration let through and no waiver excused
-  const unjudged = new Set(placeFindings(checks?.facts ?? [], linesOfFile).map(fingerprintOf));
+  const unjudged = new Set(
+    [...placeFindings(checks?.facts ?? [], linesOfFile), ...(prepass?.findings ?? [])].map(
+      fingerprintOf,
+    ),
+  );
   // fallback.gate pass: in an outage no fact fails the step, a model's finding still does
   const gate = evaluateGate(
     fallback !== undefined && config.fallback.gate === "pass"
@@ -693,6 +724,7 @@ export async function runReview(
       ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
       ...(checks !== undefined ? { checks: checks.tally } : {}),
       ...(facts !== undefined ? { factsOnly: facts } : {}),
+      ...(prepass !== undefined ? { semgrep: semgrepTally(prepass) } : {}),
       ...(blocked !== undefined ? { budget: blocked } : {}),
       ...(blocked === undefined && ceiling.reached()
         ? {
@@ -998,19 +1030,28 @@ async function assembleReview(
   deps: ReviewDeps,
   config: Config,
   diff: string,
+  modelDiff: string,
   guidelines: readonly Guideline[],
-  changedFiles: readonly string[],
   declared: DeclaredTags | undefined,
 ): Promise<AssembledReview> {
-  const redacted = redactDiff(diff, compileCustomPatterns(config.redaction.patterns), {
-    strict: config.redaction.strict,
-  });
+  const redact = (text: string): RedactedDiff =>
+    redactDiff(text, compileCustomPatterns(config.redaction.patterns), {
+      strict: config.redaction.strict,
+    });
+  const redacted = redact(diff);
   const redactionTotal = Object.values(redacted.counts).reduce((sum, n) => sum + n, 0);
   if (redactionTotal > 0) {
     deps.err(`${String(redactionTotal)} secret-shaped value(s) redacted before the model call\n`);
   }
+  // the model reads only the hunks the rules left; everything else reads the whole diff
+  const toModel = modelDiff === diff ? redacted.text : redact(modelDiff).text;
 
-  const contextInput = { cwd: deps.cwd, diff: redacted.text, changedFiles: [...changedFiles] };
+  const contextInput = {
+    cwd: deps.cwd,
+    diff: toModel,
+    // paths come from the diff before redaction, as they did before the pre pass
+    changedFiles: changedFilesFromDiff(modelDiff),
+  };
   const resolvedContext = await resolveContext(
     config,
     {
@@ -1041,7 +1082,7 @@ async function assembleReview(
   const plan = planBudget({
     prefix,
     context: projectContext,
-    diff: redacted.text,
+    diff: toModel,
     budgetTokens,
   });
   for (const notice of plan.notices) deps.err(`${notice}\n`);
@@ -1051,7 +1092,7 @@ async function assembleReview(
   // room for prefix + context in every batch, so each batch gets its own
   // context decision instead of one drop-for-everyone verdict, and splitting
   // the diff is not, by itself, a reason to call the review degraded.
-  const batches = planBatches(plan, redacted.text, projectContext, prefix, budgetTokens, {
+  const batches = planBatches(plan, toModel, projectContext, prefix, budgetTokens, {
     maxFiles: config.review.maxFilesPerBatch,
     maxTokens: config.review.maxTokensPerBatch,
   });
@@ -1074,7 +1115,7 @@ async function assembleReview(
         );
 
   const request = attachContextTools(
-    promptOf(diffBatches[0] ?? redacted.text, batchContexts[0] ?? ""),
+    promptOf(diffBatches[0] ?? toModel, batchContexts[0] ?? ""),
     contextTools,
     config.context.maxToolRounds,
   );
@@ -1172,6 +1213,31 @@ function assembleFacts(
     },
     budgetDegraded: false,
     linters: [],
+  };
+}
+
+/** The pre pass in the log: its notices, then what it found and withheld, or why it failed. */
+function logPrepass(deps: ReviewDeps, prepass: PrepassOutcome): void {
+  for (const notice of prepass.notices) deps.err(`${notice}\n`);
+  if (prepass.failure !== undefined) {
+    deps.err(
+      `warning: semgrep pre pass failed (${prepass.failure}); the model reviews the whole diff, the rule guidelines included\n`,
+    );
+    return;
+  }
+  deps.err(
+    `semgrep pre pass: ${String(prepass.findings.length)} finding(s), ${String(prepass.withheld.length)} hunk(s) withheld from the model\n`,
+  );
+}
+
+/** The report's view of the pre pass. */
+function semgrepTally(prepass: PrepassOutcome): SemgrepTally {
+  return {
+    ...(prepass.engine !== undefined ? { engine: prepass.engine } : {}),
+    ruleSets: prepass.ruleSets,
+    findings: prepass.findings.length,
+    withheldHunks: prepass.withheld.length,
+    ...(prepass.failure !== undefined ? { failure: prepass.failure } : {}),
   };
 }
 

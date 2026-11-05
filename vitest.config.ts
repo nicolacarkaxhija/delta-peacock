@@ -20,6 +20,8 @@ export default defineConfig({
         branches: 95,
         functions: 95,
         statements: 95,
+        // the semgrep pre pass is held to the house rule of 100 per file
+        "src/review/semgrep/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
       },
     },
   },

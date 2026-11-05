@@ -1,0 +1,13 @@
+diff --git a/cartridges/app_shop_core/cartridge/scripts/giftPack.js b/cartridges/app_shop_core/cartridge/scripts/giftPack.js
+index e4cdcdc..8c04859 100644
+--- a/cartridges/app_shop_core/cartridge/scripts/giftPack.js
++++ b/cartridges/app_shop_core/cartridge/scripts/giftPack.js
+@@ -3,6 +3,8 @@
+ const logger = require('dw/system/Logger').getLogger('giftPack', 'checkout');
+ 
+ function pack(id) {
++    require('dw/system/Logger').getLogger('giftPack', 'checkout').error('no pack {0}', id);
++    logger.info('pack {0}', id);
+     return id;
+ }
+ 

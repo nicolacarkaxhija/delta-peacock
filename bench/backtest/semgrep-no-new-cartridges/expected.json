@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "cartridges/app_shop_gifts/cartridge/app_shop_gifts.properties",
+      "line": 3,
+      "guidelineId": "no-new-cartridges",
+      "severity": "MAJOR",
+      "why": "the new properties file declares a cartridge id, so the change adds a cartridge"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "cartridges/app_shop_core/cartridge/app_shop_core.properties",
+      "line": 2,
+      "guidelineId": "no-new-cartridges",
+      "why": "a setting added to an existing cartridge declares no new one"
+    }
+  ]
+}

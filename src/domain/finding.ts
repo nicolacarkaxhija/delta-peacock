@@ -17,6 +17,8 @@ export interface Violation {
   guidelineId: string;
   /** Name of the pack the cited guideline came from; absent for local rules. */
   pack?: string;
+  /** semgrep when the pre pass found it; absent for the model and the built in checks. */
+  producer?: "semgrep";
   /** Inherited from the cited guideline; the model never assigns it. */
   severity: Severity;
   file: string;

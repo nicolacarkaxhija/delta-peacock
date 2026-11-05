@@ -111,9 +111,24 @@ export interface ReviewReport {
   checks?: CheckTally;
   /** Present when model.provider is none: the run checked facts only. */
   factsOnly?: FactsOnly;
+  /** Present when the semgrep pre pass had rules to run. */
+  semgrep?: SemgrepTally;
 }
 
 /** Candidates the static checks found, and how each ended. */
+/** What the semgrep pre pass did in a review. */
+export interface SemgrepTally {
+  /** The Semgrep version that ran; absent when it failed or had nothing to scan. */
+  engine?: string;
+  /** Where each rule set came from: a pack with the guideline set version it was derived from, or local. */
+  ruleSets: string[];
+  findings: number;
+  /** Hunks the rules settled, so the model never received them. */
+  withheldHunks: number;
+  /** Why the pre pass failed; the model then reviewed the whole diff. */
+  failure?: string;
+}
+
 export interface CheckTally {
   candidates: number;
   findings: number;
@@ -172,6 +187,7 @@ export function buildReport(input: {
   lineTextOf?: (finding: Finding) => string | undefined;
   checks?: CheckTally;
   factsOnly?: FactsOnly;
+  semgrep?: SemgrepTally;
 }): ReviewReport {
   const withFingerprint = (finding: Finding): ReportedFinding => {
     const lineText = input.lineTextOf?.(finding);
@@ -226,5 +242,6 @@ export function buildReport(input: {
       : {}),
     ...(input.checks !== undefined ? { checks: input.checks } : {}),
     ...(input.factsOnly !== undefined ? { factsOnly: input.factsOnly } : {}),
+    ...(input.semgrep !== undefined ? { semgrep: input.semgrep } : {}),
   };
 }

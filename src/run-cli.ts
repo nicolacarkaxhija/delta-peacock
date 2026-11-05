@@ -9,6 +9,7 @@ import type { ModelRef } from "./model/build.js";
 import type { ModelPort } from "./model/port.js";
 import { buildProgram } from "./program.js";
 import type { ScmPort } from "./scm/port.js";
+import type { SemgrepRunner } from "./review/semgrep/run.js";
 
 /**
  * The raw boundary a real process (or a test) hands the CLI: cwd and env are
@@ -36,6 +37,8 @@ export interface CliDeps {
   readLine?: () => Promise<string | null>;
   /** Embedding seam for the rag embeddings backend; real adapters otherwise. */
   embeddingPort?: EmbeddingPort;
+  /** The Semgrep seam: tests inject a scripted run; the CLI child process otherwise. */
+  semgrepRunner?: SemgrepRunner;
 }
 
 function toRuntimeDeps(boundary: CliDeps): RuntimeDeps {

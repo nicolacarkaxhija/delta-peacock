@@ -1,0 +1,12 @@
+# A synthetic case for a semgrep rule: facts only, no model call.
+model:
+  provider: none
+review:
+  target: main
+  guidelinesDir: guidelines
+  generalPass: false
+  repoConfigPath: ""
+gate:
+  failOn: none
+stats:
+  enabled: false
