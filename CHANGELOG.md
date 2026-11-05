@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.10.1...delta-peacock-v0.11.0) (2026-11-05)
+
+
+### Features
+
+* **packs:** add semgrep rules for the logger, cartridge and test id guidelines ([7a38c61](https://github.com/nicolacarkaxhija/delta-peacock/commit/7a38c61a30c99e0e2a5be75d70ba750b828d22d9))
+* **review:** run the guidelines' semgrep rules in a pre pass before the model ([26063a6](https://github.com/nicolacarkaxhija/delta-peacock/commit/26063a60295c9a3c7b4f0934e36c55f3eba10bd9))
+* **review:** run the guidelines' semgrep rules in a pre pass before the model ([50adec4](https://github.com/nicolacarkaxhija/delta-peacock/commit/50adec47dc5cf6a6e2e851358432f6e110196819))
+
+
+### Bug Fixes
+
+* **config:** name the semgrep timeout default and keep the installer comment on one line ([81616c5](https://github.com/nicolacarkaxhija/delta-peacock/commit/81616c56a63e56b1273d73296ff56d91e202be6e))
+* **review:** send the model the whole diff on any pre pass failure and guard the installer ([4c47844](https://github.com/nicolacarkaxhija/delta-peacock/commit/4c47844b2770e51329ae825e3c5f34c9014e5806))
+
 ## [0.10.1](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.10.0...delta-peacock-v0.10.1) (2026-11-04)
 
 
