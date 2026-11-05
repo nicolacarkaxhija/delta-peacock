@@ -292,8 +292,8 @@ With `model.provider: none` the rules still run; only the judged guidelines are 
 
 The reviewer runs the open source Semgrep CLI as a child process, offline: rules from the local
 file only, metrics off, no version check, no login. `package.json` pins the release under `semgrep`,
-with one wheel and its sha256 per platform; `node scripts/semgrep-install.mjs` downloads the wheel
-for the platform, checks the digest, unpacks the binary into `.delta-peacock-cache/semgrep/` and
+with one wheel and its sha256 per platform; after `pnpm build`, `node scripts/semgrep-install.mjs` downloads the wheel
+for the platform, checks the digest, refuses an archive entry that would leave its folder, unpacks the binary into `.delta-peacock-cache/semgrep/` and
 prints the folder to put on the `PATH`. Behind a proxy, run it with `NODE_USE_ENV_PROXY=1`. A
 review refuses any other version as a failure of the pre pass.
 

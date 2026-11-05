@@ -32,7 +32,7 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   diff. On its own: `pnpm exec vitest run tests/semgrep-`.
 - `semgrep rules`: every shipped rule flags its violating fixture and passes its clean one on the
   pinned Semgrep, carries its pack version and changes only with a new pack version, and each
-  rule's backtest case passes with no model. On its own: `node scripts/semgrep-install.mjs`, then
+  rule's backtest case passes with no model. On its own: `pnpm build && node scripts/semgrep-install.mjs`, then
   `pnpm exec vitest run tests/semgrep-packs.test.ts`, then `pnpm build` and
   `PATH="$(node scripts/semgrep-install.mjs):$PATH" node dist/cli.js backtest --cases bench/backtest --only semgrep-logger-assigned-once,semgrep-no-new-cartridges,semgrep-test-ids-on-page-objects --provider none`.
 - `pack facts on the bench`: with no model the bench finds every planted breach of a pack rule a
