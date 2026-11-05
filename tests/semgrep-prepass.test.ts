@@ -158,6 +158,11 @@ describe("runPrepass", () => {
     expect(outcome?.notices).toEqual(["semgrep: 1 hit(s) off the change"]);
   });
 
+  it("names the pack of a rule finding", async () => {
+    const { input: given } = input([ruled("logger-assigned-once", { pack: "sfra" })], ok([hit()]));
+    expect((await runPrepass(given))?.findings[0]?.pack).toBe("sfra");
+  });
+
   it("places a hit that spans lines on its first added line and skips a hit off the change", async () => {
     const { input: given } = input(
       [ruled("logger-assigned-once")],

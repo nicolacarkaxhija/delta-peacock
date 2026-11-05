@@ -95,7 +95,7 @@ describe("semgrepRunner", () => {
     expect(run).toMatchObject({ ok: true, warnings: ["rule note"] });
   });
 
-  const failures: { why: string; body: string; says: string }[] = [
+  const failures: { why: string; body: string; says: string; timeoutMs?: number }[] = [
     {
       why: "a version other than the pin",
       body: `process.stdout.write(JSON.stringify({ version: "0.1.0", results: [], errors: [] }));`,
@@ -125,12 +125,16 @@ describe("semgrepRunner", () => {
       why: "a run past the timeout",
       body: `setTimeout(() => undefined, 30000);`,
       says: "semgrep timed out after 0.5s",
+      timeoutMs: 500,
     },
   ];
   for (const row of failures) {
     it(`fails with a reason on ${row.why}`, async () => {
       const fake = fakeSemgrep(row.body);
-      const run = await semgrepRunner({ command: fake.command, timeoutMs: 500 })("", FILES);
+      const run = await semgrepRunner({
+        command: fake.command,
+        timeoutMs: row.timeoutMs ?? 20_000,
+      })("", FILES);
       expect(run).toEqual({ ok: false, reason: row.says });
     });
   }

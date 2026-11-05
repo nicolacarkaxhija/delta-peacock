@@ -200,6 +200,18 @@ describe("the guideline readers", () => {
 });
 
 describe("combinedRules", () => {
+  it("leaves out a guideline with no semgrep check", () => {
+    const plain = loadGuidelinesFromFiles([
+      {
+        displayPath: "plain.md",
+        content: "---\nid: plain\nseverity: INFO\n---\n# Plain\n\nText.\n",
+      },
+    ]).guidelines;
+    const combined = combinedRules(plain);
+    expect(combined.owners.size).toBe(0);
+    expect(combined.config).toBe("rules: []\n");
+  });
+
   it("joins every guideline's rules into one config whose ids name their guideline", () => {
     const first = loadOne(GUIDELINE, RULES).guidelines[0];
     const second = loadOne(

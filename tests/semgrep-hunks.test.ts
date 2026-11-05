@@ -43,6 +43,12 @@ describe("withholdSettled", () => {
     expect(out).toEqual({ diff: GIFT, withheld: [] });
   });
 
+  it("counts new lines past deletions and the no newline marker", () => {
+    const chunk = `${HEADER("cartridges/gift.js")}@@ -1,3 +1,2 @@\n-old();\n a\n\\ No newline at end of file\n+chained();\n`;
+    const out = withholdSettled(chunk, lines([["cartridges/gift.js", [2]]]), () => true);
+    expect(out.withheld).toEqual([{ file: "cartridges/gift.js", hunk: "@@ -1,3 +1,2 @@" }]);
+  });
+
   it("keeps a chunk it cannot read a path from", () => {
     const odd = "not a diff\n";
     const out = withholdSettled(odd, lines([]), () => true);
