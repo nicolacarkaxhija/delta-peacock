@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Installs the semgrep package.json pins; the logic lives in src/review/semgrep/install.ts.
-// Usage: pnpm build, then node scripts/semgrep-install.mjs [--dir <path>]; prints the folder to put on PATH.
+// Installs the pinned semgrep after pnpm build and prints the folder to put on PATH; the logic lives in src/review/semgrep/install.ts.
 
 import console from "node:console";
 import { Buffer } from "node:buffer";
