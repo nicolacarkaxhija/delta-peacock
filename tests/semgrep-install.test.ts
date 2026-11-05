@@ -46,7 +46,7 @@ function zipOf(entries: { name: string; data: string; deflate?: boolean }[]): Bu
 
 const WHEEL = zipOf([
   { name: `${BIN}semgrep-core`, data: "#!/bin/sh\necho core\n", deflate: true },
-  { name: `${BIN}libs/libcore.dylib`, data: "lib" },
+  { name: `${BIN}libs/core-lib.dylib`, data: "lib" },
   { name: `${BIN}__init__.py`, data: "" },
   { name: `${BIN}libs/`, data: "" },
   { name: "semgrep/__init__.py", data: "" },
@@ -63,7 +63,7 @@ describe("unpackBin", () => {
   it("unpacks the bin folder of a wheel, stored and deflated, and nothing else", () => {
     expect(unpackBin(WHEEL, VERSION).map((entry) => [entry.name, entry.data.toString()])).toEqual([
       ["semgrep-core", "#!/bin/sh\necho core\n"],
-      ["libs/libcore.dylib", "lib"],
+      ["libs/core-lib.dylib", "lib"],
     ]);
   });
 
