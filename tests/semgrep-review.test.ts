@@ -252,6 +252,18 @@ describe("the semgrep pre pass in a review", () => {
     expect(reviewed.report.semgrep).toBeUndefined();
   });
 
+  it("sends with the pre pass off the request origin/main sends for the same change", async () => {
+    // recorded on origin/main, where the guideline carries no check block
+    const recorded = readFileSync(
+      new URL("fixtures/semgrep-off-request.json", import.meta.url),
+      "utf8",
+    );
+    const reviewed = await review(scenario(GIFT_HIT), HIT, {
+      DELTA_PEACOCK_SEMGREP_ENABLED: "false",
+    });
+    expect(JSON.stringify(reviewed.requests)).toBe(JSON.stringify(JSON.parse(recorded)));
+  });
+
   it("warns and hands the model the whole diff when semgrep fails", async () => {
     const reviewed = await review(scenario(GIFT_HIT), {
       ok: false,

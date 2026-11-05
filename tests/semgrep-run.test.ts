@@ -156,6 +156,18 @@ describe("semgrepRunner", () => {
     });
   });
 
+  it("fails with the reason when the files cannot be staged", async () => {
+    const clash = new Map([
+      ["cartridges", "a file where a folder must go\n"],
+      ["cartridges/gift.js", "chained();\n"],
+    ]);
+    const run = await semgrepRunner({ command: "/nowhere/osemgrep", timeoutMs: 1000 })("", clash);
+    expect(run).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("semgrep could not stage the changed files: ") as string,
+    });
+  });
+
   it("fails with the install hint when the command is not there", async () => {
     const run = await semgrepRunner({ command: "/nowhere/osemgrep", timeoutMs: 1000 })("", FILES);
     expect(run).toEqual({

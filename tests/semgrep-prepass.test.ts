@@ -250,6 +250,18 @@ describe("runPrepass", () => {
     expect(calls).toEqual([]);
   });
 
+  it("hands the model the whole diff when the runner throws", async () => {
+    const { input: given } = input([ruled("logger-assigned-once")], ok([]), {
+      runner: () => Promise.reject(new Error("disk full")),
+    });
+    expect(await runPrepass(given)).toMatchObject({
+      settled: [],
+      findings: [],
+      modelDiff: GIFT + APP,
+      failure: "semgrep pre pass threw: disk full",
+    });
+  });
+
   it("hands the model the whole diff and settles nothing when semgrep fails", async () => {
     const { input: given } = input([ruled("logger-assigned-once")], {
       ok: false,
