@@ -1,0 +1,31 @@
+{
+  "findings": [
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 21,
+      "guidelineId": "axis-tags",
+      "severity": "MINOR",
+      "why": "@smoke is neither an axis, a taxonomy nor a feature tag the config declares"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 7,
+      "guidelineId": "axis-tags",
+      "why": "@effect:sends-mail is a value taxonomy.dimensions.effect lists, and the config builds its sites in code"
+    },
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 12,
+      "guidelineId": "axis-tags",
+      "why": "@risk:P1 and @feature:notes are taxonomy tags the engine defines without a listing"
+    },
+    {
+      "file": "tests/notes.spec.ts",
+      "line": 16,
+      "guidelineId": "axis-tags",
+      "why": "unclassified is the value a required dimension holds until the test is classified"
+    }
+  ]
+}

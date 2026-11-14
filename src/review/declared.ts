@@ -17,6 +17,8 @@ interface Scan {
   /** Dotted keys, from the top level and outside arrays, whose value code builds. */
   built: Set<string>;
   strings: Map<string, Map<string, string>>;
+  /** Dotted keys whose value is the literal `true`. */
+  flags: Set<string>;
 }
 
 const SAFE_KEY = /^[A-Za-z0-9_.:-]{1,60}$/;
@@ -44,6 +46,7 @@ function scanObjects(source: string): Scan {
   const found = new Map<string, string[]>();
   const strings = new Map<string, Map<string, string>>();
   const built = new Set<string>();
+  const flags = new Set<string>();
   const stack: Frame[] = [{ kind: "(", path: [], keys: [], strings: new Map() }];
   // the last token, and whether a key may start here (after `{` or `,`)
   let keyPosition = false;
@@ -91,6 +94,9 @@ function scanObjects(source: string): Scan {
     }
     const word = /^[A-Za-z_$][\w$]*/.exec(source.slice(at, at + 80))?.[0];
     if (word !== undefined) {
+      if (word === "true" && pendingKey !== undefined && top?.kind === "{") {
+        flags.add([...top.path, pendingKey].join("."));
+      }
       candidate = keyPosition ? word : undefined;
       keyPosition = false;
       pendingKey = undefined;
@@ -133,7 +139,7 @@ function scanObjects(source: string): Scan {
     at += 1;
   }
   while (stack.length > 1) close();
-  return { keys: found, strings, built };
+  return { keys: found, strings, built, flags };
 }
 
 /** The string values under every path whose tail is `pattern`, by key. */
@@ -179,6 +185,10 @@ export interface DeclaredTags {
   axis: string[];
   /** Axes whose values the config builds in code, so none could be read; absent when every axis was. */
   openAxes?: string[];
+  /** Taxonomy tags, `@<dimension>:<value>`; absent on tags read without a taxonomy. */
+  dimensions?: string[];
+  /** Dimensions whose values the config builds in code; `*` when it builds them all. */
+  openDimensions?: string[];
   /** What each feature tag covers, as the config describes it; absent when it says nothing. */
   descriptions?: Record<string, string>;
 }
@@ -190,6 +200,57 @@ const AXES: readonly [string, string][] = [
   ["device", "devices"],
   ["locale", "sites.*.locales"],
 ];
+
+/** The value a required dimension holds until someone classifies the test. */
+const UNCLASSIFIED = "unclassified";
+
+/** The risk scale the engine ships when the config lists none. */
+const DEFAULT_RISK = ["P0", "P1", "P2", "P3"];
+
+/** Engine dimensions that are never required, whatever the config says. */
+const OPTIONAL_DIMENSIONS = ["effect", "needs", "constraint"];
+
+/** Tag words with a meaning of their own, never a dimension. */
+const RESERVED = ["site", "env", "device", "locale", "pending"];
+
+const ANY_DIMENSION = "*";
+
+/**
+ * The taxonomy tags: the risk scale (the engine's unless the config lists its
+ * own), `@feature:<feature>` per feature, every value the config lists for a
+ * dimension, and `unclassified` on each required one.
+ */
+function taxonomyTags(
+  scan: Scan,
+  features: readonly string[],
+): { dimensions: string[]; openDimensions: string[] } {
+  const isBuilt = (pattern: string) => [...scan.built].some((dotted) => onPath(dotted, pattern));
+  const isTrue = (pattern: string) => [...scan.flags].some((dotted) => onPath(dotted, pattern));
+  const risk = stringsAt(scan, "taxonomy").get("risk") ?? "risk";
+  const valuesOf = (name: string) => keysAt(scan.keys, `taxonomy.dimensions.${name}.values`);
+  const listedRisk = valuesOf(risk);
+  const dimensions = [
+    ...[...(listedRisk.length > 0 ? listedRisk : DEFAULT_RISK), UNCLASSIFIED].map(
+      (value) => `@${risk}:${value}`,
+    ),
+    ...[...features.map((tag) => tag.slice(1)), UNCLASSIFIED].map((value) => `@feature:${value}`),
+  ];
+  if (isBuilt("taxonomy") || isBuilt("taxonomy.dimensions")) {
+    return { dimensions, openDimensions: [ANY_DIMENSION] };
+  }
+  const openDimensions: string[] = [];
+  for (const name of keysAt(scan.keys, "taxonomy.dimensions")) {
+    const path = `taxonomy.dimensions.${name}`;
+    const values = valuesOf(name);
+    if (values.length === 0 && isBuilt(`${path}.values`)) openDimensions.push(name);
+    if (name === risk || name === "feature") continue;
+    const required = !OPTIONAL_DIMENSIONS.includes(name) && isTrue(`${path}.required`);
+    for (const value of required ? [...values, UNCLASSIFIED] : values) {
+      dimensions.push(`@${name}:${value}`);
+    }
+  }
+  return { dimensions, openDimensions };
+}
 
 /**
  * The tags a test-runner suite declares: `tags.features` keys as feature tags,
@@ -211,7 +272,9 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
     for (const value of values) axis.push(`@${name}:${value}`, `@not-${name}:${value}`);
   }
   if (keysAt(index, "sites.*.locales").length > 0) axis.push("@locales");
-  if (features.length === 0 && axis.length === 0) return undefined;
+  const named = [...scan.keys.keys(), ...scan.built].some((dotted) => onPath(dotted, "taxonomy"));
+  if (features.length === 0 && axis.length === 0 && !named) return undefined;
+  const { dimensions, openDimensions } = taxonomyTags(scan, features);
   const described = [...stringsAt(scan, "tags.features")].filter(([key]) =>
     features.includes(`@${key}`),
   );
@@ -220,10 +283,24 @@ export function declaredTags(source: string, file: string): DeclaredTags | undef
     features,
     axis,
     ...(openAxes.length > 0 ? { openAxes } : {}),
+    dimensions,
+    ...(openDimensions.length > 0 ? { openDimensions } : {}),
     ...(described.length > 0
       ? { descriptions: Object.fromEntries(described.map(([key, text]) => [`@${key}`, text])) }
       : {}),
   };
+}
+
+/** Whether a tag is one the config declares, any value of an open axis or dimension included. */
+export function isDeclaredTag(tags: DeclaredTags, tag: string): boolean {
+  if ([...tags.features, ...tags.axis, ...(tags.dimensions ?? [])].includes(tag)) return true;
+  const match = /^@(not-)?([A-Za-z][\w-]*):\S+$/.exec(tag);
+  if (match === null) return false;
+  const name = String(match[2]);
+  if ((tags.openAxes ?? []).includes(name)) return true;
+  if (match[1] !== undefined || RESERVED.includes(name)) return false;
+  const open = tags.openDimensions ?? [];
+  return open.includes(name) || open.includes(ANY_DIMENSION);
 }
 
 /** Reads the reviewed repository's own config; undefined when there is none. */
@@ -250,6 +327,23 @@ function axisLines(tags: DeclaredTags): string[] {
   ];
 }
 
+/** The taxonomy tags read, then every dimension whose values only code builds. */
+function taxonomyLines(tags: DeclaredTags): string[] {
+  const dimensions = tags.dimensions ?? [];
+  const open = tags.openDimensions ?? [];
+  const forms = open.map((name) =>
+    name === ANY_DIMENSION ? "@<dimension>:<value>" : `@${name}:<value>`,
+  );
+  return [
+    ...(dimensions.length > 0 ? [`Taxonomy tags: ${dimensions.join(", ")}`] : []),
+    ...(open.length > 0
+      ? [
+          `Taxonomy dimensions whose values the config builds in code, so any value counts as declared: ${forms.join(", ")}`,
+        ]
+      : []),
+  ];
+}
+
 /**
  * The prompt block naming the only tags a suggestion may use, each feature with
  * what it covers: without that, a model offered any declared tag as the fit.
@@ -271,6 +365,7 @@ export function declaredTagsBlock(tags: DeclaredTags): string {
     "",
     ...features,
     ...axisLines(tags),
+    ...taxonomyLines(tags),
     "No other tag exists in this repository: never suggest one, and a test that fits none of the feature tags owes none.",
     "A finding about a missing feature tag names the one declared tag whose description covers what the test checks; when no description covers it, there is no finding. Never offer a list of candidate tags.",
     "A tag covers a test when its description names the feature the test asserts on; a page the test only opens on the way does not make that page's tag fit.",
