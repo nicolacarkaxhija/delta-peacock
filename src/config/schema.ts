@@ -248,6 +248,8 @@ export const ScmSchema = z.strictObject({
   codeInsights: z.boolean().optional(),
   /** One pull request task per posted finding (Bitbucket); resolved by the reviewer once the line changes. */
   tasks: z.boolean().default(false),
+  /** Above this many findings, a rule that repeats keeps one inline comment and the summary lists the rest: a reader still works through that many threads, and a flood never reaches the host's comment cap. */
+  foldRepeatsAbove: z.number().int().positive().default(25),
   /** API base override for enterprise hosts and tests. */
   baseUrl: z.url().optional(),
   /** The hard guarantee: no write of any kind leaves the process. */

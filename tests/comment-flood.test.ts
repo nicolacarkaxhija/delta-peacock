@@ -72,11 +72,44 @@ describe("a review above the fold threshold", () => {
     expect(fake.statuses).toHaveLength(1);
   });
 
+  it("adds the count after a note the first finding already carries", async () => {
+    const findings = findingsOf("axis-tags", 3).map((finding, index) =>
+      index === 0 ? { ...finding, note: "Seen before." } : finding,
+    );
+    await publish(port, findings, 2);
+    expect(inline()[0]?.content.raw).toContain(
+      "_Seen before. This rule matches 2 more places in this pull request; the summary lists them._",
+    );
+  });
+
+  it("never folds observations, which cite no rule", async () => {
+    const observations: Finding[] = [1, 2, 3].map((line) => ({
+      kind: "observation",
+      severity: "INFO",
+      file: "tests/notes.spec.ts",
+      line,
+      title: `An observation on line ${String(line)}`,
+      body: "Worth a look.",
+    }));
+    await publish(port, observations, 1);
+    expect(inline()).toHaveLength(3);
+  });
+
   it("keeps a rule that matches once as its own comment", async () => {
     const findings = [...findingsOf("axis-tags", 3), ...findingsOf("natural-comments", 1, 10)];
     await publish(port, findings, 2);
     expect(inline().map((comment) => comment.inline?.to)).toEqual([1, 10]);
     expect(inline()[1]?.content.raw).not.toContain("more place");
+    expect(summary()).toContain("_Folded: 2 repeated findings have no comment");
+  });
+
+  it("says so in the singular when one repeat folds", async () => {
+    await publish(
+      port,
+      [...findingsOf("axis-tags", 2), ...findingsOf("natural-comments", 1, 10)],
+      2,
+    );
+    expect(summary()).toContain("_Folded: 1 repeated finding has no comment of their own");
   });
 
   it("posts every finding at or below the threshold, and folds nothing without one", async () => {
@@ -157,7 +190,11 @@ describe("a host that refuses more inline comments", () => {
 });
 
 describe("the fold threshold setting", () => {
-  it("defaults to 25 findings", () => {
-    expect(Reflect.get(loadConfig({ root: makeRepo() }).scm, "foldRepeatsAbove")).toBe(25);
+  it("defaults to 25 findings and reads a number from the environment", () => {
+    expect(loadConfig({ root: makeRepo() }).scm.foldRepeatsAbove).toBe(25);
+    expect(
+      loadConfig({ root: makeRepo(), env: { DELTA_PEACOCK_SCM_FOLD_REPEATS_ABOVE: "40" } }).scm
+        .foldRepeatsAbove,
+    ).toBe(40);
   });
 });

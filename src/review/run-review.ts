@@ -1827,6 +1827,7 @@ async function publishIfConfigured(
     ...input,
     ...(head !== undefined ? { reviewedCommit: head } : {}),
     tasks: config.scm.tasks,
+    foldRepeatsAbove: config.scm.foldRepeatsAbove,
     lineTextOf: (file, line) => {
       if (!lines.has(file)) lines.set(file, linesAtHead(deps.cwd, file, undefined));
       return lines.get(file)?.[line - 1];

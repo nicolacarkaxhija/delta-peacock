@@ -303,6 +303,10 @@ export interface SummaryInput {
   reviewedCommit?: string;
   /** Set when no model reply could be read for some files; the rest were reviewed. */
   unreviewed?: UnreviewedFiles;
+  /** Repeated findings of a rule with no comment of their own; the first of each rule has one. */
+  folded?: number;
+  /** Findings left without a comment because the host refused more. */
+  refusedInline?: number;
 }
 
 /** Files whose model reply could not be read, so no model judged them. */
@@ -758,6 +762,22 @@ export function renderSummaryBody(
       : []),
   ];
   if (unposted.length > 0) lines.push("", `_Not posted: ${unposted.join(", ")}._`);
+  const folded = input.folded ?? 0;
+  if (folded > 0) {
+    const verb = folded === 1 ? "has" : "have";
+    lines.push(
+      "",
+      `_Folded: ${plural(folded, "repeated finding")} ${verb} no comment of their own; the first of each rule does._`,
+    );
+  }
+  const left = input.refusedInline ?? 0;
+  if (left > 0) {
+    const verb = left === 1 ? "appears" : "appear";
+    lines.push(
+      "",
+      `_The host refused more inline comments: ${plural(left, "finding")} ${verb} only in this list._`,
+    );
+  }
   if (presentation.markers) lines.push("", SUMMARY_MARKER);
   return lines.join("\n");
 }
