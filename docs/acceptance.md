@@ -43,6 +43,11 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
 - `facts only`: with `model.provider: none` no model port is ever built or called, a candidate
   that needs a judgement is left to a person, and every command that needs a model refuses with
   one line and exit code 1. On its own: `pnpm exec vitest run tests/facts-`.
+- `taxonomy tags`: the tag check accepts `@<dimension>:<value>` for every value the consumer config
+  lists under `taxonomy.dimensions`, the engine risk scale, `@feature:<feature>` and `unclassified`
+  on a required dimension, and any value of an axis or a dimension the config builds in code; a
+  tag none of these declare is still a finding. On its own: `pnpm exec vitest run tests/taxonomy-tags`,
+  then `pnpm build && node dist/cli.js backtest --cases bench/backtest --only axis-tags-taxonomy-and-built-sites-compliant --provider none`.
 - `model retry`: a model request that meets an unreachable provider, a rate or quota limit or a
   timeout is asked again with jittered exponential backoff, up to three attempts, and a refused
   credential is never asked again; by default a review whose model still cannot run posts the
