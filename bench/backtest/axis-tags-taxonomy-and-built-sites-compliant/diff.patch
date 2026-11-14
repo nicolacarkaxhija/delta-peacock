@@ -1,0 +1,26 @@
+diff --git a/tests/notes.spec.ts b/tests/notes.spec.ts
+index 6f69217..54747c0 100644
+--- a/tests/notes.spec.ts
++++ b/tests/notes.spec.ts
+@@ -3,3 +3,21 @@ import { expect, test } from './fixtures';
+ test('an empty list shows the hint', { tag: ['@notes'] }, async ({ notes }) => {
+   await expect(notes.emptyHint()).toBeVisible();
+ });
++
++test('sharing a note mails the guest', { tag: ['@site:alpha', '@effect:sends-mail', '@notes'] }, async ({ notes }) => {
++  await notes.share('Buy milk', 'guest@notes.test');
++  await expect(notes.sharedHint('Buy milk')).toBeVisible();
++});
++
++test('the list keeps its order', { tag: ['@risk:P1', '@feature:notes', '@not-site:beta', '@not-env:prd'] }, async ({ notes }) => {
++  await expect(notes.lines()).toHaveCount(3);
++});
++
++test('the list scrolls', { tag: ['@risk:unclassified', '@feature:unclassified'] }, async ({ notes }) => {
++  await notes.scrollToEnd();
++  await expect(notes.lines().last()).toBeVisible();
++});
++
++test('the list prints', { tag: ['@smoke', '@notes'] }, async ({ notes }) => {
++  await expect(notes.printButton()).toBeVisible();
++});

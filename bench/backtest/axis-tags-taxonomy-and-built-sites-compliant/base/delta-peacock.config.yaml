@@ -1,0 +1,14 @@
+# A synthetic case for the tag check: facts only, no model call.
+model:
+  provider: none
+review:
+  target: main
+  guidelinesDir: guidelines
+  generalPass: false
+  repoConfigPath: test-runner.config.ts
+  checks:
+    axis-tags: tags
+gate:
+  failOn: none
+stats:
+  enabled: false
