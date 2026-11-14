@@ -89,9 +89,9 @@ describe("taxonomy tags a config declares", () => {
   });
 
   it("opens every dimension when the config builds the dimensions or the taxonomy in code", () => {
-    expect(read("export default { taxonomy: { dimensions: dimensionRows } };").openDimensions).toEqual(
-      ["*"],
-    );
+    expect(
+      read("export default { taxonomy: { dimensions: dimensionRows } };").openDimensions,
+    ).toEqual(["*"]);
     expect(read("export default { taxonomy: taxonomyFrom(rows) };").openDimensions).toEqual(["*"]);
   });
 });

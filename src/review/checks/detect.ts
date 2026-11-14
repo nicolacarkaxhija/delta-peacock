@@ -5,7 +5,7 @@ import {
   type GuidelineCheck,
 } from "../../domain/guideline.js";
 import { appliesTo } from "../../guidelines/languages.js";
-import type { DeclaredTags } from "../declared.js";
+import { isDeclaredTag, type DeclaredTags } from "../declared.js";
 import { astCandidates, astCovers, parseScript } from "./ast.js";
 import { numberCandidates } from "./numbers.js";
 import { patternCandidates } from "./pattern.js";
@@ -1015,7 +1015,6 @@ function tagCandidates(
 ): Candidate[] {
   const { scan, joined, original, offsets } = parsed;
   const found: Candidate[] = [];
-  const allowed = new Set(declared === undefined ? [] : [...declared.features, ...declared.axis]);
   const call =
     /(?<![\w$.])test(?:\s*\.\s*(?:only|skip|fixme|fail|slow|describe)(?:\s*\.\s*(?:only|skip|fixme|serial|parallel))?)?\s*\(/g;
   for (const match of joined.matchAll(call)) {
@@ -1052,7 +1051,7 @@ function tagCandidates(
     const valueText = original.slice(valueFrom, valueTo);
     for (const tag of valueText.matchAll(/(['"`])(@[^'"`]+)\1/g)) {
       const name = String(tag[2]);
-      if (allowed.has(name)) continue;
+      if (isDeclaredTag(declared, name)) continue;
       const at = valueFrom + tag.index;
       const line = lineOf(offsets, at);
       if (!changed.has(line)) continue;
@@ -1081,7 +1080,7 @@ function tagCandidates(
         line,
         quote,
         title: "Tag the config does not declare",
-        body: `${code(name)} is neither an axis tag nor a feature tag ${declared.source} declares, so the suite's check refuses it. Remove it, or use a declared tag that covers what the test checks.`,
+        body: `${code(name)} is neither an axis, a taxonomy nor a feature tag ${declared.source} declares, so the suite's check refuses it. Remove it, or use a declared tag that covers what the test checks.`,
         ...(suggestion !== undefined ? { suggestion } : {}),
       });
     }

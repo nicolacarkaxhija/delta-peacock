@@ -702,7 +702,7 @@ describe("the tag check", () => {
     expect(found[2]?.suggestion).toBeUndefined();
     expect(found[3]?.suggestion).toBeUndefined();
     expect(found[1]?.body).toContain(
-      "`@smoke` is neither an axis tag nor a feature tag test-runner.config.ts declares",
+      "`@smoke` is neither an axis, a taxonomy nor a feature tag test-runner.config.ts declares",
     );
   });
 
