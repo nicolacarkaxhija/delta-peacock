@@ -109,6 +109,11 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
 - `tasks at major`: a pull request task is created only for a finding at MAJOR or above; a MINOR
   or INFO finding posts its comment alone, and the reviewer resolves its own task once the finding
   falls below MAJOR. On its own: `pnpm exec vitest run tests/bitbucket-tasks`.
+- `folded repeats`: above `scm.foldRepeatsAbove` findings (default 25) a rule that repeats keeps one
+  inline comment, on its first finding, naming how many more places it matches, and the summary
+  lists every finding; a 403 or a limit answer while posting inline comments stops the inline
+  posting, and the review still posts its summary and status and names the findings left out;
+  any other error still fails the step. On its own: `pnpm exec vitest run tests/comment-flood`.
 - `accepted forms`: a finding whose tags or text match the repository's `accepted-forms.json`,
   read from the guidelines ref, is never posted, and the summary counts it as accepted; the
   synthetic `@not-site` and `@locale` cases replay a recorded false positive and post nothing.

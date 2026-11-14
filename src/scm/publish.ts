@@ -355,6 +355,49 @@ async function retireComment(
   }
 }
 
+/** Which findings get no comment of their own, and how many more places the first of each rule names. */
+interface FoldPlan {
+  hidden: Set<string>;
+  more: Map<string, number>;
+}
+
+/** Above the threshold, every rule that repeats keeps only its first finding as a comment. */
+export function foldPlan(desired: ReadonlyMap<string, Finding>, threshold?: number): FoldPlan {
+  const plan: FoldPlan = { hidden: new Set(), more: new Map() };
+  if (threshold === undefined || desired.size <= threshold) return plan;
+  const byRule = new Map<string, string[]>();
+  for (const [fingerprint, finding] of desired) {
+    // an observation cites no rule, so it never folds
+    if (finding.kind !== "violation") continue;
+    byRule.set(finding.guidelineId, [...(byRule.get(finding.guidelineId) ?? []), fingerprint]);
+  }
+  for (const group of byRule.values()) {
+    if (group.length < 2) continue;
+    plan.more.set(String(group[0]), group.length - 1);
+    for (const fingerprint of group.slice(1)) plan.hidden.add(fingerprint);
+  }
+  return plan;
+}
+
+/** The comment of the first finding of a folded rule names how many more places it matches. */
+function foldedBody(
+  finding: Finding,
+  fingerprint: string,
+  presentation: Presentation,
+  more: number | undefined,
+): string {
+  if (more === undefined) return renderCommentBody(finding, fingerprint, presentation);
+  const places = more === 1 ? "1 more place" : `${String(more)} more places`;
+  const fold = `This rule matches ${places} in this pull request; the summary lists them.`;
+  const note = finding.note === undefined ? fold : `${finding.note} ${fold}`;
+  return renderCommentBody({ ...finding, note }, fingerprint, presentation);
+}
+
+/** A host answer that says no more comments may be posted: a refusal or a limit. */
+function isHostLimit(message: string): boolean {
+  return /\b(?:403|429)\b|\blimit\b/i.test(message);
+}
+
 /** An earlier comment a fallback run left as it is, named in the summary. */
 interface KeptComment {
   label: string;
@@ -382,7 +425,12 @@ async function reconcileInlineComments(
   reviewedCommit?: string,
   notRejudged?: KeptComment[],
   unjudged: ReadonlySet<string> = new Set(),
-): Promise<{ commentIds: Map<string, string>; anchors: Map<string, string> }> {
+  fold: FoldPlan = { hidden: new Set(), more: new Map() },
+): Promise<{
+  commentIds: Map<string, string>;
+  anchors: Map<string, string>;
+  refused?: { reason: string; left: number };
+}> {
   const commentIds = new Map<string, string>();
   const anchors = new Map<string, string>();
   const listed = await scm.listInlineComments();
@@ -440,7 +488,7 @@ async function reconcileInlineComments(
     seen.add(fingerprint);
     commentIds.set(fingerprint, comment.id);
     anchors.set(fingerprint, comment.id);
-    const body = renderCommentBody(finding, fingerprint, presentation);
+    const body = foldedBody(finding, fingerprint, presentation, fold.more.get(fingerprint));
     if (sameComment(body, comment.body) || notRejudged !== undefined) {
       outcome.unchanged += 1;
     } else {
@@ -448,20 +496,34 @@ async function reconcileInlineComments(
       outcome.updated += 1;
     }
   }
+  let refused: { reason: string; left: number } | undefined;
   for (const [fingerprint, finding] of desired) {
-    if (seen.has(fingerprint) || settled.has(fingerprint)) continue;
-    const id = await scm.createInlineComment({
-      body: renderCommentBody(finding, fingerprint, presentation),
-      path: finding.file,
-      line: finding.line,
-    });
+    if (seen.has(fingerprint) || settled.has(fingerprint) || fold.hidden.has(fingerprint)) continue;
+    if (refused !== undefined) {
+      refused.left += 1;
+      continue;
+    }
+    let id: unknown;
+    try {
+      id = await scm.createInlineComment({
+        body: foldedBody(finding, fingerprint, presentation, fold.more.get(fingerprint)),
+        path: finding.file,
+        line: finding.line,
+      });
+    } catch (error) {
+      const message = String((error as { message?: unknown }).message);
+      if (!isHostLimit(message)) throw error;
+      // the summary still lists every finding, so the review goes on to it
+      refused = { reason: String(message.split("\n")[0]), left: 1 };
+      continue;
+    }
     if (typeof id === "string") {
       commentIds.set(fingerprint, id);
       anchors.set(fingerprint, id);
     }
     outcome.created += 1;
   }
-  return { commentIds, anchors };
+  return { commentIds, anchors, ...(refused !== undefined ? { refused } : {}) };
 }
 
 /** Short stable digest of a line's text, so a later run can tell whether it changed. */
@@ -653,6 +715,8 @@ export async function publishReview(
     tasks?: boolean;
     /** A file's line at the reviewed commit; tasks resolve once it changed. */
     lineTextOf?: (file: string, line: number) => string | undefined;
+    /** Above this many placed findings, a rule that repeats keeps one comment; unset never folds. */
+    foldRepeatsAbove?: number;
     /** The hard guarantee (spec: "a single dry-run switch gates every outbound write"): true short-circuits before any adapter call, even one a caller forgot to gate itself. */
     dryRun: boolean;
   },
@@ -705,7 +769,8 @@ export async function publishReview(
           await resolveStaleTasks(taskApi, own, blocking, lineTextOf, outcome, unjudged);
         }
       }
-      const { commentIds, anchors } = await reconcileInlineComments(
+      const fold = foldPlan(desired, input.foldRepeatsAbove);
+      const { commentIds, anchors, refused } = await reconcileInlineComments(
         scm,
         presentation,
         desired,
@@ -714,7 +779,17 @@ export async function publishReview(
         input.reviewedCommit,
         notRejudged,
         unjudged,
+        fold,
       );
+      if (fold.hidden.size > 0) summaryInput = { ...summaryInput, folded: fold.hidden.size };
+      if (refused !== undefined) {
+        const findings =
+          refused.left === 1 ? "1 finding is" : `${String(refused.left)} findings are`;
+        outcome.notices.push(
+          `the host refused more inline comments (${refused.reason}); ${findings} listed in the summary only`,
+        );
+        summaryInput = { ...summaryInput, refusedInline: refused.left };
+      }
       for (const [fingerprint, id] of anchors) {
         const finding = desired.get(fingerprint);
         if (finding !== undefined) commentOf.set(finding, id);
@@ -728,7 +803,7 @@ export async function publishReview(
           const url = scm.commentUrl?.(commentId);
           return url === undefined ? label : `[${label}](${url})`;
         });
-        summaryInput = { ...input, factsOnly: { ...input.factsOnly, notRejudged: named } };
+        summaryInput = { ...summaryInput, factsOnly: { ...input.factsOnly, notRejudged: named } };
       }
     }
     // a clean card carries a clean result, so the comment keeps only the line saying the run happened
