@@ -662,6 +662,41 @@ describe("the timeout check", () => {
       }),
     ).toEqual([]);
   });
+
+  it("leaves millisecond inputs to a unit test alone and still flags a page sleep there", () => {
+    const unit = [
+      "retry(act, { outcome, attempts: 3, timeout: 5 });",
+      "await sleep(500);",
+      "await new Promise((resolve) => setTimeout(resolve, 1_000));",
+      "await page.waitForTimeout(3000);",
+    ].join("\n");
+    expect(
+      brief(
+        run({
+          files: { "components/retry.test.ts": unit, "tests/retry.test.mjs": unit },
+          changed: { "components/retry.test.ts": "all", "tests/retry.test.mjs": "all" },
+          checks: ["timeouts"],
+        }),
+      ),
+    ).toEqual([
+      "components/retry.test.ts:4 wait-for-timeout",
+      "tests/retry.test.mjs:4 wait-for-timeout",
+    ]);
+    expect(
+      brief(
+        run({
+          files: { "components/retry.spec.ts": unit },
+          changed: { "components/retry.spec.ts": "all" },
+          checks: ["timeouts"],
+        }),
+      ),
+    ).toEqual([
+      "components/retry.spec.ts:1 inline-timeout",
+      "components/retry.spec.ts:2 sleep",
+      "components/retry.spec.ts:3 sleep",
+      "components/retry.spec.ts:4 wait-for-timeout",
+    ]);
+  });
 });
 
 describe("the tag check", () => {
