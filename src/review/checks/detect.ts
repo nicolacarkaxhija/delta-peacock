@@ -4,7 +4,6 @@ import {
   type Guideline,
   type GuidelineCheck,
 } from "../../domain/guideline.js";
-import { posix } from "node:path";
 import { appliesTo } from "../../guidelines/languages.js";
 import { isDeclaredTag, type DeclaredTags } from "../declared.js";
 import { astCandidates, astCovers, parseScript } from "./ast.js";
@@ -1103,38 +1102,15 @@ function literalMs(text: string): string | undefined {
   return value > 0 ? trimmed : undefined;
 }
 
-const UNIT_TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
-
-/** A Playwright or page object import, a page or locator call, or a web first matcher on a locator. */
-const PAGE_SIGNAL =
-  /(?:from\s*|require\s*\(\s*)["'](?:@playwright\/test|[^"']*\bpages\/[^"']*)["']|\bpage\s*\.\s*\w+\s*\(|\.\s*(?:locator|getBy[A-Z]\w*)\s*\(|\.\s*(?:not\s*\.\s*)?to(?:Be(?:Visible|Hidden|Enabled|Disabled|Checked|Attached|Editable|Empty|Focused|InViewport)|Have(?:Text|Count|URL|Title|Values?|Attribute|Class|CSS|Id|AccessibleName|Screenshot)|ContainText)\s*\(/;
+/** An import of a unit test runner: vitest, jest globals or node:test. */
+const UNIT_RUNNER_IMPORT =
+  /(?:from\s*|require\s*\(\s*|import\s*\(?\s*)["'](?:vitest|@jest\/globals|node:test)["']/;
 
 const PAGE_FILE = /(?:^|\/)pages\//;
 
-const RELATIVE_IMPORT = /(?:from\s*|require\s*\(\s*|import\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g;
-
-const SCRIPT_SUFFIXES = ["", ".ts", ".tsx", ".js", ".mjs", ".cjs", "/index.ts", "/index.js"];
-
-/** A relative import of a file that itself shows a page signal; a pages/ path is one already. */
-function importsPageFile(file: string, source: string, context: CheckContext): boolean {
-  for (const match of source.matchAll(RELATIVE_IMPORT)) {
-    const target = posix.join(posix.dirname(file), String(match[1]));
-    for (const suffix of SCRIPT_SUFFIXES) {
-      const text = context.read(target + suffix);
-      if (text !== undefined && PAGE_SIGNAL.test(text)) return true;
-    }
-  }
-  return false;
-}
-
-/** A unit test without a page signal hands its option values to fakes; its real sleeps still flag. */
-function isUnitTest(file: string, source: string, context: CheckContext): boolean {
-  return (
-    UNIT_TEST_FILE.test(file) &&
-    !PAGE_FILE.test(file) &&
-    !PAGE_SIGNAL.test(source) &&
-    !importsPageFile(file, source, context)
-  );
+/** A unit test hands its option values to fakes; its real sleeps still flag. */
+function isUnitTest(file: string, source: string): boolean {
+  return !PAGE_FILE.test(file) && UNIT_RUNNER_IMPORT.test(source);
 }
 
 /** The repository file that names the suite's waits, such as lib/timeouts.ts. */
@@ -1151,7 +1127,7 @@ function timeoutCandidates(
 ): Candidate[] {
   const { scan, joined, original, offsets } = parsed;
   const found: Candidate[] = [];
-  const unit = isUnitTest(file, original, context);
+  const unit = isUnitTest(file, original);
   const named = timeoutsFile(context);
   const home = named !== undefined ? code(named) : "the suite's timeouts file";
   const entry = /\bthis\s*\.\s*#?timeouts\b/.test(joined) ? "this.timeouts" : "timeouts";
