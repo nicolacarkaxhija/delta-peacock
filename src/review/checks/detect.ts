@@ -1102,6 +1102,9 @@ function literalMs(text: string): string | undefined {
   return value > 0 ? trimmed : undefined;
 }
 
+/** A unit test file: its millisecond inputs go to fakes and wait for no page; waitForTimeout still flags. */
+const UNIT_TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
+
 /** The repository file that names the suite's waits, such as lib/timeouts.ts. */
 function timeoutsFile(context: CheckContext): string | undefined {
   return context.files().find((file) => /(?:^|\/)timeouts\.(?:[cm]?[jt]s)$/.test(file));
@@ -1116,6 +1119,7 @@ function timeoutCandidates(
 ): Candidate[] {
   const { scan, joined, original, offsets } = parsed;
   const found: Candidate[] = [];
+  const unit = UNIT_TEST_FILE.test(file);
   const named = timeoutsFile(context);
   const home = named !== undefined ? code(named) : "the suite's timeouts file";
   const entry = /\bthis\s*\.\s*#?timeouts\b/.test(joined) ? "this.timeouts" : "timeouts";
@@ -1150,7 +1154,7 @@ function timeoutCandidates(
       });
       continue;
     }
-    if (dotted) continue;
+    if (dotted || unit) continue;
     const bounds: [number, number] =
       name === "setTimeout"
         ? [(args[0] ?? close) + 1, args[1] ?? close]
@@ -1164,7 +1168,7 @@ function timeoutCandidates(
       body: `${code(call)} pauses a fixed ${ms} ms instead of waiting for a state. ${waitFirst}`,
     });
   }
-  for (const match of joined.matchAll(/(?<![\w$.])(timeout|delay|intervals)\s*:\s*/g)) {
+  for (const match of unit ? [] : joined.matchAll(/(?<![\w$.])(timeout|delay|intervals)\s*:\s*/g)) {
     const key = String(match[1]);
     const from = match.index + match[0].length;
     let to = from;
