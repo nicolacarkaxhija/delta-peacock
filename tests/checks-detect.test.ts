@@ -663,39 +663,57 @@ describe("the timeout check", () => {
     ).toEqual([]);
   });
 
-  it("leaves millisecond inputs to a unit test alone and still flags a page sleep there", () => {
-    const unit = [
-      "retry(act, { outcome, attempts: 3, timeout: 5 });",
-      "await sleep(500);",
-      "await new Promise((resolve) => setTimeout(resolve, 1_000));",
-      "await page.waitForTimeout(3000);",
-    ].join("\n");
+  const FAKE_OPTION = "retry(act, { outcome, attempts: 3, timeout: 5 });";
+
+  it.each([
+    {
+      row: "an option handed to a fake in a unit test",
+      file: "components/retry.test.ts",
+      lines: ["import { retry } from './retry';", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "a real sleep in a unit test",
+      file: "tests/retry.test.mjs",
+      lines: [FAKE_OPTION, "await sleep(500);", "await new Promise((r) => setTimeout(r, 1_000));"],
+      want: ["tests/retry.test.mjs:2 sleep", "tests/retry.test.mjs:3 sleep"],
+    },
+    {
+      row: "a timeout on a real page call in a pages test file",
+      file: "pages/cart.test.ts",
+      lines: ["await page.click('#buy', { timeout: 5000 });"],
+      want: ["pages/cart.test.ts:1 inline-timeout"],
+    },
+    {
+      row: "a Playwright import in a support test file",
+      file: "support/x.test.ts",
+      lines: ["import { test } from '@playwright/test';", FAKE_OPTION],
+      want: ["support/x.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "a page object import in a test file",
+      file: "tests/cart.test.ts",
+      lines: ["import { Cart } from '../pages/cart';", FAKE_OPTION],
+      want: ["tests/cart.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "an expect on a locator in a test file",
+      file: "components/card.test.ts",
+      lines: [FAKE_OPTION, "await expect(card.price).toBeVisible({ timeout: 4000 });"],
+      want: ["components/card.test.ts:1 inline-timeout", "components/card.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "an option in a spec file",
+      file: "components/retry.spec.ts",
+      lines: [FAKE_OPTION],
+      want: ["components/retry.spec.ts:1 inline-timeout"],
+    },
+  ])("treats $row by its content", ({ file, lines, want }) => {
     expect(
       brief(
-        run({
-          files: { "components/retry.test.ts": unit, "tests/retry.test.mjs": unit },
-          changed: { "components/retry.test.ts": "all", "tests/retry.test.mjs": "all" },
-          checks: ["timeouts"],
-        }),
+        run({ files: { [file]: lines.join("\n") }, changed: { [file]: "all" }, checks: ["timeouts"] }),
       ),
-    ).toEqual([
-      "components/retry.test.ts:4 wait-for-timeout",
-      "tests/retry.test.mjs:4 wait-for-timeout",
-    ]);
-    expect(
-      brief(
-        run({
-          files: { "components/retry.spec.ts": unit },
-          changed: { "components/retry.spec.ts": "all" },
-          checks: ["timeouts"],
-        }),
-      ),
-    ).toEqual([
-      "components/retry.spec.ts:1 inline-timeout",
-      "components/retry.spec.ts:2 sleep",
-      "components/retry.spec.ts:3 sleep",
-      "components/retry.spec.ts:4 wait-for-timeout",
-    ]);
+    ).toEqual(want);
   });
 });
 
