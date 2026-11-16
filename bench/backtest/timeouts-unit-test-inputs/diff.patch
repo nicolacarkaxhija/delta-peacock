@@ -1,0 +1,40 @@
+diff --git a/components/retry.test.ts b/components/retry.test.ts
+new file mode 100644
+index 0000000..495dbe4
+--- /dev/null
++++ b/components/retry.test.ts
+@@ -0,0 +1,34 @@
++import { describe, expect, it } from 'vitest';
++import { retryUntilOutcome } from './retry';
++
++describe('retryUntilOutcome', () => {
++  it('acts again after a miss and returns the outcome', async () => {
++    const answers: (string | undefined)[] = [undefined, 'shown'];
++    let acts = 0;
++    const result = await retryUntilOutcome(
++      () => {
++        acts += 1;
++        return Promise.resolve();
++      },
++      {
++        outcome: () => Promise.resolve(answers.shift()),
++        attempts: 3,
++        timeout: 5,
++      },
++    );
++    expect({ result, acts }).toEqual({ result: 'shown', acts: 2 });
++  });
++
++  it('hands the outcome check the timeout of each attempt', async () => {
++    const waits: number[] = [];
++    await retryUntilOutcome(() => Promise.resolve(), {
++      outcome: (timeout) => {
++        waits.push(timeout);
++        return Promise.resolve(undefined);
++      },
++      attempts: 2,
++      timeout: 7,
++    });
++    expect(waits).toEqual([7, 7]);
++  });
++});

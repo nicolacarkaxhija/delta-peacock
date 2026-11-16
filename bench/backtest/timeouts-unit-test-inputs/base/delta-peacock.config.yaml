@@ -1,0 +1,14 @@
+# A synthetic case for a static check: facts only, no model call.
+model:
+  provider: none
+review:
+  target: main
+  guidelinesDir: guidelines
+  generalPass: false
+  repoConfigPath: ""
+  checks:
+    no-inline-timeouts: timeouts
+gate:
+  failOn: none
+stats:
+  enabled: false
