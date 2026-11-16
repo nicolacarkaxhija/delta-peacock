@@ -28,6 +28,10 @@ export interface FakeGitHub {
   /** Every non-GET request the server ever saw; dry-run asserts this stays empty. */
   writes: WriteRecord[];
   prText: { title: string; body: string };
+  /** Open pull requests by head (owner:branch), served by the pulls list. */
+  openPulls: { number: number; head: string }[];
+  /** The head filter of every pulls list request. */
+  pullLookups: string[];
   close(): Promise<void>;
 }
 
@@ -59,6 +63,8 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
     statuses: [] as FakeGitHub["statuses"],
     writes: [] as WriteRecord[],
     prText: { title: "original title", body: "author prose" },
+    openPulls: [] as FakeGitHub["openPulls"],
+    pullLookups: [] as string[],
   };
 
   const server: Server = createServer((request, response) => {
@@ -86,6 +92,7 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
       }
 
       const path = url.pathname;
+      const pullList = /^\/repos\/[^/]+\/[^/]+\/pulls$/;
       const pullMeta = /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+$/;
       const reviewComments = /^\/repos\/[^/]+\/[^/]+\/pulls\/\d+\/comments$/;
       const reviewComment = /^\/repos\/[^/]+\/[^/]+\/pulls\/comments\/(\d+)$/;
@@ -93,7 +100,17 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
       const issueComment = /^\/repos\/[^/]+\/[^/]+\/issues\/comments\/(\d+)$/;
       const statuses = /^\/repos\/[^/]+\/[^/]+\/statuses\/(.+)$/;
 
-      if (method === "GET" && pullMeta.test(path)) {
+      if (method === "GET" && pullList.test(path)) {
+        const head = url.searchParams.get("head") ?? "";
+        state.pullLookups.push(head);
+        send(
+          response,
+          200,
+          state.openPulls
+            .filter((pull) => pull.head === head)
+            .map((pull) => ({ number: pull.number })),
+        );
+      } else if (method === "GET" && pullMeta.test(path)) {
         if (String(request.headers.accept).includes("diff")) {
           response.writeHead(200, { "content-type": "application/vnd.github.diff" });
           response.end("diff --git a/api.js b/api.js\n+from the github api diff\n");
@@ -183,6 +200,8 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
     statuses: state.statuses,
     writes: state.writes,
     prText: state.prText,
+    openPulls: state.openPulls,
+    pullLookups: state.pullLookups,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {

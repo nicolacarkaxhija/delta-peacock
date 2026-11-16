@@ -499,7 +499,7 @@ describe("publishing to github", () => {
     expect(stderr).toContain("GITHUB_TOKEN");
   });
 
-  it("requires repository and pull request once a provider is set", async () => {
+  it("requires a repository once a provider is set", async () => {
     const repo = makeScenario();
     let stderr = "";
     const code = await runCli(["review"], {
@@ -513,6 +513,5 @@ describe("publishing to github", () => {
     });
     expect(code).toBe(1);
     expect(stderr).toContain("scm.repository");
-    expect(stderr).toContain("scm.pullRequest");
   });
 });
