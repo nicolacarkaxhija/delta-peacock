@@ -664,84 +664,66 @@ describe("the timeout check", () => {
   });
 
   const FAKE_OPTION = "retry(act, { outcome, attempts: 3, timeout: 5 });";
+  const PAGE_OPTION = "await cart.open({ timeout: 5000 });";
 
   it.each([
     {
-      row: "an option handed to a fake in a unit test",
+      row: "an option handed to a fake in a vitest unit test",
       file: "components/retry.test.ts",
-      lines: ["import { retry } from './retry';", FAKE_OPTION],
-      extra: { "components/retry.ts": "export function retry(): void {}" },
+      lines: ["import { it } from 'vitest';", FAKE_OPTION],
       want: [],
     },
     {
-      row: "a sibling page object import in a pages test file",
-      file: "pages/x.test.ts",
-      lines: ["import { Cart } from './cart';", "await cart.open({ timeout: 5000 });"],
-      want: ["pages/x.test.ts:2 inline-timeout"],
+      row: "an option handed to a fake in a jest unit test",
+      file: "support/retry.test.js",
+      lines: ["const { it } = require('@jest/globals');", FAKE_OPTION],
+      want: [],
     },
     {
-      row: "a sibling page object import in a tests copy",
-      file: "tests/x.test.ts",
-      lines: ["import { Cart } from './cart';", "await cart.open({ timeout: 5000 });"],
-      extra: { "tests/cart.ts": CART },
-      want: ["tests/x.test.ts:2 inline-timeout"],
-    },
-    {
-      row: "an option in a pages test file without imports",
-      file: "pages/math.test.ts",
-      lines: [FAKE_OPTION],
-      want: ["pages/math.test.ts:1 inline-timeout"],
-    },
-    {
-      row: "a real sleep in a unit test",
+      row: "an option handed to a fake in a node:test unit test",
       file: "tests/retry.test.mjs",
-      lines: [FAKE_OPTION, "await sleep(500);", "await new Promise((r) => setTimeout(r, 1_000));"],
-      want: ["tests/retry.test.mjs:2 sleep", "tests/retry.test.mjs:3 sleep"],
+      lines: ["import { test } from 'node:test';", FAKE_OPTION],
+      want: [],
     },
     {
-      row: "a timeout on a real page call in a pages test file",
-      file: "pages/cart.test.ts",
-      lines: ["await page.click('#buy', { timeout: 5000 });"],
-      want: ["pages/cart.test.ts:1 inline-timeout"],
+      row: "a real awaited sleep in a vitest unit test",
+      file: "tests/retry.test.ts",
+      lines: [
+        "import { it } from 'vitest';",
+        "await sleep(500);",
+        "await new Promise((r) => setTimeout(r, 1_000));",
+      ],
+      want: ["tests/retry.test.ts:2 sleep", "tests/retry.test.ts:3 sleep"],
     },
     {
-      row: "a Playwright import in a support test file",
-      file: "support/x.test.ts",
-      lines: ["import { test } from '@playwright/test';", FAKE_OPTION],
-      want: ["support/x.test.ts:2 inline-timeout"],
-    },
-    {
-      row: "a page object import in a test file",
+      row: "a spec importing test from an aliased fixtures file",
       file: "tests/cart.test.ts",
-      lines: ["import { Cart } from '../pages/cart';", FAKE_OPTION],
+      lines: ["import { test } from '@support/fixtures.js';", PAGE_OPTION],
       want: ["tests/cart.test.ts:2 inline-timeout"],
     },
     {
-      row: "an expect on a locator in a test file",
-      file: "components/card.test.ts",
-      lines: [FAKE_OPTION, "await expect(card.price).toBeVisible({ timeout: 4000 });"],
-      want: [
-        "components/card.test.ts:1 inline-timeout",
-        "components/card.test.ts:2 inline-timeout",
-      ],
+      row: "a spec importing test from a relative fixtures file",
+      file: "tests/cart.test.ts",
+      lines: ["import { test } from '../support/fixtures';", PAGE_OPTION],
+      want: ["tests/cart.test.ts:2 inline-timeout"],
     },
     {
-      row: "an option in a spec file",
-      file: "components/retry.spec.ts",
+      row: "a test file without a runner import",
+      file: "components/retry.test.ts",
       lines: [FAKE_OPTION],
-      want: ["components/retry.spec.ts:1 inline-timeout"],
+      want: ["components/retry.test.ts:1 inline-timeout"],
     },
-  ] as {
-    row: string;
-    file: string;
-    lines: string[];
-    extra?: Record<string, string>;
-    want: string[];
-  }[])("treats $row by its content", ({ file, lines, extra, want }) => {
+    {
+      row: "a vitest file under pages",
+      file: "pages/math.test.ts",
+      lines: ["import { it } from 'vitest';", FAKE_OPTION],
+      want: ["pages/math.test.ts:2 inline-timeout"],
+    },
+  ])("treats $row by its runner import", ({ file, lines, want }) => {
     expect(
       brief(
         run({
-          files: { ...extra, [file]: lines.join("\n") },
+          files: { [file]: lines.join("\n") },
           changed: { [file]: "all" },
           checks: ["timeouts"],
         }),
