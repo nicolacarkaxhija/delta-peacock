@@ -670,7 +670,27 @@ describe("the timeout check", () => {
       row: "an option handed to a fake in a unit test",
       file: "components/retry.test.ts",
       lines: ["import { retry } from './retry';", FAKE_OPTION],
+      extra: { "components/retry.ts": "export function retry(): void {}" },
       want: [],
+    },
+    {
+      row: "a sibling page object import in a pages test file",
+      file: "pages/x.test.ts",
+      lines: ["import { Cart } from './cart';", "await cart.open({ timeout: 5000 });"],
+      want: ["pages/x.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "a sibling page object import in a tests copy",
+      file: "tests/x.test.ts",
+      lines: ["import { Cart } from './cart';", "await cart.open({ timeout: 5000 });"],
+      extra: { "tests/cart.ts": CART },
+      want: ["tests/x.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "an option in a pages test file without imports",
+      file: "pages/math.test.ts",
+      lines: [FAKE_OPTION],
+      want: ["pages/math.test.ts:1 inline-timeout"],
     },
     {
       row: "a real sleep in a unit test",
@@ -711,11 +731,17 @@ describe("the timeout check", () => {
       lines: [FAKE_OPTION],
       want: ["components/retry.spec.ts:1 inline-timeout"],
     },
-  ])("treats $row by its content", ({ file, lines, want }) => {
+  ] as {
+    row: string;
+    file: string;
+    lines: string[];
+    extra?: Record<string, string>;
+    want: string[];
+  }[])("treats $row by its content", ({ file, lines, extra, want }) => {
     expect(
       brief(
         run({
-          files: { [file]: lines.join("\n") },
+          files: { ...extra, [file]: lines.join("\n") },
           changed: { [file]: "all" },
           checks: ["timeouts"],
         }),
