@@ -1102,8 +1102,16 @@ function literalMs(text: string): string | undefined {
   return value > 0 ? trimmed : undefined;
 }
 
-/** A unit test file: its millisecond inputs go to fakes and wait for no page; waitForTimeout still flags. */
 const UNIT_TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
+
+/** A Playwright or page object import, a page or locator call, or a web first matcher on a locator. */
+const PAGE_SIGNAL =
+  /(?:from\s*|require\s*\(\s*)["'](?:@playwright\/test|[^"']*\bpages\/[^"']*)["']|\bpage\s*\.\s*\w+\s*\(|\.\s*(?:locator|getBy[A-Z]\w*)\s*\(|\.\s*(?:not\s*\.\s*)?to(?:Be(?:Visible|Hidden|Enabled|Disabled|Checked|Attached|Editable|Empty|Focused|InViewport)|Have(?:Text|Count|URL|Title|Values?|Attribute|Class|CSS|Id|AccessibleName|Screenshot)|ContainText)\s*\(/;
+
+/** A unit test without a page signal hands its option values to fakes; its real sleeps still flag. */
+function isUnitTest(file: string, source: string): boolean {
+  return UNIT_TEST_FILE.test(file) && !PAGE_SIGNAL.test(source);
+}
 
 /** The repository file that names the suite's waits, such as lib/timeouts.ts. */
 function timeoutsFile(context: CheckContext): string | undefined {
@@ -1119,7 +1127,7 @@ function timeoutCandidates(
 ): Candidate[] {
   const { scan, joined, original, offsets } = parsed;
   const found: Candidate[] = [];
-  const unit = UNIT_TEST_FILE.test(file);
+  const unit = isUnitTest(file, original);
   const named = timeoutsFile(context);
   const home = named !== undefined ? code(named) : "the suite's timeouts file";
   const entry = /\bthis\s*\.\s*#?timeouts\b/.test(joined) ? "this.timeouts" : "timeouts";
@@ -1154,7 +1162,7 @@ function timeoutCandidates(
       });
       continue;
     }
-    if (dotted || unit) continue;
+    if (dotted) continue;
     const bounds: [number, number] =
       name === "setTimeout"
         ? [(args[0] ?? close) + 1, args[1] ?? close]

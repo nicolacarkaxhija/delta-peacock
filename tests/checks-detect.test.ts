@@ -700,7 +700,10 @@ describe("the timeout check", () => {
       row: "an expect on a locator in a test file",
       file: "components/card.test.ts",
       lines: [FAKE_OPTION, "await expect(card.price).toBeVisible({ timeout: 4000 });"],
-      want: ["components/card.test.ts:1 inline-timeout", "components/card.test.ts:2 inline-timeout"],
+      want: [
+        "components/card.test.ts:1 inline-timeout",
+        "components/card.test.ts:2 inline-timeout",
+      ],
     },
     {
       row: "an option in a spec file",
@@ -711,7 +714,11 @@ describe("the timeout check", () => {
   ])("treats $row by its content", ({ file, lines, want }) => {
     expect(
       brief(
-        run({ files: { [file]: lines.join("\n") }, changed: { [file]: "all" }, checks: ["timeouts"] }),
+        run({
+          files: { [file]: lines.join("\n") },
+          changed: { [file]: "all" },
+          checks: ["timeouts"],
+        }),
       ),
     ).toEqual(want);
   });
