@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NoPullRequestError, ToolError } from "../src/errors.js";
-import { createGitHubPort, type GitHubPortOptions } from "../src/scm/github.js";
+import { createGitHubPort } from "../src/scm/github.js";
 import { startFakeGitHub } from "./helpers/fake-github.js";
 import { runScmContract } from "./helpers/scm-contract.js";
 
@@ -150,5 +150,5 @@ function onBranch(
     base: "main",
     token,
     baseUrl,
-  } as unknown as GitHubPortOptions);
+  });
 }

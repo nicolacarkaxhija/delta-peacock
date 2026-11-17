@@ -21,6 +21,7 @@ import {
   resolveTargetRef,
   stagedDiff,
   type AcquiredDiff,
+  branchName,
   currentBranch,
 } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
@@ -162,7 +163,8 @@ export async function runReview(
     }
   }
   // a publishing run knows where it publishes before it spends anything
-  if (config.scm.provider !== "local") pullRequestTarget(config, currentBranch(deps.cwd));
+  if (config.scm.provider !== "local")
+    pullRequestTarget(config, currentBranch(deps.cwd, deps.ciBranch));
   const resolvedTarget =
     options.staged === true
       ? { ref: "HEAD", notices: [] }
@@ -894,7 +896,12 @@ export async function pullRequestAttribution(
     try {
       const scm =
         deps.scmPort ??
-        buildScmPort(config, deps.credentials, deps.ciBuildUrl, currentBranch(deps.cwd));
+        buildScmPort(
+          config,
+          deps.credentials,
+          deps.ciBuildUrl,
+          currentBranch(deps.cwd, deps.ciBranch),
+        );
       text = await scm.getPullRequestText?.();
     } catch (error) {
       deps.err(
@@ -1804,10 +1811,6 @@ function fileOnRef(cwd: string, ref: string, file: string): boolean {
 }
 
 /** The branch links point at: the target without a remote or refs prefix. */
-function targetBranch(target: string): string {
-  return target.replace(/^refs\/heads\//, "").replace(/^origin\//, "");
-}
-
 async function publishIfConfigured(
   deps: ReviewDeps,
   config: Config,
@@ -1822,7 +1825,7 @@ async function publishIfConfigured(
   // adapter writes even if this caller got the plumbing wrong.
   const scm =
     deps.scmPort ??
-    buildScmPort(config, deps.credentials, deps.ciBuildUrl, currentBranch(deps.cwd));
+    buildScmPort(config, deps.credentials, deps.ciBuildUrl, currentBranch(deps.cwd, deps.ciBranch));
   const { guidePath } = config.review;
   const lines = new Map<string, readonly string[] | undefined>();
   const head = reviewedCommit(deps.cwd);
@@ -1846,7 +1849,7 @@ async function publishIfConfigured(
       presentation: {
         displayName: config.review.displayName,
         guidelinesDir: config.review.guidelinesDir,
-        targetBranch: targetBranch(config.review.target),
+        targetBranch: branchName(config.review.target),
         ...(guideExists ? { guidePath } : {}),
         ...(guideOnTarget === false ? { guideLinked: false } : {}),
         ...(config.tickets.url !== undefined

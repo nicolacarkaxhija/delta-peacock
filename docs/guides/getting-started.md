@@ -20,7 +20,7 @@ scm:
   repository: owner/repo
 ```
 
-The PR number and tokens come from the environment (`DELTA_PEACOCK_SCM_PULL_REQUEST`, `GITHUB_TOKEN`, `GITLAB_TOKEN` or `BITBUCKET_TOKEN`). Only a review that publishes needs the PR number, and on GitHub it falls back to the open pull request of the checked out branch; a branch without one is reviewed and gated, and nothing is published. Comments are idempotent: re-runs update or resolve, never duplicate. `--dry-run` guarantees nothing is posted even with everything configured.
+The PR number and tokens come from the environment (`DELTA_PEACOCK_SCM_PULL_REQUEST`, `GITHUB_TOKEN`, `GITLAB_TOKEN` or `BITBUCKET_TOKEN`). Only a review that publishes needs the PR number, and on GitHub it falls back to the one open pull request from the checked out branch into `review.target` (on a detached HEAD the branch comes from `GITHUB_HEAD_REF`, then `GITHUB_REF_NAME`). A branch without one is reviewed and gated, and nothing is published; a pull request from a fork, or more than one match, needs the number. Comments are idempotent: re-runs update or resolve, never duplicate. `--dry-run` guarantees nothing is posted even with everything configured.
 
 ## Gating
 

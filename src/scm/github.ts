@@ -7,7 +7,7 @@ import type {
   StatusState,
 } from "./port.js";
 import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
-import { NoPullRequestError } from "../errors.js";
+import { NoPullRequestError, ToolError } from "../errors.js";
 import { encodeFilePath } from "./addresses.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
@@ -20,7 +20,8 @@ interface GitHubPortBase {
 }
 
 /** The pull request by number, or the open one whose head is the branch. */
-export type GitHubPortOptions = GitHubPortBase & ({ pullRequest: number } | { branch: string });
+export type GitHubPortOptions = GitHubPortBase &
+  ({ pullRequest: number } | { branch: string; base: string });
 
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
@@ -42,7 +43,7 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
   const base = normalizeBaseUrl(options.baseUrl, "https://api.github.com");
   const repo = options.repository;
   let number = "pullRequest" in options ? String(options.pullRequest) : undefined;
-  const branch = "branch" in options ? options.branch : "";
+  const { branch, base: into } = "branch" in options ? options : { branch: "", base: "" };
   // api.github.com serves github.com; an enterprise API lives under <host>/api/v3
   const web = `${base === "https://api.github.com" ? "https://github.com" : base.replace(/\/api\/v3$/, "")}/${repo}`;
   let headSha: string | undefined;
@@ -87,16 +88,20 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
     });
   }
 
-  /** The pull request number, looked up once from the branch when none was given. */
+  /** The pull request number, looked up once from the branch and base when none was given; never a guess among several. */
   async function pullNumber(): Promise<string> {
     if (number === undefined) {
       const owner = repo.slice(0, repo.indexOf("/"));
-      const head = encodeURIComponent(`${owner}:${branch}`);
-      const open = (await request("GET", `/repos/${repo}/pulls?state=open&head=${head}`)) as {
-        number: number;
-      }[];
-      const found = open[0];
-      if (found === undefined) throw new NoPullRequestError(branch);
+      const query = `state=open&head=${encodeURIComponent(`${owner}:${branch}`)}&base=${encodeURIComponent(into)}`;
+      const open = (await request("GET", `/repos/${repo}/pulls?${query}`)) as { number: number }[];
+      const [found, ...others] = open;
+      if (found === undefined) throw new NoPullRequestError(branch, into);
+      if (others.length > 0) {
+        const all = open.map((pull) => `#${String(pull.number)}`).join(", ");
+        throw new ToolError(
+          `more than one open pull request for this branch: ${branch} into ${into} (${all}); set scm.pullRequest`,
+        );
+      }
       number = String(found.number);
     }
     return number;

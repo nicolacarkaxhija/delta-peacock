@@ -26,6 +26,8 @@ export interface RuntimeDeps {
   ci: CiProvider;
   /** The CI run's absolute URL, when the host exposes one; status links point at it. */
   ciBuildUrl?: string;
+  /** The branch the CI run names, for a checkout on a detached HEAD. */
+  ciBranch?: string;
   out: (text: string) => void;
   err: (text: string) => void;
   /** The model-port seam: tests inject a scripted fake here. */

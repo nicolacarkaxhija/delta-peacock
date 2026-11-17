@@ -17,10 +17,12 @@ export class ExitCodeError extends Error {
   }
 }
 
-/** The branch has no open pull request, so there is nothing to publish to. */
+/** The branch has no open pull request into the base, so there is nothing to publish to. */
 export class NoPullRequestError extends ToolError {
-  constructor(branch: string) {
-    super(`no pull request for this branch: ${branch}`);
+  constructor(branch: string, base: string) {
+    super(
+      `no pull request for this branch: ${branch} into ${base}; a pull request from a fork needs scm.pullRequest`,
+    );
     this.name = "NoPullRequestError";
   }
 }

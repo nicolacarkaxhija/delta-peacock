@@ -69,14 +69,19 @@ function listRemotes(cwd: string): string[] {
     .filter((line) => line !== "");
 }
 
-/** The branch HEAD is on, or undefined for a detached HEAD. */
-export function currentBranch(cwd: string): string | undefined {
+/** The branch HEAD is on; on a detached HEAD the fallback, which may be undefined. */
+export function currentBranch(cwd: string, detachedFallback?: string): string | undefined {
   try {
     const branch = runGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
-    return branch === "HEAD" ? undefined : branch;
+    return branch === "HEAD" ? detachedFallback : branch;
   } catch {
-    return undefined;
+    return detachedFallback;
   }
+}
+
+/** A target ref as a plain branch name. */
+export function branchName(target: string): string {
+  return target.replace(/^refs\/heads\//, "").replace(/^origin\//, "");
 }
 
 /** The remote this branch tracks, or undefined when no upstream is configured. */

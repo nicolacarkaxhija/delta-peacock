@@ -2,6 +2,7 @@ import type { Credentials } from "../config/credentials.js";
 import { ConfigError } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
+import { branchName } from "../git/diff.js";
 import { createBitbucketPort } from "./bitbucket.js";
 import { createGitHubPort } from "./github.js";
 import { createGitLabPort } from "./gitlab.js";
@@ -14,10 +15,12 @@ import type { ScmPort } from "./port.js";
 export function pullRequestTarget(
   config: Config,
   branch: string | undefined,
-): { pullRequest: number } | { branch: string } {
+): { pullRequest: number } | { branch: string; base: string } {
   const { pullRequest, provider } = config.scm;
   if (pullRequest !== undefined) return { pullRequest };
-  if (provider === "github" && branch !== undefined) return { branch };
+  if (provider === "github" && branch !== undefined) {
+    return { branch, base: branchName(config.review.target) };
+  }
   return missingPullRequest(config);
 }
 
