@@ -1,0 +1,17 @@
+{
+  "findings": [],
+  "noFinding": [
+    {
+      "file": "components/retry.test.ts",
+      "line": 16,
+      "guidelineId": "no-inline-timeouts",
+      "why": "a few milliseconds handed to a fake in a unit test wait for no page, so no wait longer than the framework defaults is written"
+    },
+    {
+      "file": "components/retry.test.ts",
+      "line": 30,
+      "guidelineId": "no-inline-timeouts",
+      "why": "same: the value only proves the option is passed on"
+    }
+  ]
+}

@@ -1102,6 +1102,35 @@ function literalMs(text: string): string | undefined {
   return value > 0 ? trimmed : undefined;
 }
 
+const UNIT_RUNNERS = "vitest|@jest\\/globals|node:test";
+
+const PLAYWRIGHT = "@playwright\\/test";
+
+const PAGE_FILE = /(?:^|\/)pages\//;
+
+/** A real import of one of the modules: a statement at a line start, a require or a dynamic import, never in a comment or string. */
+function importsModule(parsed: Parsed, modules: string): boolean {
+  const statements = new RegExp(
+    `^[ \\t]*(import)\\s[^;]*?\\bfrom\\s*["'](?:${modules})["']|\\b(require|import)\\s*\\(\\s*["'](?:${modules})["']\\s*\\)`,
+    "gm",
+  );
+  for (const match of parsed.original.matchAll(statements)) {
+    const keyword = String(match[1] ?? match[2]);
+    const at = match.index + match[0].indexOf(keyword);
+    if (parsed.joined.slice(at, at + keyword.length) === keyword) return true;
+  }
+  return false;
+}
+
+/** A unit test hands its option values to fakes; its real sleeps still flag. A Playwright import means a real page. */
+function isUnitTest(file: string, parsed: Parsed): boolean {
+  return (
+    !PAGE_FILE.test(file) &&
+    importsModule(parsed, UNIT_RUNNERS) &&
+    !importsModule(parsed, PLAYWRIGHT)
+  );
+}
+
 /** The repository file that names the suite's waits, such as lib/timeouts.ts. */
 function timeoutsFile(context: CheckContext): string | undefined {
   return context.files().find((file) => /(?:^|\/)timeouts\.(?:[cm]?[jt]s)$/.test(file));
@@ -1116,6 +1145,7 @@ function timeoutCandidates(
 ): Candidate[] {
   const { scan, joined, original, offsets } = parsed;
   const found: Candidate[] = [];
+  const unit = isUnitTest(file, parsed);
   const named = timeoutsFile(context);
   const home = named !== undefined ? code(named) : "the suite's timeouts file";
   const entry = /\bthis\s*\.\s*#?timeouts\b/.test(joined) ? "this.timeouts" : "timeouts";
@@ -1164,7 +1194,7 @@ function timeoutCandidates(
       body: `${code(call)} pauses a fixed ${ms} ms instead of waiting for a state. ${waitFirst}`,
     });
   }
-  for (const match of joined.matchAll(/(?<![\w$.])(timeout|delay|intervals)\s*:\s*/g)) {
+  for (const match of unit ? [] : joined.matchAll(/(?<![\w$.])(timeout|delay|intervals)\s*:\s*/g)) {
     const key = String(match[1]);
     const from = match.index + match[0].length;
     let to = from;

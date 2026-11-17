@@ -662,6 +662,118 @@ describe("the timeout check", () => {
       }),
     ).toEqual([]);
   });
+
+  const FAKE_OPTION = "retry(act, { outcome, attempts: 3, timeout: 5 });";
+  const PAGE_OPTION = "await cart.open({ timeout: 5000 });";
+
+  it.each([
+    {
+      row: "an option handed to a fake in a vitest unit test",
+      file: "components/retry.test.ts",
+      lines: ["import { it } from 'vitest';", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "an option handed to a fake in a jest unit test",
+      file: "support/retry.test.js",
+      lines: ["const { it } = require('@jest/globals');", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "an option handed to a fake in a node:test unit test",
+      file: "tests/retry.test.mjs",
+      lines: ["import { test } from 'node:test';", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "a real awaited sleep in a vitest unit test",
+      file: "tests/retry.test.ts",
+      lines: [
+        "import { it } from 'vitest';",
+        "await sleep(500);",
+        "await new Promise((r) => setTimeout(r, 1_000));",
+      ],
+      want: ["tests/retry.test.ts:2 sleep", "tests/retry.test.ts:3 sleep"],
+    },
+    {
+      row: "a spec importing test from an aliased fixtures file",
+      file: "tests/cart.test.ts",
+      lines: ["import { test } from '@support/fixtures.js';", PAGE_OPTION],
+      want: ["tests/cart.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "a spec importing test from a relative fixtures file",
+      file: "tests/cart.test.ts",
+      lines: ["import { test } from '../support/fixtures';", PAGE_OPTION],
+      want: ["tests/cart.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "a test file without a runner import",
+      file: "components/retry.test.ts",
+      lines: [FAKE_OPTION],
+      want: ["components/retry.test.ts:1 inline-timeout"],
+    },
+    {
+      row: "a vitest file under pages",
+      file: "pages/math.test.ts",
+      lines: ["import { it } from 'vitest';", FAKE_OPTION],
+      want: ["pages/math.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "an option handed to a fake in a file with a type import from vitest",
+      file: "components/retry.test.ts",
+      lines: ["import type { Mock } from 'vitest';", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "an option handed to a fake in a file with a dynamic vitest import",
+      file: "components/retry.test.ts",
+      lines: ["const { it } = await import('vitest');", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "a spec with a commented runner import",
+      file: "tests/cart.test.ts",
+      lines: [
+        "import { test } from '@support/fixtures.js';",
+        "// import { it } from 'vitest';",
+        PAGE_OPTION,
+      ],
+      want: ["tests/cart.test.ts:3 inline-timeout"],
+    },
+    {
+      row: "a spec with a runner import in a block comment",
+      file: "tests/cart.test.ts",
+      lines: ["/*", "import { it } from 'vitest';", "*/", PAGE_OPTION],
+      want: ["tests/cart.test.ts:4 inline-timeout"],
+    },
+    {
+      row: "a spec with a runner import in a string",
+      file: "tests/cart.test.ts",
+      lines: ["const note = \"require('vitest')\";", PAGE_OPTION],
+      want: ["tests/cart.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "a component test importing vitest and Playwright",
+      file: "components/card.test.ts",
+      lines: [
+        "import { it } from 'vitest';",
+        "import { expect } from '@playwright/test';",
+        FAKE_OPTION,
+      ],
+      want: ["components/card.test.ts:3 inline-timeout"],
+    },
+  ])("treats $row by its runner import", ({ file, lines, want }) => {
+    expect(
+      brief(
+        run({
+          files: { [file]: lines.join("\n") },
+          changed: { [file]: "all" },
+          checks: ["timeouts"],
+        }),
+      ),
+    ).toEqual(want);
+  });
 });
 
 describe("the tag check", () => {
