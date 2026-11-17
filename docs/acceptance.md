@@ -154,3 +154,8 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
 - `backtest anchor window`: with `--anchor-window <lines>` a finding that many lines beside an
   expected span counts as right and goes to the nearest span; 0 keeps the exact span. On its own:
   `pnpm exec vitest run tests/backtest.test.ts`.
+- `pull request from the branch`: `config` and `guidelines lint` run under a provider with no
+  pull request number; a GitHub review without one publishes to the open pull request of the
+  branch, says `no pull request for this branch` when there is none and still gates; a review on
+  any other provider or a detached HEAD still needs the number. On its own:
+  `pnpm exec vitest run tests/pull-request-from-branch.test.ts tests/scm-github.test.ts`.
