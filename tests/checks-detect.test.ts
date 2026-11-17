@@ -719,6 +719,50 @@ describe("the timeout check", () => {
       lines: ["import { it } from 'vitest';", FAKE_OPTION],
       want: ["pages/math.test.ts:2 inline-timeout"],
     },
+    {
+      row: "an option handed to a fake in a file with a type import from vitest",
+      file: "components/retry.test.ts",
+      lines: ["import type { Mock } from 'vitest';", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "an option handed to a fake in a file with a dynamic vitest import",
+      file: "components/retry.test.ts",
+      lines: ["const { it } = await import('vitest');", FAKE_OPTION],
+      want: [],
+    },
+    {
+      row: "a spec with a commented runner import",
+      file: "tests/cart.test.ts",
+      lines: [
+        "import { test } from '@support/fixtures.js';",
+        "// import { it } from 'vitest';",
+        PAGE_OPTION,
+      ],
+      want: ["tests/cart.test.ts:3 inline-timeout"],
+    },
+    {
+      row: "a spec with a runner import in a block comment",
+      file: "tests/cart.test.ts",
+      lines: ["/*", "import { it } from 'vitest';", "*/", PAGE_OPTION],
+      want: ["tests/cart.test.ts:4 inline-timeout"],
+    },
+    {
+      row: "a spec with a runner import in a string",
+      file: "tests/cart.test.ts",
+      lines: ["const note = \"require('vitest')\";", PAGE_OPTION],
+      want: ["tests/cart.test.ts:2 inline-timeout"],
+    },
+    {
+      row: "a component test importing vitest and Playwright",
+      file: "components/card.test.ts",
+      lines: [
+        "import { it } from 'vitest';",
+        "import { expect } from '@playwright/test';",
+        FAKE_OPTION,
+      ],
+      want: ["components/card.test.ts:3 inline-timeout"],
+    },
   ])("treats $row by its runner import", ({ file, lines, want }) => {
     expect(
       brief(
