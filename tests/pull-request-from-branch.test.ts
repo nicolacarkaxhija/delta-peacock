@@ -89,13 +89,15 @@ describe("runs without a pull request number", () => {
   it("a review publishes to the open pull request of the branch", async () => {
     const fake = await startFakeGitHub();
     try {
-      fake.openPulls.push({ number: 7, head: "acme:feature" });
+      fake.openPulls.push({ number: 9, head: "acme:feature", base: "release" });
+      fake.openPulls.push({ number: 7, head: "acme:feature", base: "main" });
       const { code, stderr } = await run(makeScenario(), ["review"], githubEnv(fake));
       expect(code).toBe(0);
       expect(stderr).toContain("published: 1 created");
       expect(fake.pullLookups).toContain("acme:feature");
       expect(fake.reviewComments).toHaveLength(1);
       expect(fake.statuses.map((status) => status.state)).toEqual(["success"]);
+      expect(fake.statuses[0]?.targetUrl).toBe(`${fake.baseUrl}/acme/widgets/pull/7`);
     } finally {
       await fake.close();
     }
@@ -108,12 +110,37 @@ describe("runs without a pull request number", () => {
         ...githubEnv(fake),
       });
       expect(code).toBe(2);
-      expect(stderr).toContain("no pull request for this branch: feature; nothing published");
+      expect(stderr).toContain(
+        "no pull request for this branch: feature into main; a pull request from a fork needs scm.pullRequest; nothing published",
+      );
       expect(fake.writes).toEqual([]);
     } finally {
       await fake.close();
     }
   });
+
+  it.each([
+    [{ GITHUB_HEAD_REF: "feature" }],
+    [{ GITHUB_REF_NAME: "feature" }],
+    [{ GITHUB_HEAD_REF: "", GITHUB_REF_NAME: "feature" }],
+    [{ GITHUB_HEAD_REF: "feature", GITHUB_REF_NAME: "7/merge" }],
+  ])(
+    "a review on a detached HEAD finds the pull request from the CI branch in %j",
+    async (ciEnv) => {
+      const fake = await startFakeGitHub();
+      try {
+        fake.openPulls.push({ number: 7, head: "acme:feature", base: "main" });
+        const repo = makeScenario();
+        git(repo, "checkout", "-q", "--detach");
+        const { code, stderr } = await run(repo, ["review"], { ...githubEnv(fake), ...ciEnv });
+        expect(code).toBe(0);
+        expect(stderr).toContain("published: 1 created");
+        expect(fake.pullLookups).toEqual(["acme:feature"]);
+      } finally {
+        await fake.close();
+      }
+    },
+  );
 
   it.each([
     ["github on a detached HEAD", "github", true],

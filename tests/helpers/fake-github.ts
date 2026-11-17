@@ -29,7 +29,7 @@ export interface FakeGitHub {
   writes: WriteRecord[];
   prText: { title: string; body: string };
   /** Open pull requests by head (owner:branch), served by the pulls list. */
-  openPulls: { number: number; head: string }[];
+  openPulls: { number: number; head: string; base?: string }[];
   /** The head filter of every pulls list request. */
   pullLookups: string[];
   close(): Promise<void>;
@@ -101,13 +101,18 @@ export async function startFakeGitHub(): Promise<FakeGitHub> {
       const statuses = /^\/repos\/[^/]+\/[^/]+\/statuses\/(.+)$/;
 
       if (method === "GET" && pullList.test(path)) {
+        if (path.startsWith("/repos/acme/missing/")) {
+          send(response, 404, { message: "Not Found" });
+          return;
+        }
         const head = url.searchParams.get("head") ?? "";
+        const base = url.searchParams.get("base");
         state.pullLookups.push(head);
         send(
           response,
           200,
           state.openPulls
-            .filter((pull) => pull.head === head)
+            .filter((pull) => pull.head === head && (base === null || pull.base === base))
             .map((pull) => ({ number: pull.number })),
         );
       } else if (method === "GET" && pullMeta.test(path)) {
