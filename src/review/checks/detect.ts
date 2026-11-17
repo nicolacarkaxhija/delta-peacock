@@ -1102,15 +1102,33 @@ function literalMs(text: string): string | undefined {
   return value > 0 ? trimmed : undefined;
 }
 
-/** An import of a unit test runner: vitest, jest globals or node:test. */
-const UNIT_RUNNER_IMPORT =
-  /(?:from\s*|require\s*\(\s*|import\s*\(?\s*)["'](?:vitest|@jest\/globals|node:test)["']/;
+const UNIT_RUNNERS = "vitest|@jest\\/globals|node:test";
+
+const PLAYWRIGHT = "@playwright\\/test";
 
 const PAGE_FILE = /(?:^|\/)pages\//;
 
-/** A unit test hands its option values to fakes; its real sleeps still flag. */
-function isUnitTest(file: string, source: string): boolean {
-  return !PAGE_FILE.test(file) && UNIT_RUNNER_IMPORT.test(source);
+/** A real import of one of the modules: a statement at a line start, a require or a dynamic import, never in a comment or string. */
+function importsModule(parsed: Parsed, modules: string): boolean {
+  const statements = new RegExp(
+    `^[ \\t]*(import)\\s[^;]*?\\bfrom\\s*["'](?:${modules})["']|\\b(require|import)\\s*\\(\\s*["'](?:${modules})["']\\s*\\)`,
+    "gm",
+  );
+  for (const match of parsed.original.matchAll(statements)) {
+    const keyword = String(match[1] ?? match[2]);
+    const at = match.index + match[0].indexOf(keyword);
+    if (parsed.joined.slice(at, at + keyword.length) === keyword) return true;
+  }
+  return false;
+}
+
+/** A unit test hands its option values to fakes; its real sleeps still flag. A Playwright import means a real page. */
+function isUnitTest(file: string, parsed: Parsed): boolean {
+  return (
+    !PAGE_FILE.test(file) &&
+    importsModule(parsed, UNIT_RUNNERS) &&
+    !importsModule(parsed, PLAYWRIGHT)
+  );
 }
 
 /** The repository file that names the suite's waits, such as lib/timeouts.ts. */
@@ -1127,7 +1145,7 @@ function timeoutCandidates(
 ): Candidate[] {
   const { scan, joined, original, offsets } = parsed;
   const found: Candidate[] = [];
-  const unit = isUnitTest(file, original);
+  const unit = isUnitTest(file, parsed);
   const named = timeoutsFile(context);
   const home = named !== undefined ? code(named) : "the suite's timeouts file";
   const entry = /\bthis\s*\.\s*#?timeouts\b/.test(joined) ? "this.timeouts" : "timeouts";
