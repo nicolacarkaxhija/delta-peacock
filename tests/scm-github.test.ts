@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ToolError } from "../src/errors.js";
-import { createGitHubPort, type GitHubPortOptions } from "../src/scm/github.js";
+import { NoPullRequestError, ToolError } from "../src/errors.js";
+import { createGitHubPort } from "../src/scm/github.js";
 import { startFakeGitHub } from "./helpers/fake-github.js";
 import { runScmContract } from "./helpers/scm-contract.js";
 
@@ -80,7 +80,7 @@ describe("github pull request from the branch", () => {
         branch: "feature/a b",
         token: "test-token",
         baseUrl: fake.baseUrl,
-      } as unknown as GitHubPortOptions);
+      });
       await port.createSummaryComment("hello");
       await port.postStatus("success", "ok");
       expect(fake.pullLookups).toEqual(["acme:feature/a b"]);
@@ -100,12 +100,10 @@ describe("github pull request from the branch", () => {
         branch: "feature",
         token: "test-token",
         baseUrl: fake.baseUrl,
-      } as unknown as GitHubPortOptions);
-      const failure = port.listSummaryComments();
-      await expect(failure).rejects.toMatchObject({
-        name: "NoPullRequestError",
-        message: "no pull request for this branch: feature",
       });
+      const failure = port.listSummaryComments();
+      await expect(failure).rejects.toBeInstanceOf(NoPullRequestError);
+      await expect(failure).rejects.toThrow("no pull request for this branch: feature");
       expect(fake.writes).toEqual([]);
     } finally {
       await fake.close();

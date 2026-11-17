@@ -7,17 +7,20 @@ import type {
   StatusState,
 } from "./port.js";
 import { DEFAULT_DISPLAY_NAME } from "../config/schema.js";
+import { NoPullRequestError } from "../errors.js";
 import { encodeFilePath } from "./addresses.js";
 import { assertSafeRepository, collectAllPages, httpRequest, normalizeBaseUrl } from "./http.js";
 
-export interface GitHubPortOptions {
+interface GitHubPortBase {
   /** owner/repo */
   repository: string;
-  pullRequest: number;
   token: string;
   /** Defaults to api.github.com; tests and enterprise hosts override it. */
   baseUrl?: string;
 }
+
+/** The pull request by number, or the open one whose head is the branch. */
+export type GitHubPortOptions = GitHubPortBase & ({ pullRequest: number } | { branch: string });
 
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
@@ -38,10 +41,10 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
   );
   const base = normalizeBaseUrl(options.baseUrl, "https://api.github.com");
   const repo = options.repository;
-  const pr = String(options.pullRequest);
+  let number = "pullRequest" in options ? String(options.pullRequest) : undefined;
+  const branch = "branch" in options ? options.branch : "";
   // api.github.com serves github.com; an enterprise API lives under <host>/api/v3
   const web = `${base === "https://api.github.com" ? "https://github.com" : base.replace(/\/api\/v3$/, "")}/${repo}`;
-  const pullRequestUrl = `${web}/pull/${pr}`;
   let headSha: string | undefined;
 
   async function request(method: string, path: string, body?: unknown): Promise<unknown> {
@@ -84,9 +87,28 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
     });
   }
 
+  /** The pull request number, looked up once from the branch when none was given. */
+  async function pullNumber(): Promise<string> {
+    if (number === undefined) {
+      const owner = repo.slice(0, repo.indexOf("/"));
+      const head = encodeURIComponent(`${owner}:${branch}`);
+      const open = (await request("GET", `/repos/${repo}/pulls?state=open&head=${head}`)) as {
+        number: number;
+      }[];
+      const found = open[0];
+      if (found === undefined) throw new NoPullRequestError(branch);
+      number = String(found.number);
+    }
+    return number;
+  }
+
+  async function pullPath(suffix = ""): Promise<string> {
+    return `/repos/${repo}/pulls/${await pullNumber()}${suffix}`;
+  }
+
   async function resolveHeadSha(): Promise<string> {
     if (headSha === undefined) {
-      const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {
+      const meta = (await request("GET", await pullPath())) as {
         head: { sha: string };
       };
       headSha = meta.head.sha;
@@ -108,10 +130,10 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
 
   return {
     async listInlineComments(): Promise<ScmComment[]> {
-      return (await paginate(`/repos/${repo}/pulls/${pr}/comments`)).map(toComment);
+      return (await paginate(await pullPath("/comments"))).map(toComment);
     },
     async createInlineComment(comment: NewInlineComment): Promise<string> {
-      const created = (await request("POST", `/repos/${repo}/pulls/${pr}/comments`, {
+      const created = (await request("POST", await pullPath("/comments"), {
         body: comment.body,
         commit_id: await resolveHeadSha(),
         path: comment.path,
@@ -127,10 +149,12 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
       await request("DELETE", `/repos/${repo}/pulls/comments/${id}`);
     },
     async listSummaryComments(): Promise<ScmComment[]> {
-      return (await paginate(`/repos/${repo}/issues/${pr}/comments`)).map(toComment);
+      return (await paginate(`/repos/${repo}/issues/${await pullNumber()}/comments`)).map(
+        toComment,
+      );
     },
     async createSummaryComment(body: string): Promise<void> {
-      await request("POST", `/repos/${repo}/issues/${pr}/comments`, { body });
+      await request("POST", `/repos/${repo}/issues/${await pullNumber()}/comments`, { body });
     },
     async updateSummaryComment(id: string, body: string): Promise<void> {
       await request("PATCH", `/repos/${repo}/issues/comments/${id}`, { body });
@@ -140,7 +164,7 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
         state,
         description,
         context: name ?? DEFAULT_DISPLAY_NAME,
-        target_url: pullRequestUrl,
+        target_url: `${web}/pull/${await pullNumber()}`,
       });
     },
     fileUrl,
@@ -148,10 +172,10 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
       return `${web}/commit/${encodeURIComponent(sha)}`;
     },
     commentUrl(id: string): string {
-      return `${pullRequestUrl}#discussion_r${id}`;
+      return `${web}/pull/${String(number)}#discussion_r${id}`;
     },
     async listCommentSignals(): Promise<CommentSignal[]> {
-      const all = await paginate(`/repos/${repo}/pulls/${pr}/comments`);
+      const all = await paginate(await pullPath("/comments"));
       const repliesTo = new Map<number, string[]>();
       for (const comment of all) {
         if (comment.in_reply_to_id === undefined) continue;
@@ -172,13 +196,13 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
         }));
     },
     async getPullRequestAuthor(): Promise<string> {
-      const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {
+      const meta = (await request("GET", await pullPath())) as {
         user?: { login?: string };
       };
       return meta.user?.login ?? "";
     },
     async getPullRequestText(): Promise<PullRequestText> {
-      const meta = (await request("GET", `/repos/${repo}/pulls/${pr}`)) as {
+      const meta = (await request("GET", await pullPath())) as {
         title: string;
         body: string | null;
         html_url?: string;
@@ -186,14 +210,14 @@ export function createGitHubPort(options: GitHubPortOptions): ScmPort {
       return { title: meta.title, body: meta.body ?? "", url: meta.html_url };
     },
     async updatePullRequestText(text: { title?: string; body: string }): Promise<void> {
-      await request("PATCH", `/repos/${repo}/pulls/${pr}`, {
+      await request("PATCH", await pullPath(), {
         body: text.body,
         ...(text.title !== undefined ? { title: text.title } : {}),
       });
     },
     async fetchPullRequestDiff(): Promise<string> {
       const response = await httpRequest(
-        `${base}/repos/${repo}/pulls/${pr}`,
+        `${base}${await pullPath()}`,
         {
           headers: {
             authorization: `Bearer ${options.token}`,

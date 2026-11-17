@@ -1,4 +1,5 @@
 import type { Credentials } from "../config/credentials.js";
+import { ConfigError } from "../config/loader.js";
 import type { Config } from "../config/schema.js";
 import { ToolError } from "../errors.js";
 import { createBitbucketPort } from "./bitbucket.js";
@@ -6,14 +7,37 @@ import { createGitHubPort } from "./github.js";
 import { createGitLabPort } from "./gitlab.js";
 import type { ScmPort } from "./port.js";
 
-/** Callers guarantee the provider is not local; the schema guarantees the fields. */
+/**
+ * Which pull request a run publishes to: the configured number, else on GitHub
+ * the open one of the branch. Throws when neither is there to go on.
+ */
+export function pullRequestTarget(
+  config: Config,
+  branch: string | undefined,
+): { pullRequest: number } | { branch: string } {
+  const { pullRequest, provider } = config.scm;
+  if (pullRequest !== undefined) return { pullRequest };
+  if (provider === "github" && branch !== undefined) return { branch };
+  return missingPullRequest(config);
+}
+
+function missingPullRequest(config: Config): never {
+  throw new ConfigError([
+    `scm.pullRequest: scm.pullRequest is required when scm.provider is ${config.scm.provider}`,
+  ]);
+}
+
+/**
+ * Callers guarantee the provider is not local; the schema guarantees the repository.
+ * A branch lets the github provider find the pull request when no number is set.
+ */
 export function buildScmPort(
   config: Config,
   credentials: Credentials,
   ciBuildUrl?: string,
+  branch?: string,
 ): ScmPort {
   const repository = config.scm.repository ?? "";
-  const pullRequest = config.scm.pullRequest ?? 0;
   if (config.scm.provider === "github") {
     const token = credentials.GITHUB_TOKEN;
     if (token === undefined || token === "") {
@@ -21,7 +45,7 @@ export function buildScmPort(
     }
     return createGitHubPort({
       repository,
-      pullRequest,
+      ...pullRequestTarget(config, branch),
       token,
       ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
     });
@@ -33,7 +57,7 @@ export function buildScmPort(
     }
     return createBitbucketPort({
       repository,
-      pullRequest,
+      pullRequest: config.scm.pullRequest ?? missingPullRequest(config),
       token,
       ...(ciBuildUrl !== undefined ? { statusUrl: ciBuildUrl } : {}),
       ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
@@ -46,7 +70,7 @@ export function buildScmPort(
     }
     return createGitLabPort({
       repository,
-      pullRequest,
+      pullRequest: config.scm.pullRequest ?? missingPullRequest(config),
       token,
       ...(config.scm.baseUrl !== undefined ? { baseUrl: config.scm.baseUrl } : {}),
     });

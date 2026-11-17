@@ -70,7 +70,7 @@ function listRemotes(cwd: string): string[] {
 }
 
 /** The branch HEAD is on, or undefined for a detached HEAD. */
-function currentBranch(cwd: string): string | undefined {
+export function currentBranch(cwd: string): string | undefined {
   try {
     const branch = runGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
     return branch === "HEAD" ? undefined : branch;

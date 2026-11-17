@@ -16,3 +16,11 @@ export class ExitCodeError extends Error {
     this.code = code;
   }
 }
+
+/** The branch has no open pull request, so there is nothing to publish to. */
+export class NoPullRequestError extends ToolError {
+  constructor(branch: string) {
+    super(`no pull request for this branch: ${branch}`);
+    this.name = "NoPullRequestError";
+  }
+}

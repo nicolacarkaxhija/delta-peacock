@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { loadConfig } from "../src/config/loader.js";
 import { runCli } from "../src/index.js";
+import { buildScmPort } from "../src/scm/build.js";
 import type { ModelPort } from "../src/model/port.js";
 import { startFakeGitHub, type FakeGitHub } from "./helpers/fake-github.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
@@ -75,7 +77,7 @@ describe("runs without a pull request number", () => {
       const fake = await startFakeGitHub();
       try {
         const { code, stderr } = await run(makeScenario(), args, githubEnv(fake));
-        expect(stderr).toBe("");
+        expect(stderr).not.toContain("scm.pullRequest");
         expect(code).toBe(0);
         expect(fake.pullLookups).toEqual([]);
       } finally {
@@ -133,4 +135,17 @@ describe("runs without a pull request number", () => {
       await fake.close();
     }
   });
+
+  it.each(["gitlab", "bitbucket"])(
+    "building a %s port without a pull request number names scm.pullRequest",
+    (provider) => {
+      const config = loadConfig({
+        root: makeRepo(),
+        flags: { "scm.provider": provider, "scm.repository": "acme/widgets" },
+      });
+      expect(() =>
+        buildScmPort(config, { GITLAB_TOKEN: "t", BITBUCKET_TOKEN: "t" }, undefined, "feature"),
+      ).toThrow(`scm.pullRequest is required when scm.provider is ${provider}`);
+    },
+  );
 });

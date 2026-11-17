@@ -430,13 +430,6 @@ export const ConfigSchema = z
           message: `scm.repository is required when scm.provider is ${config.scm.provider}`,
         });
       }
-      if (config.scm.pullRequest === undefined) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["scm", "pullRequest"],
-          message: `scm.pullRequest is required when scm.provider is ${config.scm.provider}`,
-        });
-      }
     }
   });
 
