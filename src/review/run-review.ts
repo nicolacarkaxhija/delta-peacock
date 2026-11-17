@@ -7,7 +7,7 @@ import type { RuntimeDeps } from "../deps.js";
 import { fingerprintOf, type Finding } from "../domain/finding.js";
 import type { Guideline } from "../domain/guideline.js";
 import { evaluateGate } from "../domain/gate.js";
-import { ToolError } from "../errors.js";
+import { NoPullRequestError, ToolError } from "../errors.js";
 import {
   acquireDiff,
   addedLineCount,
@@ -21,6 +21,8 @@ import {
   resolveTargetRef,
   stagedDiff,
   type AcquiredDiff,
+  branchName,
+  currentBranch,
 } from "../git/diff.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { resolveGuidelines, type ResolvedGuidelines } from "../guidelines/loader.js";
@@ -97,7 +99,7 @@ import {
   unavailableReason,
   type FactsScope,
 } from "../scm/comment-format.js";
-import { buildScmPort } from "../scm/build.js";
+import { buildScmPort, pullRequestTarget } from "../scm/build.js";
 import { codeInsightsEnabled, isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
 import { renderReview } from "./render.js";
@@ -160,6 +162,9 @@ export async function runReview(
       throw new ToolError("--staged is a pre-commit review; it needs no SCM configured");
     }
   }
+  // a publishing run knows where it publishes before it spends anything
+  if (config.scm.provider !== "local")
+    pullRequestTarget(config, currentBranch(deps.cwd, deps.ciBranch));
   const resolvedTarget =
     options.staged === true
       ? { ref: "HEAD", notices: [] }
@@ -889,7 +894,14 @@ export async function pullRequestAttribution(
   let text: PullRequestText | undefined;
   if (config.scm.provider !== "local") {
     try {
-      const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
+      const scm =
+        deps.scmPort ??
+        buildScmPort(
+          config,
+          deps.credentials,
+          deps.ciBuildUrl,
+          currentBranch(deps.cwd, deps.ciBranch),
+        );
       text = await scm.getPullRequestText?.();
     } catch (error) {
       deps.err(
@@ -1799,10 +1811,6 @@ function fileOnRef(cwd: string, ref: string, file: string): boolean {
 }
 
 /** The branch links point at: the target without a remote or refs prefix. */
-function targetBranch(target: string): string {
-  return target.replace(/^refs\/heads\//, "").replace(/^origin\//, "");
-}
-
 async function publishIfConfigured(
   deps: ReviewDeps,
   config: Config,
@@ -1815,7 +1823,9 @@ async function publishIfConfigured(
   if (config.scm.provider === "local") return;
   // publishReview itself holds the hard guarantee now: a dry run trips zero
   // adapter writes even if this caller got the plumbing wrong.
-  const scm = deps.scmPort ?? buildScmPort(config, deps.credentials, deps.ciBuildUrl);
+  const scm =
+    deps.scmPort ??
+    buildScmPort(config, deps.credentials, deps.ciBuildUrl, currentBranch(deps.cwd, deps.ciBranch));
   const { guidePath } = config.review;
   const lines = new Map<string, readonly string[] | undefined>();
   const head = reviewedCommit(deps.cwd);
@@ -1823,31 +1833,38 @@ async function publishIfConfigured(
   const guideOnTarget =
     sources === undefined ? undefined : fileOnRef(deps.cwd, sources.targetRef, guidePath);
   const guideExists = guideOnTarget === true || existsSync(path.resolve(deps.cwd, guidePath));
-  const outcome = await publishReview(scm, {
-    ...input,
-    ...(head !== undefined ? { reviewedCommit: head } : {}),
-    tasks: config.scm.tasks,
-    foldRepeatsAbove: config.scm.foldRepeatsAbove,
-    lineTextOf: (file, line) => {
-      if (!lines.has(file)) lines.set(file, linesAtHead(deps.cwd, file, undefined));
-      return lines.get(file)?.[line - 1];
-    },
-    codeInsights: codeInsightsEnabled(config),
-    summaryWhenClean: config.review.summaryWhenClean,
-    presentation: {
-      displayName: config.review.displayName,
-      guidelinesDir: config.review.guidelinesDir,
-      targetBranch: targetBranch(config.review.target),
-      ...(guideExists ? { guidePath } : {}),
-      ...(guideOnTarget === false ? { guideLinked: false } : {}),
-      ...(config.tickets.url !== undefined
-        ? { tickets: { url: config.tickets.url, pattern: config.tickets.pattern } }
-        : {}),
-      ...(sources !== undefined
-        ? { guidelineFiles: guidelineSources(deps.cwd, sources.guidelines, head) }
-        : {}),
-    },
-  });
+  let outcome;
+  try {
+    outcome = await publishReview(scm, {
+      ...input,
+      ...(head !== undefined ? { reviewedCommit: head } : {}),
+      tasks: config.scm.tasks,
+      foldRepeatsAbove: config.scm.foldRepeatsAbove,
+      lineTextOf: (file, line) => {
+        if (!lines.has(file)) lines.set(file, linesAtHead(deps.cwd, file, undefined));
+        return lines.get(file)?.[line - 1];
+      },
+      codeInsights: codeInsightsEnabled(config),
+      summaryWhenClean: config.review.summaryWhenClean,
+      presentation: {
+        displayName: config.review.displayName,
+        guidelinesDir: config.review.guidelinesDir,
+        targetBranch: branchName(config.review.target),
+        ...(guideExists ? { guidePath } : {}),
+        ...(guideOnTarget === false ? { guideLinked: false } : {}),
+        ...(config.tickets.url !== undefined
+          ? { tickets: { url: config.tickets.url, pattern: config.tickets.pattern } }
+          : {}),
+        ...(sources !== undefined
+          ? { guidelineFiles: guidelineSources(deps.cwd, sources.guidelines, head) }
+          : {}),
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof NoPullRequestError)) throw error;
+    deps.err(`${error.message}; nothing published\n`);
+    return;
+  }
   for (const notice of outcome.notices) deps.err(`${notice}\n`);
   if (!input.dryRun) {
     deps.err(

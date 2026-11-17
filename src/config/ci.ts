@@ -15,6 +15,16 @@ export function detectCi(env: Readonly<Record<string, string | undefined>>): CiP
   return undefined;
 }
 
+/** The branch a GitHub Actions run is for: the pull request head, else the pushed ref. */
+export function ciHeadBranch(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  const head = env["GITHUB_HEAD_REF"];
+  if (head !== undefined && head !== "") return head;
+  const ref = env["GITHUB_REF_NAME"];
+  return ref === "" ? undefined : ref;
+}
+
 const SAFE_SLUG = /^[A-Za-z0-9_.-]+$/;
 
 /**

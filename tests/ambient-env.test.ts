@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectCi } from "../src/config/ci.js";
+import { ciHeadBranch, detectCi } from "../src/config/ci.js";
 import { loadCredentials } from "../src/config/credentials.js";
 
 describe("loadCredentials", () => {
@@ -57,5 +57,18 @@ describe("detectCi", () => {
 
   it("prefers github when more than one signal is somehow present", () => {
     expect(detectCi({ GITHUB_ACTIONS: "true", GITLAB_CI: "true" })).toBe("github");
+  });
+});
+
+describe("ciHeadBranch", () => {
+  it.each([
+    { env: {}, branch: undefined },
+    { env: { GITHUB_HEAD_REF: "feature" }, branch: "feature" },
+    { env: { GITHUB_REF_NAME: "main" }, branch: "main" },
+    { env: { GITHUB_HEAD_REF: "feature", GITHUB_REF_NAME: "7/merge" }, branch: "feature" },
+    { env: { GITHUB_HEAD_REF: "", GITHUB_REF_NAME: "main" }, branch: "main" },
+    { env: { GITHUB_HEAD_REF: "", GITHUB_REF_NAME: "" }, branch: undefined },
+  ])("reads $branch from $env", ({ env, branch }) => {
+    expect(ciHeadBranch(env)).toBe(branch);
   });
 });
