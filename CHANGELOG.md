@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.11.1](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.11.0...delta-peacock-v0.11.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **checks:** narrow the unit test timeout rule to fake values and page files ([#52](https://github.com/nicolacarkaxhija/delta-peacock/issues/52)) ([80bf04a](https://github.com/nicolacarkaxhija/delta-peacock/commit/80bf04a5b6333e8dd1b60a3490ee90a77e1f8592))
+* **publish:** limit inline comments to the first of each repeating rule above a threshold ([#49](https://github.com/nicolacarkaxhija/delta-peacock/issues/49)) ([23db739](https://github.com/nicolacarkaxhija/delta-peacock/commit/23db739781cfd46a1a8af3e56cf573a4c0fc4ed6))
+* **review:** accept taxonomy tags and any value of an open axis in the tag check ([#48](https://github.com/nicolacarkaxhija/delta-peacock/issues/48)) ([a81f272](https://github.com/nicolacarkaxhija/delta-peacock/commit/a81f27260100fddd4b9336b9987b72c484492b59))
+* **scm:** find the github pull request from the branch and ask for a number only to publish ([#53](https://github.com/nicolacarkaxhija/delta-peacock/issues/53)) ([13fb276](https://github.com/nicolacarkaxhija/delta-peacock/commit/13fb2767397a14061183cd0676dffbbe55142bee))
+
 ## [0.11.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.10.1...delta-peacock-v0.11.0) (2026-11-05)
 
 
