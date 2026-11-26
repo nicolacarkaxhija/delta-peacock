@@ -393,7 +393,7 @@ with the reason `exclusion-unverified` and counted in the report's `exclusions` 
 posted, the summary's first line never reads as clean, and the backtest lists them as a problem of
 the case. A comment an earlier run posted for a finding that is held now stays as it is, thread
 and task included. When the held findings reach `exclusions.warnHeldShare` of the checked ones
-(a quarter by default), the log and the summary warn that the review is incomplete; the exit code
+(its default is in the configuration schema), the log and the summary warn that the review is incomplete; the exit code
 stays the gate's. A dropped finding is logged
 as `dropped, the guideline excludes it`, counted in the log line `finding(s) dropped: their
 guideline says the line is never a finding` and recorded with the reason `excluded`. A guideline

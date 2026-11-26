@@ -154,7 +154,7 @@ export interface ExclusionTally {
 export interface ExclusionOutcome {
   kept: Finding[];
   /** Findings no readable verdict cleared: neither posted nor retired. */
-  held: Finding[];
+  held: Violation[];
   tally: ExclusionTally;
   dropped: RejectedCandidate[];
   usage?: ModelUsage;
@@ -186,6 +186,8 @@ interface Settled {
   finding: Finding;
   /** Held against a list: excluded, unverified or cleared. */
   checked?: true;
+  /** Set when no readable verdict cleared the finding. */
+  held?: Violation;
   /** The question that answered this finding's own verdict call. */
   answeredBy?: VerdictPath;
   rejected?: RejectedCandidate;
@@ -266,6 +268,7 @@ function settled(finding: Violation, decision: Decision, usage?: ModelUsage): Se
     // a finding the check could not clear is held, never posted as if it had passed
     return {
       finding,
+      held: finding,
       ...spent,
       rejected: {
         reason: "exclusion-unverified",
@@ -333,7 +336,7 @@ export async function applyExclusions(
     options.concurrency,
   );
   const kept: Finding[] = [];
-  const held: Finding[] = [];
+  const held: Violation[] = [];
   const dropped: RejectedCandidate[] = [];
   const notices: string[] = [];
   const tally: ExclusionTally = {
@@ -347,9 +350,9 @@ export async function applyExclusions(
   for (const one of outcomes) {
     if (one.checked === true) tally.checked += 1;
     if (one.rejected?.reason === "excluded") tally.excluded += 1;
-    if (one.rejected?.reason === "exclusion-unverified") {
+    if (one.held !== undefined) {
       tally.unverified += 1;
-      held.push(one.finding);
+      held.push(one.held);
     }
     if (one.answeredBy === "structured") tally.structured += 1;
     if (one.answeredBy === "plain text") tally.plainText += 1;

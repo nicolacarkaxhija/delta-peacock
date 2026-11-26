@@ -1,5 +1,10 @@
 import { DEFAULT_DISPLAY_NAME, type Config } from "../config/schema.js";
-import { fingerprintFrom, type Finding, type ProposedGuideline } from "../domain/finding.js";
+import {
+  fingerprintFrom,
+  type Finding,
+  type ProposedGuideline,
+  type Violation,
+} from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
 import type { ChangeScope } from "../git/diff.js";
 import { meetsThreshold, SEVERITIES, type Severity } from "../domain/severity.js";
@@ -308,7 +313,7 @@ export interface SummaryInput {
   /** Findings left without a comment because the host refused more. */
   refusedInline?: number;
   /** Findings held for want of a readable exclusion verdict; their earlier comments stay as they are. */
-  held?: { findings: readonly Finding[]; checked: number; incomplete: boolean };
+  held?: { findings: readonly Violation[]; checked: number; incomplete: boolean };
 }
 
 /** Files whose model reply could not be read, so no model judged them. */
@@ -774,6 +779,15 @@ export function renderSummaryBody(
       : []),
   ];
   if (unposted.length > 0) lines.push("", `_Not posted: ${unposted.join(", ")}._`);
+  if (input.held !== undefined) {
+    lines.push(
+      "",
+      ...input.held.findings.map(
+        (finding) =>
+          `- ${finding.file}:${String(finding.line)} ${finding.guidelineId}: held, no readable exclusion verdict`,
+      ),
+    );
+  }
   if (input.held?.incomplete === true) {
     lines.push(
       "",

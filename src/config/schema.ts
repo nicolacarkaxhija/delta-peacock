@@ -171,10 +171,10 @@ export const SemgrepSchema = z.strictObject({
   timeoutSeconds: z.number().int().positive().default(SEMGREP_TIMEOUT_SECONDS),
 });
 
-/** The check that holds model findings against a guideline's listed exclusions. */
-/** One finding in four held means the check failed often enough that the review cannot pass as complete. */
+/** Low enough that a check failing on a sizeable part of the findings never reads as a complete review, high enough that one stray unreadable reply in a long review stays a notice. */
 const WARN_HELD_SHARE = 0.25;
 
+/** The check that holds model findings against a guideline's listed exclusions. */
 export const ExclusionsSchema = z.strictObject({
   /** A model for the verdict calls only; the review model serves when unset. */
   model: ModelRefSchema.optional(),

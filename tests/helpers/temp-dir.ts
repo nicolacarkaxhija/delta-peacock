@@ -17,11 +17,10 @@ afterAll(() => {
     else process.env[name] = value;
   }
   // a rename is instant under any load; the global teardown deletes what was set aside
+  const run = process.env["PEACOCK_TEST_RUN"];
   try {
-    renameSync(
-      root,
-      path.join(parent, `${trashPrefix(process.env["PEACOCK_TEST_RUN"])}${path.basename(root)}`),
-    );
+    if (run === undefined) throw new Error("no run to set the folder aside for");
+    renameSync(root, path.join(parent, `${trashPrefix(run)}${path.basename(root)}`));
   } catch {
     rmSync(root, { recursive: true, force: true });
   }

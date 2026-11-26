@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfigSchema } from "../src/config/schema.js";
-import type { Finding } from "../src/domain/finding.js";
+import type { Finding, Violation } from "../src/domain/finding.js";
 import { evaluateGate } from "../src/domain/gate.js";
 import { renderReview } from "../src/review/render.js";
 import { createBitbucketPort } from "../src/scm/bitbucket.js";
@@ -15,7 +15,7 @@ import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 let fake: FakeBitbucket;
 let port: ScmPort;
 
-const FINDING: Finding = {
+const FINDING: Violation = {
   kind: "violation",
   guidelineId: "values-in-settings",
   severity: "MAJOR",
@@ -49,7 +49,7 @@ afterEach(async () => {
 
 const inline = () => fake.comments.filter((comment) => comment.inline !== undefined);
 
-function publish(findings: Finding[], held?: { findings: Finding[]; checked: number }) {
+function publish(findings: Finding[], held?: { findings: Violation[]; checked: number }) {
   return publishReview(port, {
     ...empty,
     findings,
