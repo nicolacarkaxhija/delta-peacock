@@ -124,8 +124,17 @@ function namedSentence(answer: string, exclusions: readonly string[]): string | 
   return exclusions.find((sentence) => normalized(sentence) === wanted);
 }
 
+/** Findings held against an exclusion list, and how each ended. */
+export interface ExclusionTally {
+  checked: number;
+  excluded: number;
+  /** Held, not posted: no readable verdict came back. */
+  unverified: number;
+}
+
 export interface ExclusionOutcome {
   kept: Finding[];
+  tally: ExclusionTally;
   dropped: RejectedCandidate[];
   usage?: ModelUsage;
   notices: string[];
@@ -271,5 +280,11 @@ export async function applyExclusions(
     if (one.usage !== undefined)
       usage = usage === undefined ? one.usage : addUsage(usage, one.usage);
   }
-  return { kept, dropped, ...(usage !== undefined ? { usage } : {}), notices };
+  return {
+    kept,
+    dropped,
+    tally: { checked: 0, excluded: 0, unverified: 0 },
+    ...(usage !== undefined ? { usage } : {}),
+    notices,
+  };
 }
