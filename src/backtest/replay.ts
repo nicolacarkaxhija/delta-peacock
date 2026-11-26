@@ -162,6 +162,12 @@ export async function replayCase(
   }));
   const config = replayDeps.loadConfig();
   const problems = missingLines(config, log, repo, report?.usage !== undefined);
+  const unverified = report?.exclusions?.unverified ?? 0;
+  if (unverified > 0) {
+    problems.push(
+      `${String(unverified)} of ${String(report?.exclusions?.checked)} finding(s) got no readable exclusion verdict and were held`,
+    );
+  }
   if (report !== undefined && benchCase.previous.length > 0) {
     const lineTextOf = (file: string, line: number): string | undefined => {
       const target = path.join(repo, file);

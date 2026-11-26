@@ -1,5 +1,5 @@
 import { appendFileSync } from "node:fs";
-import { generateText, stepCountIs, type LanguageModel, type SystemModelMessage } from "ai";
+import { generateText, Output, stepCountIs, type LanguageModel, type SystemModelMessage } from "ai";
 import {
   DEFAULT_MAX_OUTPUT_TOKENS,
   DEFAULT_MAX_TOOL_ROUNDS,
@@ -89,6 +89,16 @@ function systemOf(
   ];
 }
 
+/** The structured object as JSON, or the raw text when the reply held none. */
+function structuredText(result: { readonly output: unknown; readonly text: string }): string {
+  try {
+    const output = result.output;
+    return output === undefined || output === null ? result.text : JSON.stringify(output);
+  } catch {
+    return result.text;
+  }
+}
+
 /** Model ids (substring match) that reject a sampling temperature; Haiku 5.5 accepts only its default. */
 export const DEFAULT_OMIT_TEMPERATURE_FOR: readonly string[] = ["haiku-5-5"];
 
@@ -125,6 +135,14 @@ export async function completeWith(
     ...(providerOptions !== undefined ? { providerOptions } : {}),
     // the port's retry policy owns retries, so the SDK makes one call
     maxRetries: 0,
+    ...(request.structured !== undefined
+      ? {
+          output: Output.object({
+            schema: request.structured.schema,
+            name: request.structured.name,
+          }),
+        }
+      : {}),
     // a call that fails mid tool loop still paid for the steps it finished
     onStepEnd: (step) => {
       const usage = normalizeUsage(step.usage);
@@ -159,9 +177,13 @@ export async function completeWith(
   dumpReply(result);
   const transcript = transcriptOf(result.steps);
   return {
-    // an empty last step still leaves any answer an earlier step wrote
     text:
-      result.text.trim() !== "" ? result.text : result.steps.map((step) => step.text).join("\n"),
+      request.structured !== undefined
+        ? structuredText(result)
+        : // an empty last step still leaves any answer an earlier step wrote
+          result.text.trim() !== ""
+          ? result.text
+          : result.steps.map((step) => step.text).join("\n"),
     usage: normalizeUsage(result.usage),
     finishReason: result.finishReason,
     ...(toolCalls > 0 ? { toolCalls } : {}),

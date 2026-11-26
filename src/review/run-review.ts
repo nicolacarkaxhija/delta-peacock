@@ -413,9 +413,14 @@ export async function runReview(
           concurrency: PASS_CONCURRENCY,
         });
   for (const notice of excluded?.notices ?? []) deps.err(`${notice}\n`);
-  if (excluded !== undefined && excluded.dropped.length > 0) {
+  if (excluded !== undefined && excluded.tally.excluded > 0) {
     deps.err(
-      `${String(excluded.dropped.length)} finding(s) dropped: their guideline says the line is never a finding\n`,
+      `${String(excluded.tally.excluded)} finding(s) dropped: their guideline says the line is never a finding\n`,
+    );
+  }
+  if (excluded !== undefined && excluded.tally.unverified > 0) {
+    deps.err(
+      `exclusions: ${String(excluded.tally.unverified)} of ${String(excluded.tally.checked)} finding(s) got no readable verdict and are held, not posted; the exclusion check did not do its job\n`,
     );
   }
   const checks =
@@ -728,6 +733,9 @@ export async function runReview(
       ...(linters.length > 0 ? { lintersDetected: linters } : {}),
       ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
       ...(checks !== undefined ? { checks: checks.tally } : {}),
+      ...(excluded !== undefined && excluded.tally.checked > 0
+        ? { exclusions: excluded.tally }
+        : {}),
       ...(facts !== undefined ? { factsOnly: facts } : {}),
       ...(prepass !== undefined ? { semgrep: semgrepTally(prepass) } : {}),
       ...(blocked !== undefined ? { budget: blocked } : {}),
