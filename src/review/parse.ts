@@ -42,6 +42,8 @@ export interface ParseOptions {
   generalPass: boolean;
   /** The most severe an observation may be; the model cannot exceed it. */
   observationSeverityCap: Severity;
+  /** Set under `review.posting: evidence`: a violation must quote a whole sentence of its rule text. */
+  evidence?: true;
 }
 
 /**
@@ -208,6 +210,14 @@ export function quotesGuideline(
   const wanted = normalizeQuote(quote);
   if (wanted.length < MIN_GUIDELINE_QUOTE) return false;
   return normalizeQuote(`${guideline.title}\n${guideline.body}`).includes(wanted);
+}
+
+/** True when the quote is a whole sentence of the guideline's rule text. */
+export function quotesRuleSentence(
+  quote: string | undefined,
+  guideline: Pick<Guideline, "title" | "body" | "exclusions">,
+): boolean {
+  return quotesGuideline(quote, guideline);
 }
 
 /** Undefined means uncited with the general pass off; out-of-scope and misquoted are their own lanes. */

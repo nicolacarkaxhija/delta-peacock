@@ -15,6 +15,8 @@ export interface PromptOptions {
   linterInstruction?: string;
   /** The tags the reviewed repository declares, as a prompt block. */
   declarations?: string;
+  /** Set under `review.posting: evidence`: no confidence floor filters a violation. */
+  evidence?: true;
 }
 
 /** Shared by every command that shows the corpus, so the block stays byte-identical. */
