@@ -189,6 +189,7 @@ export function buildReport(input: {
   /** Looks up the flagged line's text; absent entries simply carry none. */
   lineTextOf?: (finding: Finding) => string | undefined;
   checks?: CheckTally;
+  exclusions?: ExclusionTally;
   factsOnly?: FactsOnly;
   semgrep?: SemgrepTally;
 }): ReviewReport {
@@ -244,6 +245,7 @@ export function buildReport(input: {
       ? { unparsedBatches: [...input.unparsedBatches] }
       : {}),
     ...(input.checks !== undefined ? { checks: input.checks } : {}),
+    ...(input.exclusions !== undefined ? { exclusions: input.exclusions } : {}),
     ...(input.factsOnly !== undefined ? { factsOnly: input.factsOnly } : {}),
     ...(input.semgrep !== undefined ? { semgrep: input.semgrep } : {}),
   };

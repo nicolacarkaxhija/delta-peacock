@@ -377,15 +377,20 @@ guideline as `Never report under this guideline: <sentence>`, once per guideline
 many files the batch holds, so the model leaves most excluded cases out before any verdict call.
 Every finding the model reports under the guideline is then held
 against the list in one short call at temperature 0: the guideline, the listed sentences, the
-flagged line's text, the finding and the code around its line. The call must answer with JSON
-naming the one listed sentence that covers the line, copied exactly, or `none`. The finding is
-dropped only on a listed sentence (quotes, a list bullet, case and spacing aside). `none`, an
-unreadable answer (asked twice) or a failed call keep it; an answer that names a sentence the list
-does not hold is read as `none` and logged as `the verdict names a sentence the guideline does not
-list, read as none`. A dropped finding is logged as `dropped, the guideline excludes it`, counted
-in the log line `finding(s) dropped: their guideline says the line is never a finding` and
-recorded in the report's `rejectedCandidates` with the reason `excluded`. A guideline without
-`exclusions` costs no call, and no call is made when the model cannot run.
+flagged line's text, the finding and the code around its line. The call asks for a structured
+reply, through the provider's structured output, whose `exclusion` field may only hold one listed
+sentence or `none`; when that call fails or its reply is unreadable, the same question is asked
+once more as plain JSON. The reply has room for the hidden reasoning a thinking model spends
+before it answers. The finding is dropped only on a listed sentence (quotes, a list bullet, case
+and spacing aside) and kept on `none`. Anything else holds it: an unlisted sentence, an
+unreadable reply, a reply that ran out of output tokens or a failed call. A held finding is never
+posted, is logged as `no verdict (<why>); held, not posted`, recorded in `rejectedCandidates`
+with the reason `exclusion-unverified` and counted in the report's `exclusions` tally
+(`checked`, `excluded`, `unverified`); a run with any is logged as `the exclusion check did
+not do its job`, and the backtest lists it as a problem of the case. A dropped finding is logged
+as `dropped, the guideline excludes it`, counted in the log line `finding(s) dropped: their
+guideline says the line is never a finding` and recorded with the reason `excluded`. A guideline
+without `exclusions` costs no call, and no call is made when the model cannot run.
 
 A verdict is decided once per guideline, flagged line text and exclusion list in a run: the same
 line flagged under the same guideline in another batch or another file reuses the first verdict and

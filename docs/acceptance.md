@@ -62,10 +62,13 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   model posts and exits as before. On its own:
   `pnpm exec vitest run tests/model-fallback`.
 - `exclusions`: a guideline's `exclusions` must be sentences it says word for word; a finding
-  under it is dropped only when the exclusion check names a listed sentence, and kept on `none`,
-  an unlisted sentence (logged), an unreadable answer or a failed call; the verdict runs at
-  temperature 0, once per guideline, line text and list in a run, and on `exclusions.model` when
-  set, priced at that model's rates; the review prompt carries each listed sentence once per
+  under it is dropped only when the exclusion check names a listed sentence and kept on `none`;
+  the verdict is asked as a structured reply whose schema holds only the listed sentences and
+  `none`, then once as plain text; an unlisted sentence, an unreadable answer, a reply that ran
+  out of output or a failed call holds the finding (never posted), records it as
+  `exclusion-unverified`, counts it in the report's `exclusions` tally and logs that the check
+  did not do its job; the verdict runs at temperature 0, once per guideline, line text and list in
+  a run, and on `exclusions.model` when set, priced at that model's rates; the review prompt carries each listed sentence once per
   guideline as a `Never report under this guideline` line. On its own:
   `pnpm exec vitest run tests/exclusions`.
 - `findings on changed lines`: a model finding whose span touches no added or edited line is

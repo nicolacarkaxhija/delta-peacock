@@ -44,11 +44,16 @@ const SYSTEM = [
 const BEFORE = 20;
 const AFTER = 5;
 
-/** A copied sentence and one reason fit well inside this many tokens. */
-const VERDICT_MAX_TOKENS = 300;
+/** A copied sentence and one reason, plus the hidden reasoning a thinking model spends first. */
+const VERDICT_MAX_TOKENS = 2048;
 
-/** An unreadable reply is asked once more, the same rule the judge follows. */
-const VERDICT_ATTEMPTS = 2;
+/** The verdict a structured reply must take: one listed sentence, copied exactly, or none. */
+function verdictSchema(exclusions: readonly string[]) {
+  return z.object({
+    exclusion: z.enum([NONE, ...exclusions]),
+    reason: z.string(),
+  });
+}
 
 /** Numbered lines around a finding; >> marks the flagged one. */
 function excerptAround(lines: readonly string[], line: number): string {
@@ -91,7 +96,15 @@ function exclusionRequest(
     ].join("\n"),
     temperature: 0,
     maxOutputTokens: VERDICT_MAX_TOKENS,
+    structured: { name: "exclusion_verdict", schema: verdictSchema(guideline.exclusions ?? []) },
   };
+}
+
+/** The same question as plain text, for a provider whose structured reply failed. */
+function plainRequest(request: ModelRequest): ModelRequest {
+  const plain = { ...request };
+  delete plain.structured;
+  return plain;
 }
 
 function readVerdict(text: string): Verdict | undefined {
@@ -156,13 +169,13 @@ interface Decision {
   exclusion?: string;
   /** Set when no readable verdict came back. */
   failure?: string;
-  /** A sentence the answer named that the list does not hold. */
-  unlisted?: string;
   usage?: ModelUsage;
 }
 
 interface Settled {
   finding: Finding;
+  /** Held against a list: excluded, unverified or cleared. */
+  checked?: true;
   rejected?: RejectedCandidate;
   usage?: ModelUsage;
   notice?: string;
@@ -174,6 +187,13 @@ const where = (finding: Violation): string =>
 const listHash = (exclusions: readonly string[]): string =>
   createHash("sha256").update(exclusions.join("\n")).digest("hex").slice(0, 12);
 
+/** Why a reply holds no verdict, or undefined when it holds one. */
+function whyUnread(text: string, finishReason: string | undefined): string {
+  return finishReason === "length" && readVerdict(text) === undefined
+    ? "the reply ran out of output tokens"
+    : "no readable verdict";
+}
+
 async function decide(
   request: ModelRequest,
   exclusions: readonly string[],
@@ -182,39 +202,46 @@ async function decide(
   let usage: ModelUsage | undefined;
   let verdict: Verdict | undefined;
   let failure = "no readable verdict";
-  for (let attempt = 0; attempt < VERDICT_ATTEMPTS && verdict === undefined; attempt += 1) {
+  // the structured question first, then the same question as plain text
+  for (const asked of [request, plainRequest(request)]) {
     try {
-      const reply = await port().complete(request);
+      const reply = await port().complete(asked);
       if (reply.usage !== undefined) {
         usage = usage === undefined ? reply.usage : addUsage(usage, reply.usage);
       }
       verdict = readVerdict(reply.text);
+      if (verdict === undefined) failure = whyUnread(reply.text, reply.finishReason);
     } catch (error) {
       failure = String((error as Error).message.split("\n")[0]);
-      break;
     }
+    if (verdict !== undefined) break;
   }
   const spent = usage !== undefined ? { usage } : {};
   if (verdict === undefined) return { failure, ...spent };
   const named = namedSentence(verdict.exclusion, exclusions);
-  if (named === undefined) return { exclusion: NONE, unlisted: verdict.exclusion, ...spent };
+  if (named === undefined) {
+    return {
+      failure: `the verdict names a sentence the guideline does not list: "${verdict.exclusion}"`,
+      ...spent,
+    };
+  }
   return { exclusion: named, ...spent };
 }
 
 function settled(finding: Violation, decision: Decision, usage?: ModelUsage): Settled {
-  const spent = usage !== undefined ? { usage } : {};
+  const spent = { checked: true as const, ...(usage !== undefined ? { usage } : {}) };
   if (decision.failure !== undefined) {
+    // a finding the check could not clear is held, never posted as if it had passed
     return {
       finding,
       ...spent,
-      notice: `exclusions: ${where(finding)}: no verdict (${decision.failure}); the finding stands`,
-    };
-  }
-  if (decision.unlisted !== undefined) {
-    return {
-      finding,
-      ...spent,
-      notice: `exclusions: ${where(finding)}: the verdict names a sentence the guideline does not list, read as none: "${decision.unlisted}"`,
+      rejected: {
+        reason: "exclusion-unverified",
+        raw: JSON.stringify({ file: finding.file, line: finding.line, failure: decision.failure }),
+        guidelineId: finding.guidelineId,
+        title: finding.title,
+      },
+      notice: `exclusions: ${where(finding)}: no verdict (${decision.failure}); held, not posted`,
     };
   }
   if (decision.exclusion === undefined || decision.exclusion === NONE) return { finding, ...spent };
@@ -272,8 +299,12 @@ export async function applyExclusions(
   const kept: Finding[] = [];
   const dropped: RejectedCandidate[] = [];
   const notices: string[] = [];
+  const tally: ExclusionTally = { checked: 0, excluded: 0, unverified: 0 };
   let usage: ModelUsage | undefined;
   for (const one of outcomes) {
+    if (one.checked === true) tally.checked += 1;
+    if (one.rejected?.reason === "excluded") tally.excluded += 1;
+    if (one.rejected?.reason === "exclusion-unverified") tally.unverified += 1;
     if (one.rejected !== undefined) dropped.push(one.rejected);
     else kept.push(one.finding);
     if (one.notice !== undefined) notices.push(one.notice);
@@ -283,7 +314,7 @@ export async function applyExclusions(
   return {
     kept,
     dropped,
-    tally: { checked: 0, excluded: 0, unverified: 0 },
+    tally,
     ...(usage !== undefined ? { usage } : {}),
     notices,
   };
