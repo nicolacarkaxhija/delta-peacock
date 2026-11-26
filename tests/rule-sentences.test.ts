@@ -61,6 +61,54 @@ describe("quotesRuleSentence", () => {
   });
 });
 
+const LISTED: Guideline = {
+  ...GUIDELINE,
+  body: [
+    "# Read limits and amounts from configuration",
+    "",
+    'The switch is named "enabled". Read a value from configuration, e.g. a setting, never inline. Name it after its use, i.e. what it limits.',
+    "",
+    "Reviewers refuse these shapes:",
+    "",
+    "- a limit compared to decide behaviour",
+    "- an amount written into a helper",
+    "",
+    "1. Name the setting in the guideline.",
+    "2. Give its default a reason;",
+  ].join("\n"),
+  exclusions: [],
+};
+
+describe("quotesRuleSentence on punctuation and lists", () => {
+  it("accepts trivia around a whole sentence, one row each", () => {
+    for (const quote of [
+      'The switch is named "enabled."',
+      "Reviewers refuse these shapes",
+      "Reviewers refuse these shapes;",
+      "Give its default a reason.",
+      "1. Name the setting in the guideline.",
+      "- Name the setting in the guideline.",
+      "an amount written into a helper",
+      "- an amount written into a helper.",
+      "Read a value from configuration, e.g. a setting, never inline.",
+      "Name it after its use, i.e. what it limits",
+    ]) {
+      expect(quotesRuleSentence(quote, LISTED), quote).toBe(true);
+    }
+  });
+
+  it("keeps each bullet a sentence of its own and splits no sentence at an abbreviation", () => {
+    for (const quote of [
+      "a limit compared to decide behaviour an amount written into a helper",
+      "Read a value from configuration, e.g.",
+      "a setting, never inline.",
+      "Name it after its use, i.e.",
+    ]) {
+      expect(quotesRuleSentence(quote, LISTED), quote).toBe(false);
+    }
+  });
+});
+
 describe("parsing with evidence on", () => {
   const options = (evidence: boolean) => ({
     guidelinesById: new Map([[GUIDELINE.id, GUIDELINE]]),
