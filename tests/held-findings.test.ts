@@ -105,6 +105,19 @@ describe("held findings in the summary", () => {
   });
 });
 
+describe("held findings next to posted ones", () => {
+  it("names both in the first line", () => {
+    const other = { ...FINDING, line: 9 };
+    const body = renderSummaryBody({
+      ...empty,
+      findings: [other],
+      gate: evaluateGate([other], "none"),
+      held: { findings: [FINDING], checked: 2, incomplete: false },
+    });
+    expect(body.split("\n")[0]).toMatch(/; 1 finding held without a readable exclusion verdict\.$/);
+  });
+});
+
 describe("a finding held on a later run", () => {
   it("keeps its earlier comment, thread and task as they are", async () => {
     await publish([FINDING]);

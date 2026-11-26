@@ -33,6 +33,11 @@ export interface RenderableReview {
   gate: GateDecision;
 }
 
+/** The log line of a run whose held findings reached the warning share. */
+export function heldWarning(count: number, checked: number): string {
+  return `warning: the exclusion check gave no readable verdict for ${String(count)} of ${String(checked)} checked finding(s); this review is incomplete`;
+}
+
 function findingLines(finding: Finding, badge: string): string[] {
   const head = `${badge}${finding.severity.padEnd(8)} ${finding.file}:${String(finding.line)}  ${
     finding.kind === "violation" ? `[${finding.guidelineId}]` : "[observation]"
@@ -133,6 +138,12 @@ export function renderReview(review: RenderableReview): string {
       : []),
     ...(review.filtered > 0
       ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]
+      : []),
+    ...(review.held !== undefined
+      ? [
+          `${String(review.held.count)} finding(s) held: no readable exclusion verdict`,
+          ...(review.held.incomplete ? [heldWarning(review.held.count, review.held.checked)] : []),
+        ]
       : []),
   ];
   return `${[...sections, ...notices, gateLine(review.gate)].join("\n")}\n`;

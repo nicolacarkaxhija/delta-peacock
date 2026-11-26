@@ -439,7 +439,7 @@ const sentence = (text: string): string => `${text.replace(/[.\s]+$/, "")}.`;
 /** The one line that says how the run ended. */
 export function stateLine(
   input: Pick<SummaryInput, "findings" | "outcome" | "factsOnly" | "unreviewed" | "changedFiles"> &
-    Partial<Pick<SummaryInput, "gate">>,
+    Partial<Pick<SummaryInput, "gate" | "held">>,
   presentation: Pick<Presentation, "severityScale"> = DEFAULT_PRESENTATION,
 ): string {
   const outcome = input.outcome ?? { kind: "reviewed" };
@@ -456,6 +456,12 @@ export function stateLine(
       ? " Merging needs a person's approval."
       : "";
     return `Reviewed ${String(of - files.length)} of ${plural(of, "changed file")}, ${found}. ${plural(files.length, "file")} not reviewed: ${reasonLine(input.unreviewed)}.${approval}`;
+  }
+  if (input.held !== undefined) {
+    const held = `${plural(input.held.findings.length, "finding")} held without a readable exclusion verdict`;
+    return input.findings.length === 0
+      ? `No finding posted; ${held}.`
+      : `${countLine(input.findings, presentation)}; ${held}.`;
   }
   return countLine(input.findings, presentation);
 }
@@ -638,7 +644,8 @@ function cleanLine(input: SummaryInput, presentation: Presentation): string | un
     scope === undefined ||
     input.findings.length > 0 ||
     input.factsOnly !== undefined ||
-    input.unreviewed !== undefined
+    input.unreviewed !== undefined ||
+    input.held !== undefined
   ) {
     return undefined;
   }
@@ -762,8 +769,17 @@ export function renderSummaryBody(
     ...((input.droppedOffChange ?? 0) > 0
       ? [`${plural(input.droppedOffChange ?? 0, "finding")} off the change`]
       : []),
+    ...(input.held !== undefined
+      ? [`${plural(input.held.findings.length, "held finding")} (no readable exclusion verdict)`]
+      : []),
   ];
   if (unposted.length > 0) lines.push("", `_Not posted: ${unposted.join(", ")}._`);
+  if (input.held?.incomplete === true) {
+    lines.push(
+      "",
+      `**Warning: the exclusion check gave no readable verdict for ${String(input.held.findings.length)} of ${String(input.held.checked)} checked finding(s), held and not posted; this review is incomplete.**`,
+    );
+  }
   const folded = input.folded ?? 0;
   if (folded > 0) {
     const verb = folded === 1 ? "has" : "have";

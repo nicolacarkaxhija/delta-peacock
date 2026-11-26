@@ -426,6 +426,7 @@ async function reconcileInlineComments(
   notRejudged?: KeptComment[],
   unjudged: ReadonlySet<string> = new Set(),
   fold: FoldPlan = { hidden: new Set(), more: new Map() },
+  held: ReadonlyMap<string, Finding> = new Map(),
 ): Promise<{
   commentIds: Map<string, string>;
   anchors: Map<string, string>;
@@ -452,7 +453,7 @@ async function reconcileInlineComments(
     if (edited) outcome.updated += 1;
   }
   const existing = own.filter((comment) => !oldTraces.includes(comment));
-  const claims = assignFingerprints(existing, presentation, desired);
+  const claims = assignFingerprints(existing, presentation, new Map([...held, ...desired]));
   const seen = new Set<string>();
   for (const comment of existing) {
     const fingerprint = claims.get(comment);
@@ -464,6 +465,11 @@ async function reconcileInlineComments(
         anchors.set(fingerprint, comment.id);
         outcome.unchanged += 1;
       }
+      continue;
+    }
+    if (fingerprint !== undefined && finding === undefined && held.has(fingerprint)) {
+      // a held finding was neither confirmed nor cleared, so its comment and thread stay as they are
+      outcome.unchanged += 1;
       continue;
     }
     if (fingerprint === undefined || finding === undefined) {
@@ -620,9 +626,10 @@ async function resolveStaleTasks(
   lineTextOf: (file: string, line: number) => string | undefined,
   outcome: PublishOutcome,
   unjudged: ReadonlySet<string>,
+  held: ReadonlySet<string>,
 ): Promise<void> {
   for (const entry of own) {
-    if (entry.task.resolved || unjudged.has(entry.file)) continue;
+    if (entry.task.resolved || unjudged.has(entry.file) || held.has(entry.fingerprint)) continue;
     const stands =
       desired.has(entry.fingerprint) &&
       lineDigest(lineTextOf(entry.file, entry.line)) === entry.digest;
@@ -741,6 +748,12 @@ export async function publishReview(
     // a broken run knows nothing about the code, so earlier inline comments stay as they are
     if (!failed) {
       const placed = input.findings.filter((finding) => finding.unplaced !== true);
+      const held = new Map(
+        fingerprintEntries(input.held?.findings ?? []).map(({ fingerprint, finding }) => [
+          fingerprint,
+          finding,
+        ]),
+      );
       const desired = new Map(
         fingerprintEntries(placed).map(({ fingerprint, finding }) => [fingerprint, finding]),
       );
@@ -766,7 +779,15 @@ export async function publishReview(
           if (entry.task.resolved && entry.task.resolvedBy !== me) settled.add(entry.fingerprint);
         }
         if (notRejudged === undefined) {
-          await resolveStaleTasks(taskApi, own, blocking, lineTextOf, outcome, unjudged);
+          await resolveStaleTasks(
+            taskApi,
+            own,
+            blocking,
+            lineTextOf,
+            outcome,
+            unjudged,
+            new Set(held.keys()),
+          );
         }
       }
       const fold = foldPlan(desired, input.foldRepeatsAbove);
@@ -780,6 +801,7 @@ export async function publishReview(
         notRejudged,
         unjudged,
         fold,
+        held,
       );
       if (fold.hidden.size > 0) summaryInput = { ...summaryInput, folded: fold.hidden.size };
       if (refused !== undefined) {
@@ -815,7 +837,8 @@ export async function publishReview(
       cardCarries &&
       input.summaryWhenClean !== true &&
       input.factsOnly === undefined &&
-      input.unreviewed === undefined;
+      input.unreviewed === undefined &&
+      input.held === undefined;
     const render = quiet ? renderSummaryLine : renderSummaryBody;
     await upsertSummary(scm, presentation, render(summaryInput, presentation));
   }

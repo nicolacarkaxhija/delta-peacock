@@ -382,12 +382,19 @@ reply, through the provider's structured output, whose `exclusion` field may onl
 sentence or `none`; when that call fails or its reply is unreadable, the same question is asked
 once more as plain JSON. The reply has room for the hidden reasoning a thinking model spends
 before it answers. The finding is dropped only on a listed sentence (quotes, a list bullet, case
-and spacing aside) and kept on `none`. Anything else holds it: an unlisted sentence, an
-unreadable reply, a reply that ran out of output tokens or a failed call. A held finding is never
+and spacing aside) and kept on `none`. Anything else holds it: an unlisted sentence, an empty,
+blank or missing answer, an unreadable reply, a reply that ran out of output tokens or a failed
+call. The tokens a failed call spent count in the run's usage, and the log names which question
+answered (`structured` or `plain text`) on each dropped finding and in one line per run. A held finding is never
 posted, is logged as `no verdict (<why>); held, not posted`, recorded in `rejectedCandidates`
 with the reason `exclusion-unverified` and counted in the report's `exclusions` tally
-(`checked`, `excluded`, `unverified`); a run with any is logged as `the exclusion check did
-not do its job`, and the backtest lists it as a problem of the case. A dropped finding is logged
+(`checked`, `excluded`, `unverified`, `structured`, `plainText`); a run with any is logged as
+`the exclusion check did not do its job`, the log and the summary name the held findings as not
+posted, the summary's first line never reads as clean, and the backtest lists them as a problem of
+the case. A comment an earlier run posted for a finding that is held now stays as it is, thread
+and task included. When the held findings reach `exclusions.warnHeldShare` of the checked ones
+(a quarter by default), the log and the summary warn that the review is incomplete; the exit code
+stays the gate's. A dropped finding is logged
 as `dropped, the guideline excludes it`, counted in the log line `finding(s) dropped: their
 guideline says the line is never a finding` and recorded with the reason `excluded`. A guideline
 without `exclusions` costs no call, and no call is made when the model cannot run.

@@ -172,11 +172,14 @@ export const SemgrepSchema = z.strictObject({
 });
 
 /** The check that holds model findings against a guideline's listed exclusions. */
+/** One finding in four held means the check failed often enough that the review cannot pass as complete. */
+const WARN_HELD_SHARE = 0.25;
+
 export const ExclusionsSchema = z.strictObject({
   /** A model for the verdict calls only; the review model serves when unset. */
   model: ModelRefSchema.optional(),
   /** From this share of checked findings held for want of a readable verdict, the run warns that the review is incomplete. */
-  warnHeldShare: z.number().min(0).max(1).default(0.25),
+  warnHeldShare: z.number().min(0).max(1).default(WARN_HELD_SHARE),
 });
 
 /** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */

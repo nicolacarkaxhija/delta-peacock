@@ -171,6 +171,21 @@ describe("bedrock adapter contract", () => {
     expect(JSON.parse(reply.text)).toEqual({ answer: "none" });
   });
 
+  it("fails a structured call whose reply holds no object in the schema, keeping what it spent", async () => {
+    const { fetch } = capturingFetch(canned);
+    const outcome = await bedrockPort("eu.anthropic.claude-test", fetch)
+      .complete({
+        system: "sys",
+        user: "usr",
+        structured: { name: "verdict", schema: z.object({ answer: z.enum(["none", "some"]) }) },
+      })
+      .then(
+        (reply) => reply.text,
+        (error: unknown) => `threw: ${(error as Error).name}`,
+      );
+    expect(outcome).toBe("threw: SpentError");
+  });
+
   it("puts a cache point after the stable prefix of an Anthropic model's system prompt", async () => {
     const { calls, fetch } = capturingFetch(canned);
     await bedrockPort("eu.anthropic.claude-test", fetch).complete({
