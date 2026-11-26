@@ -286,8 +286,8 @@ export function isSummaryBody(body: string, presentation: Presentation): boolean
   );
 }
 
-/** How many held findings the summary names one by one. */
-export const HELD_LISTED = 1000;
+/** Held findings named one by one; more would bury the summary, and the report keeps them all. */
+export const HELD_LISTED = 20;
 
 export interface SummaryInput {
   findings: readonly Finding[];
@@ -785,10 +785,15 @@ export function renderSummaryBody(
   if (input.held !== undefined) {
     lines.push(
       "",
-      ...input.held.findings.map(
-        (finding) =>
-          `- ${finding.file}:${String(finding.line)} ${finding.guidelineId}: held, no readable exclusion verdict`,
-      ),
+      ...input.held.findings
+        .slice(0, HELD_LISTED)
+        .map(
+          (finding) =>
+            `- ${finding.file}:${String(finding.line)} ${finding.guidelineId}: held, no readable exclusion verdict`,
+        ),
+      ...(input.held.findings.length > HELD_LISTED
+        ? [`- and ${plural(input.held.findings.length - HELD_LISTED, "more held finding")}`]
+        : []),
     );
   }
   if (input.held?.incomplete === true) {

@@ -390,7 +390,7 @@ posted, is logged as `no verdict (<why>); held, not posted`, recorded in `reject
 with the reason `exclusion-unverified` and counted in the report's `exclusions` tally
 (`checked`, `excluded`, `unverified`, `structured`, `plainText`); a run with any is logged as
 `the exclusion check did not do its job`, the log and the summary name the held findings as not
-posted, the summary's first line never reads as clean, and the backtest lists them as a problem of
+posted (the summary by file and line, up to a cap, then how many more), the summary's first line never reads as clean, and the backtest lists them as a problem of
 the case. A comment an earlier run posted for a finding that is held now stays as it is, thread
 and task included. When the held findings reach `exclusions.warnHeldShare` of the checked ones
 (its default is in the configuration schema), the log and the summary warn that the review is incomplete; the exit code

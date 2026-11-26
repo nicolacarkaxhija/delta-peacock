@@ -45,7 +45,7 @@ const SYSTEM = [
 const BEFORE = 20;
 const AFTER = 5;
 
-/** A copied sentence and one reason, plus the hidden reasoning a thinking model spends first. */
+/** A thinking model spends hidden reasoning before its answer, and a few hundred tokens leave it no text; this many still bounds a runaway reply cheaply. */
 const VERDICT_MAX_TOKENS = 2048;
 
 /** The verdict a structured reply must take: one listed sentence, copied exactly, or none. */
