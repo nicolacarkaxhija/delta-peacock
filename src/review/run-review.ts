@@ -73,6 +73,7 @@ import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { keepOnChangedLines } from "./changed-lines.js";
 import { partitionAccepted, readAcceptedForms } from "./accepted-forms.js";
 import { applyExclusions } from "./exclusions.js";
+import { isPosted } from "./posting.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
@@ -1577,7 +1578,7 @@ interface FinalizedFindings {
 }
 
 /**
- * The finalize stage: drop findings under the confidence floor, run the
+ * The finalize stage: hold findings that are not posted (isPosted), run the
  * optional calibration pass (advisory only — it may attach a `calibration`
  * note to a finding but never changes kind, severity, or gate membership,
  * ADR 0008), and split off baselined findings that inform the report but
@@ -1639,10 +1640,9 @@ async function finalizeFindings(
 }
 
 function partitionFindings(findings: readonly Finding[], config: Config) {
-  const floor = config.review.confidenceFloor;
   return {
-    kept: findings.filter((finding) => (finding.confidence ?? 1) >= floor),
-    filtered: findings.filter((finding) => (finding.confidence ?? 1) < floor),
+    kept: findings.filter((finding) => isPosted(finding, config.review)),
+    filtered: findings.filter((finding) => !isPosted(finding, config.review)),
   };
 }
 

@@ -42,8 +42,8 @@ describe("isPosted", () => {
     expect(isPosted(BARE, review())).toBe(true);
   });
 
-  it("holds a violation that sits on no line, whatever its confidence", () => {
-    expect(isPosted({ ...VIOLATION, unplaced: true, confidence: 1 }, review())).toBe(false);
+  it("posts a violation its quote could not place, leaving where it shows to placement", () => {
+    expect(isPosted({ ...VIOLATION, unplaced: true }, review())).toBe(true);
   });
 
   it("holds an observation under the confidence floor, since it cites no evidence", () => {

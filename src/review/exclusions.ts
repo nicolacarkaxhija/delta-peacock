@@ -70,6 +70,7 @@ function excerptAround(lines: readonly string[], line: number): string {
 function exclusionRequest(
   finding: Violation,
   guideline: Guideline,
+  exclusions: readonly string[],
   lineText: string,
   excerpt: string,
 ): ModelRequest {
@@ -80,7 +81,7 @@ function exclusionRequest(
       guideline.body,
       "",
       "## The listed sentences: never a finding under it",
-      ...(guideline.exclusions ?? []).map((sentence) => `- ${sentence}`),
+      ...exclusions.map((sentence) => `- ${sentence}`),
       "",
       `## Flagged line ${finding.file}:${String(finding.line)}`,
       "<line>",
@@ -96,7 +97,7 @@ function exclusionRequest(
     ].join("\n"),
     temperature: 0,
     maxOutputTokens: VERDICT_MAX_TOKENS,
-    structured: { name: "exclusion_verdict", schema: verdictSchema(guideline.exclusions ?? []) },
+    structured: { name: "exclusion_verdict", schema: verdictSchema(exclusions) },
   };
 }
 
@@ -284,6 +285,7 @@ export async function applyExclusions(
     const request = exclusionRequest(
       finding,
       guideline,
+      exclusions,
       lineText,
       excerptAround(lines, finding.line),
     );

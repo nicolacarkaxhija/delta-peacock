@@ -21,6 +21,7 @@ import { compileCustomPatterns, redactDiff } from "../review/redact.js";
 import { renderReview } from "../review/render.js";
 import { buildReport } from "../review/report.js";
 import { batchFiles, collectFiles } from "../review/tree-scan.js";
+import { isPosted } from "../review/posting.js";
 
 export interface AuditOptions {
   writeBaseline?: boolean;
@@ -125,9 +126,8 @@ export async function runAudit(
     }
   }
 
-  const floor = config.review.confidenceFloor;
-  let kept = findings.filter((finding) => (finding.confidence ?? 1) >= floor);
-  const filtered = findings.filter((finding) => (finding.confidence ?? 1) < floor);
+  let kept = findings.filter((finding) => isPosted(finding, config.review));
+  const filtered = findings.filter((finding) => !isPosted(finding, config.review));
 
   if (options.writeBaseline === true) {
     const accepted = writeBaseline(deps.cwd, config.review.baselinePath, kept);

@@ -393,7 +393,7 @@ describe("review end to end (local mode)", () => {
     expect(requests[0]?.system).not.toContain("python-only");
   });
 
-  it("keeps low-confidence findings out of the output but inside the report", async () => {
+  it("keeps low-confidence findings out of the output but inside the report under posting: confidence", async () => {
     const repo = makeScenario();
     const cited = JSON.parse(CITED) as { findings: Record<string, unknown>[] };
     const shaky = JSON.stringify({
@@ -410,14 +410,16 @@ describe("review end to end (local mode)", () => {
         },
       ],
     });
-    const { code, stdout } = await review(
-      repo,
-      scriptedModel(shaky).port,
-      "--report",
-      "conf.json",
-      "--fail-on",
-      "MAJOR",
-    );
+    let stdout = "";
+    const code = await runCli(["review", "--report", "conf.json", "--fail-on", "MAJOR"], {
+      cwd: repo,
+      env: { DELTA_PEACOCK_REVIEW_POSTING: "confidence" },
+      out: (text) => {
+        stdout += text;
+      },
+      err: () => undefined,
+      modelPort: scriptedModel(shaky).port,
+    });
     expect(code).toBe(2);
     expect(stdout).toContain("1 finding(s)");
     expect(stdout).toContain("under the confidence floor");

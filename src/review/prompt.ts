@@ -92,7 +92,7 @@ export function buildReviewPrompt(
     "",
     "Respond with JSON only, no prose around it, in this shape:",
     RESPONSE_SHAPE,
-    'Set "confidence" honestly; uncertain findings with low confidence are filtered, not punished.',
+    'Report a finding only when its quoted line breaks its quoted sentence; leave out a finding you are unsure of. Set "confidence" honestly.',
     'If nothing violates a guideline respond {"findings": []}.',
     ...(options.generalPass ? [GENERAL_PASS] : []),
     // stable prefix: changes only when a tool's config file appears or vanishes

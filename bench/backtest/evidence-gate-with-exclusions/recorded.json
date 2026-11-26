@@ -4,9 +4,9 @@
       "guidelineId": "values-in-settings",
       "file": "src/pricing.js",
       "line": 4,
-      "quote": "  return settings.get(\"lookbackDays\") || 30;",
+      "quote": "  return settings.get(\"retentionDays\") || 30;",
       "guidelineQuote": "A business value such as a limit or an amount is read from a setting, never compared inline.",
-      "title": "Lookback days written inline",
+      "title": "Retention days written inline",
       "body": "The number 30 is written inline; read it from a setting.",
       "confidence": 0.4
     },

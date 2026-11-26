@@ -176,6 +176,7 @@ describe("the exclusion check", () => {
   it("holds the finding when both answers miss the verdict field, refuse or run out of output", async () => {
     for (const [first, second, why] of [
       [verdict({ verdict: "none" }), verdict({ decision: "none" }), "no readable verdict"],
+      [verdict({ exclusion: 3 }), verdict({ exclusion: null }), "no readable verdict"],
       ["I cannot help with that.", "I cannot help with that.", "no readable verdict"],
       [
         { text: "", finishReason: "length" },

@@ -89,16 +89,6 @@ function systemOf(
   ];
 }
 
-/** The structured object as JSON, or the raw text when the reply held none. */
-function structuredText(result: { readonly output: unknown; readonly text: string }): string {
-  try {
-    const output = result.output;
-    return output === undefined || output === null ? result.text : JSON.stringify(output);
-  } catch {
-    return result.text;
-  }
-}
-
 /** Model ids (substring match) that reject a sampling temperature; Haiku 5.5 accepts only its default. */
 export const DEFAULT_OMIT_TEMPERATURE_FOR: readonly string[] = ["haiku-5-5"];
 
@@ -179,7 +169,8 @@ export async function completeWith(
   return {
     text:
       request.structured !== undefined
-        ? structuredText(result)
+        ? // the SDK throws before this when the reply holds no object in the schema
+          JSON.stringify(result.output)
         : // an empty last step still leaves any answer an earlier step wrote
           result.text.trim() !== ""
           ? result.text

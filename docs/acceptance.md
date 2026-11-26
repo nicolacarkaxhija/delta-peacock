@@ -71,6 +71,12 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   a run, and on `exclusions.model` when set, priced at that model's rates; the review prompt carries each listed sentence once per
   guideline as a `Never report under this guideline` line. On its own:
   `pnpm exec vitest run tests/exclusions`.
+- `posting on evidence`: with `review.posting: evidence` (the default) a placed violation is
+  posted whatever confidence the model gave it, and an observation keeps the confidence floor; `review.posting: confidence` gates every finding on the floor; the
+  synthetic case `evidence-gate-with-exclusions` posts the same findings in three repeats whose
+  recorded confidence moves around the floor, for each readable verdict shape, and holds both
+  findings with a listed problem when no verdict is readable. On its own:
+  `pnpm exec vitest run tests/posting tests/evidence-gate-backtest`.
 - `findings on changed lines`: a model finding whose span touches no added or edited line is
   dropped before the exclusion check and counted in the report, the log, the summary comment and
   the backtest, unless its guideline declares `scope: file`. On its own:

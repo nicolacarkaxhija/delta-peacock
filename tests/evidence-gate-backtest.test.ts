@@ -13,7 +13,7 @@ const BACKTEST = fileURLToPath(new URL("../bench/backtest", import.meta.url));
 const CASE = "evidence-gate-with-exclusions";
 /** The confidence a sampling model gave the same two candidates in three runs: around the floor. */
 const CONFIDENCE_PER_REPEAT = [0.45, 0.55, 0.35];
-const DEFAULT_LINE = '  return settings.get("lookbackDays") || 30;';
+const DEFAULT_LINE = '  return settings.get("retentionDays") || 30;';
 
 type Shapes = Record<string, Record<"default" | "amount", Partial<ModelReply>[]>>;
 
