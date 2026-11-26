@@ -189,6 +189,7 @@ describe("the exclusion check", () => {
   it("holds the finding when both answers miss the verdict field, refuse or run out of output", async () => {
     for (const [first, second, why] of [
       [verdict({ verdict: "none" }), verdict({ decision: "none" }), "no readable verdict"],
+      [verdict({ exclusion: 3 }), verdict({ exclusion: null }), "no readable verdict"],
       ["I cannot help with that.", "I cannot help with that.", "no readable verdict"],
       [
         { text: "", finishReason: "length" },
@@ -223,6 +224,24 @@ describe("the exclusion check", () => {
     const other = { ...FINDING, line: 1 };
     await applyExclusions([FINDING, other], options(port));
     expect(requests).toHaveLength(2);
+  });
+
+  it("holds a finding whose verdict names two listed sentences at once", async () => {
+    const second = "A constant the module defines is never a finding.";
+    const both = guideline(
+      GUARD.replace(`  - ${EXCLUSION}\n`, `  - ${EXCLUSION}\n  - ${second}\n`).replace(
+        `it. ${EXCLUSION}`,
+        `it. ${EXCLUSION} ${second}`,
+      ),
+    );
+    expect(both.exclusions).toEqual([EXCLUSION, second]);
+    const { port } = scripted(verdict({ exclusion: `${EXCLUSION} ${second}` }));
+    const outcome = await applyExclusions([FINDING], options(port, both));
+    expect(outcome.kept).toEqual([]);
+    expect(outcome.tally.unverified).toBe(1);
+    expect(outcome.notices[0]).toContain(
+      "the verdict names a sentence the guideline does not list",
+    );
   });
 
   it("holds a finding whose verdict is empty, blank or missing on the plain text retry", async () => {
@@ -319,6 +338,22 @@ describe("the exclusion check", () => {
       plainText: 0,
     });
     expect(outcome.notices[0]).toContain("no verdict (connection reset); held, not posted");
+  });
+
+  it("passes an observation through and asks about a line it cannot read by the quote, or by nothing", async () => {
+    const observation: Finding = { ...FINDING, kind: "observation" };
+    const quoted = { ...FINDING, line: 7, quote: "  return name.length;" };
+    const bare = { ...FINDING, line: 8 };
+    const { port, requests } = scripted(verdict({ exclusion: "none", reason: "r" }));
+    const outcome = await applyExclusions([observation, quoted, bare], {
+      ...options(port),
+      linesOf: () => undefined,
+    });
+    expect(outcome.kept).toEqual([observation, quoted, bare]);
+    expect(requests.map((request) => /<line>\n(.*)\n<\/line>/.exec(request.user)?.[1])).toEqual([
+      "  return name.length;",
+      "",
+    ]);
   });
 
   it("makes no call for a guideline that lists no exclusions", async () => {
