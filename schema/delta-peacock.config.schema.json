@@ -724,6 +724,12 @@
             "id"
           ],
           "additionalProperties": false
+        },
+        "warnHeldShare": {
+          "default": 0.25,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         }
       },
       "additionalProperties": false

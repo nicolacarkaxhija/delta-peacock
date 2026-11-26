@@ -175,6 +175,8 @@ export const SemgrepSchema = z.strictObject({
 export const ExclusionsSchema = z.strictObject({
   /** A model for the verdict calls only; the review model serves when unset. */
   model: ModelRefSchema.optional(),
+  /** From this share of checked findings held for want of a readable verdict, the run warns that the review is incomplete. */
+  warnHeldShare: z.number().min(0).max(1).default(0.25),
 });
 
 /** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */

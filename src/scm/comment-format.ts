@@ -307,6 +307,8 @@ export interface SummaryInput {
   folded?: number;
   /** Findings left without a comment because the host refused more. */
   refusedInline?: number;
+  /** Findings held for want of a readable exclusion verdict; their earlier comments stay as they are. */
+  held?: { findings: readonly Finding[]; checked: number; incomplete: boolean };
 }
 
 /** Files whose model reply could not be read, so no model judged them. */

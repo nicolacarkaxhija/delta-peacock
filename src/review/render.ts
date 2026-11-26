@@ -19,6 +19,8 @@ export interface RenderableReview {
   filtered: number;
   /** Findings on a form the repository lists as accepted. */
   accepted?: number;
+  /** Findings held for want of a readable exclusion verdict; incomplete when their share reached the warning share. */
+  held?: { count: number; checked: number; incomplete: boolean };
   /** Violations excused by an in-code waiver: reported here, never gating. */
   waived?: readonly {
     guidelineId: string;

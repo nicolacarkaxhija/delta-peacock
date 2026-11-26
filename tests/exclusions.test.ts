@@ -8,6 +8,7 @@ import type { Guideline } from "../src/domain/guideline.js";
 import { parseGuidelineContent } from "../src/guidelines/loader.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelReply, ModelRequest } from "../src/model/port.js";
+import { SpentError } from "../src/model/spent.js";
 import { applyExclusions } from "../src/review/exclusions.js";
 import type { ReviewReport } from "../src/review/report.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
@@ -147,7 +148,13 @@ describe("the exclusion check", () => {
     expect(outcome.kept).toEqual([FINDING]);
     expect(outcome.dropped).toEqual([]);
     expect(outcome.notices).toEqual([]);
-    expect(outcome.tally).toEqual({ checked: 1, excluded: 0, unverified: 0 });
+    expect(outcome.tally).toEqual({
+      checked: 1,
+      excluded: 0,
+      unverified: 0,
+      structured: 1,
+      plainText: 0,
+    });
   });
 
   it("holds a finding whose verdict names a sentence the list does not hold, and counts it", async () => {
@@ -155,7 +162,13 @@ describe("the exclusion check", () => {
     const outcome = await applyExclusions([FINDING], options(port));
     expect(outcome.kept).toEqual([]);
     expect(outcome.dropped[0]?.reason).toBe("exclusion-unverified");
-    expect(outcome.tally).toEqual({ checked: 1, excluded: 0, unverified: 1 });
+    expect(outcome.tally).toEqual({
+      checked: 1,
+      excluded: 0,
+      unverified: 1,
+      structured: 0,
+      plainText: 0,
+    });
     expect(outcome.notices).toEqual([
       'exclusions: src/app.js:2 guard-before-use: no verdict (the verdict names a sentence the guideline does not list: "Template conditions are presentation."); held, not posted',
     ]);
@@ -212,6 +225,68 @@ describe("the exclusion check", () => {
     expect(requests).toHaveLength(2);
   });
 
+  it("holds a finding whose verdict is empty, blank or missing on the plain text retry", async () => {
+    for (const answer of [
+      verdict({ exclusion: "" }),
+      verdict({ exclusion: "   " }),
+      verdict({ reason: "unsure" }),
+    ]) {
+      const { port } = scripted({ text: "", finishReason: "length" }, answer);
+      const outcome = await applyExclusions([FINDING], options(port));
+      expect(outcome.kept, answer).toEqual([]);
+      expect(outcome.tally.unverified, answer).toBe(1);
+      expect(outcome.notices[0], answer).toBe(
+        "exclusions: src/app.js:2 guard-before-use: no verdict (no readable verdict); held, not posted",
+      );
+    }
+  });
+
+  it("counts the tokens a failed structured call spent and names the path that answered", async () => {
+    const requests: ModelRequest[] = [];
+    const port: ModelPort = {
+      complete(request) {
+        requests.push(request);
+        if (request.structured !== undefined) {
+          return Promise.reject(
+            new SpentError(new Error("no object in the schema"), {
+              inputTokens: 70,
+              outputTokens: 7,
+            }),
+          );
+        }
+        return Promise.resolve({
+          text: verdict({ exclusion: EXCLUSION, reason: "a parameter" }),
+          usage: { inputTokens: 100, outputTokens: 10 },
+        });
+      },
+    };
+    const outcome = await applyExclusions([FINDING], options(port));
+    expect(outcome.usage).toMatchObject({ inputTokens: 170, outputTokens: 17 });
+    expect(outcome.tally).toEqual({
+      checked: 1,
+      excluded: 1,
+      unverified: 0,
+      structured: 0,
+      plainText: 1,
+    });
+    expect(outcome.notices[0]).toBe(
+      `exclusions: src/app.js:2 guard-before-use: dropped, the guideline excludes it (plain text answer): "${EXCLUSION}"`,
+    );
+  });
+
+  it("names the structured path when it answers", async () => {
+    const { port } = scripted(verdict({ exclusion: EXCLUSION, reason: "a parameter" }));
+    const outcome = await applyExclusions([FINDING], options(port));
+    expect(outcome.tally).toEqual({
+      checked: 1,
+      excluded: 1,
+      unverified: 0,
+      structured: 1,
+      plainText: 0,
+    });
+    expect(outcome.notices[0]).toContain("dropped, the guideline excludes it (structured answer)");
+  });
+
   it("asks once more as plain text after an unreadable reply, then holds the finding", async () => {
     const { port, requests } = scripted("no json here");
     const outcome = await applyExclusions([FINDING], options(port));
@@ -236,7 +311,13 @@ describe("the exclusion check", () => {
     const outcome = await applyExclusions([FINDING], options(port));
     expect(requests.map((request) => request.structured === undefined)).toEqual([false, true]);
     expect(outcome.kept).toEqual([]);
-    expect(outcome.tally).toEqual({ checked: 1, excluded: 0, unverified: 1 });
+    expect(outcome.tally).toEqual({
+      checked: 1,
+      excluded: 0,
+      unverified: 1,
+      structured: 0,
+      plainText: 0,
+    });
     expect(outcome.notices[0]).toContain("no verdict (connection reset); held, not posted");
   });
 
@@ -246,7 +327,13 @@ describe("the exclusion check", () => {
     const outcome = await applyExclusions([FINDING], options(port, plain));
     expect(requests).toHaveLength(0);
     expect(outcome.kept).toEqual([FINDING]);
-    expect(outcome.tally).toEqual({ checked: 0, excluded: 0, unverified: 0 });
+    expect(outcome.tally).toEqual({
+      checked: 0,
+      excluded: 0,
+      unverified: 0,
+      structured: 0,
+      plainText: 0,
+    });
   });
 });
 
@@ -320,10 +407,19 @@ describe("a review with an excluded finding", () => {
     const report = JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
     expect(code).toBe(0);
     expect(report.findings).toEqual([]);
-    expect(report.exclusions).toEqual({ checked: 1, excluded: 0, unverified: 1 });
+    expect(report.exclusions).toEqual({
+      checked: 1,
+      excluded: 0,
+      unverified: 1,
+      structured: 0,
+      plainText: 0,
+    });
     expect(report.rejectedCandidates?.map((one) => one.reason)).toContain("exclusion-unverified");
     expect(err.join("")).toContain(
       "exclusions: 1 of 1 finding(s) got no readable verdict and are held, not posted; the exclusion check did not do its job\n",
+    );
+    expect(err.join("")).toContain(
+      "warning: the exclusion check gave no readable verdict for 1 of 1 checked finding(s); this review is incomplete\n",
     );
   });
 

@@ -143,6 +143,10 @@ export interface ExclusionTally {
   excluded: number;
   /** Held, not posted: no readable verdict came back. */
   unverified: number;
+  /** Verdict calls the structured reply answered. */
+  structured: number;
+  /** Verdict calls only the plain text retry answered. */
+  plainText: number;
 }
 
 export interface ExclusionOutcome {
@@ -299,7 +303,13 @@ export async function applyExclusions(
   const kept: Finding[] = [];
   const dropped: RejectedCandidate[] = [];
   const notices: string[] = [];
-  const tally: ExclusionTally = { checked: 0, excluded: 0, unverified: 0 };
+  const tally: ExclusionTally = {
+    checked: 0,
+    excluded: 0,
+    unverified: 0,
+    structured: 0,
+    plainText: 0,
+  };
   let usage: ModelUsage | undefined;
   for (const one of outcomes) {
     if (one.checked === true) tally.checked += 1;
