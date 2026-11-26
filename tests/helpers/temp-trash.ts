@@ -14,7 +14,12 @@ export function trashPrefix(run: string): string {
 }
 
 /** Deletes the trash of the given run, and any run's trash once it is stale. */
-export function sweepTrash(parent: string, run: string | undefined): void {
+export function sweepTrash(
+  parent: string,
+  run: string | undefined,
+  onListed: (name: string) => void = () => undefined,
+): void {
+  void onListed;
   const now = Date.now();
   for (const name of readdirSync(parent).filter((entry) => entry.startsWith(TRASH))) {
     const folder = path.join(parent, name);

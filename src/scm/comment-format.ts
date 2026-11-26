@@ -286,6 +286,9 @@ export function isSummaryBody(body: string, presentation: Presentation): boolean
   );
 }
 
+/** How many held findings the summary names one by one. */
+export const HELD_LISTED = 1000;
+
 export interface SummaryInput {
   findings: readonly Finding[];
   proposals: readonly ProposedGuideline[];

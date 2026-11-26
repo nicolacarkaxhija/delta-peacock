@@ -4,7 +4,7 @@ import type { Finding, Violation } from "../src/domain/finding.js";
 import { evaluateGate } from "../src/domain/gate.js";
 import { renderReview } from "../src/review/render.js";
 import { createBitbucketPort } from "../src/scm/bitbucket.js";
-import { renderSummaryBody } from "../src/scm/comment-format.js";
+import { HELD_LISTED, renderSummaryBody } from "../src/scm/comment-format.js";
 import type { ScmPort } from "../src/scm/port.js";
 import { publishReview } from "../src/scm/publish.js";
 import { runCli } from "../src/index.js";
@@ -106,6 +106,22 @@ describe("held findings in the summary", () => {
 });
 
 describe("held findings by name", () => {
+  it("caps the held list and says how many more there are", () => {
+    const many = Array.from({ length: HELD_LISTED + 3 }, (_, index) => ({
+      ...FINDING,
+      line: index + 1,
+    }));
+    const body = renderSummaryBody({
+      ...empty,
+      findings: [],
+      held: { findings: many, checked: many.length, incomplete: true },
+    });
+    expect(
+      body.split("\n").filter((line) => line.endsWith(": held, no readable exclusion verdict")),
+    ).toHaveLength(HELD_LISTED);
+    expect(body).toContain("- and 3 more held findings");
+  });
+
   it("lists each held finding by file and line in the summary", () => {
     const body = renderSummaryBody({
       ...empty,
