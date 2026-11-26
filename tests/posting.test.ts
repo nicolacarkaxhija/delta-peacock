@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ConfigSchema } from "../src/config/schema.js";
 import type { Finding } from "../src/domain/finding.js";
-import { evidenceFlag, isPosted } from "../src/review/posting.js";
+import { evidenceFlag, isPosted, skippedCheckContext } from "../src/review/posting.js";
 import { buildReviewPrompt } from "../src/review/prompt.js";
 
 const VIOLATION: Finding = {
@@ -87,5 +87,20 @@ describe("the review prompt on confidence", () => {
     const evidence = buildReviewPrompt([], "", { generalPass: false, evidence: true }).system;
     expect(evidence).toContain(LEAVE_OUT);
     expect(evidence).not.toContain(FILTERED);
+  });
+});
+
+describe("skippedCheckContext", () => {
+  const guideline = { exclusions: ["A fallback is not a tunable value."] };
+  const byId = new Map([["limits-from-config", guideline]]);
+
+  it("marks a model finding whose exclusion check was skipped, never a check finding at the same place", () => {
+    const fromCheck: Finding = { ...VIOLATION, confidence: 1 };
+    const contextOf = skippedCheckContext([VIOLATION], [fromCheck], byId);
+    expect(contextOf(VIOLATION)).toEqual({});
+    const skippedOnly = skippedCheckContext([VIOLATION], [], byId);
+    expect(skippedOnly(VIOLATION)).toEqual({ verdictsAsked: false, guideline });
+    expect(skippedOnly({ ...VIOLATION, line: 9 })).toEqual({});
+    expect(skippedOnly(OBSERVATION)).toEqual({});
   });
 });

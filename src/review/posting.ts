@@ -22,3 +22,15 @@ export function evidenceFlag(review: Review): { evidence?: true } {
   void review;
   return {};
 }
+
+/** The posting context of each finding: a model finding whose exclusion check was skipped, and that no check found too, asked no verdict. */
+export function skippedCheckContext(
+  skipped: readonly Finding[],
+  fromChecks: readonly Finding[],
+  guidelinesById: ReadonlyMap<string, Pick<Guideline, "exclusions">>,
+): (finding: Finding) => PostingContext {
+  void skipped;
+  void fromChecks;
+  void guidelinesById;
+  return () => ({});
+}

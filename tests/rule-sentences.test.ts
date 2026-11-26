@@ -47,6 +47,9 @@ describe("quotesRuleSentence", () => {
       true,
     );
     expect(quotesRuleSentence(`*${RULE}*`, GUIDELINE)).toBe(true);
+    const unlisted: Guideline = { ...GUIDELINE };
+    delete unlisted.exclusions;
+    expect(quotesRuleSentence(EXCLUSION, unlisted)).toBe(true);
   });
 
   it("refuses a passage of a sentence, a near quote, an example line, a label, an exclusion and nothing", () => {
@@ -70,11 +73,15 @@ const LISTED: Guideline = {
     "",
     "Reviewers refuse these shapes:",
     "",
-    "- a limit compared to decide behaviour",
+    "- a limit compared to decide behavior",
     "- an amount written into a helper",
     "",
     "1. Name the setting in the guideline.",
     "2. Give its default a reason;",
+    "",
+    "These need a setting:",
+    "- a threshold a business user",
+    "  could change",
   ].join("\n"),
   exclusions: [],
 };
@@ -92,6 +99,8 @@ describe("quotesRuleSentence on punctuation and lists", () => {
       "- an amount written into a helper.",
       "Read a value from configuration, e.g. a setting, never inline.",
       "Name it after its use, i.e. what it limits",
+      "These need a setting",
+      "a threshold a business user could change",
     ]) {
       expect(quotesRuleSentence(quote, LISTED), quote).toBe(true);
     }
@@ -99,7 +108,7 @@ describe("quotesRuleSentence on punctuation and lists", () => {
 
   it("keeps each bullet a sentence of its own and splits no sentence at an abbreviation", () => {
     for (const quote of [
-      "a limit compared to decide behaviour an amount written into a helper",
+      "a limit compared to decide behavior an amount written into a helper",
       "Read a value from configuration, e.g.",
       "a setting, never inline.",
       "Name it after its use, i.e.",
@@ -144,87 +153,174 @@ const bodied = (...lines: string[]): Guideline => ({
   exclusions: [],
 });
 
-describe("quotesRuleSentence on abbreviations that may end a sentence", () => {
+describe("quotesRuleSentence on abbreviations", () => {
   const rule = bodied(
     "Never log secrets, tokens, etc. Always hash passwords.",
     "",
+    "Keep logs, traces, etc. 30 days at most.",
+    "",
     "Weigh speed vs. cost before caching. Pick one vs. Never both.",
+    "",
+    "Use a guard, e.g. Optional chaining, before reading.",
   );
 
-  it("ends a sentence at etc. or vs. before a capitalised word and nowhere else", () => {
+  it("ends a sentence at etc. before a capital or a digit, and never at vs. or e.g.", () => {
     for (const [quote, citable] of [
       ["Never log secrets, tokens, etc.", true],
       ["Always hash passwords.", true],
       ["Never log secrets, tokens, etc. Always hash passwords.", false],
+      ["Keep logs, traces, etc.", true],
+      ["30 days at most.", true],
       ["Weigh speed vs. cost before caching.", true],
       ["Weigh speed vs.", false],
-      ["Pick one vs.", true],
-      ["Never both.", true],
+      ["Pick one vs.", false],
+      ["Pick one vs. Never both.", true],
+      ["Use a guard, e.g. Optional chaining, before reading.", true],
+      ["Use a guard, e.g.", false],
     ] as const) {
       expect(quotesRuleSentence(quote, rule), quote).toBe(citable);
     }
   });
 });
 
-describe("quotesRuleSentence on example labels and code", () => {
+describe("quotesRuleSentence on example blocks", () => {
   const rule = bodied(
     "Hash every password before it is stored.",
     "",
     "Good: use hash().",
     "",
-    "Bad: `eval(x)`",
+    "Bad example:",
+    "",
+    "Good example: hash it.",
+    "",
+    "- Bad: eval(x)",
+    "",
+    "1. Good: x",
+    "",
+    "* **Good**: use hash()",
+    "",
+    "> Bad: quoted",
+    "",
+    "Incorrect:",
+    "",
+    "Example (bad):",
     "",
     "**Bad:**",
     "",
     "Bad",
     "",
-    "Good (looks like a literal, is not one):",
-    "",
-    "    eval(input);",
-    "    store(password);",
+    "Good: x. Always escape output.",
     "",
     "Bad code is refused in review.",
+    "",
+    "Do not log a token.",
   );
 
-  it("never cites a label, a label with its example, or an indented code line, one row each", () => {
+  it("never cites an example block, whatever follows its label, one row each", () => {
     for (const quote of [
       "Good: use hash().",
       "use hash().",
-      "Bad: `eval(x)`",
+      "Bad example",
+      "Good example: hash it.",
+      "hash it.",
+      "Bad: eval(x)",
+      "- Bad: eval(x)",
+      "Good: x",
+      "1. Good: x",
+      "**Good**: use hash()",
+      "Bad: quoted",
+      "Incorrect",
+      "Example (bad)",
       "**Bad:**",
       "Bad",
-      "Good (looks like a literal, is not one)",
-      "eval(input);",
-      "store(password);",
+      "Always escape output.",
+      "Good: x. Always escape output.",
     ]) {
       expect(quotesRuleSentence(quote, rule), quote).toBe(false);
     }
   });
 
-  it("still cites prose that starts with the word", () => {
-    expect(quotesRuleSentence("Hash every password before it is stored.", rule)).toBe(true);
-    expect(quotesRuleSentence("Bad code is refused in review.", rule)).toBe(true);
+  it("still cites prose that starts with a label word and has no colon after it", () => {
+    for (const quote of [
+      "Hash every password before it is stored.",
+      "Bad code is refused in review.",
+      "Do not log a token.",
+    ]) {
+      expect(quotesRuleSentence(quote, rule), quote).toBe(true);
+    }
   });
 });
 
-describe("quotesRuleSentence on bare lines", () => {
+describe("quotesRuleSentence on code and quotes", () => {
   const rule = bodied(
-    "# Use the logger",
-    "Write through the module logger",
-    "Never print to the console",
-    "A value is read from",
-    "configuration, never written inline.",
+    "Hash every password.",
+    "",
+    "```js",
+    "Never cite this line.",
+    "```",
+    "",
+    "~~~",
+    "Nor this one.",
+    "~~~",
+    "",
+    "    Nor an indented line.",
+    "",
+    "> Nor a quoted rule.",
+    "> Nor its second line.",
   );
 
-  it("keeps each bare line a unit of its own and joins a wrapped sentence", () => {
+  it("never cites fenced code with backticks or tildes, indented code or a block quote", () => {
+    for (const quote of [
+      "Never cite this line.",
+      "Nor this one.",
+      "Nor an indented line.",
+      "Nor a quoted rule.",
+      "Nor its second line.",
+    ]) {
+      expect(quotesRuleSentence(quote, rule), quote).toBe(false);
+    }
+    expect(quotesRuleSentence("Hash every password.", rule)).toBe(true);
+  });
+});
+
+describe("quotesRuleSentence on paragraphs, items and headings", () => {
+  it("joins every soft wrapped line into its paragraph, whatever the next line starts with", () => {
+    for (const next of [
+      "`logger.info` is used.",
+      "Logger is used.",
+      "2 loggers are used.",
+      '"logger" is used.',
+      "(the logger) is used.",
+    ]) {
+      const rule = bodied("A value is read through the", next);
+      const whole = `A value is read through the ${next}`;
+      expect(quotesRuleSentence(whole, rule), whole).toBe(true);
+      expect(quotesRuleSentence("A value is read through the", rule), next).toBe(false);
+      expect(quotesRuleSentence(next, rule), next).toBe(false);
+    }
+  });
+
+  it("makes two bare lines one unit, so only both together are a valid quote", () => {
+    const rule = bodied("use const", "prefer let");
+    expect(quotesRuleSentence("use const prefer let", rule)).toBe(true);
+    expect(quotesRuleSentence("use const", rule)).toBe(false);
+    expect(quotesRuleSentence("prefer let", rule)).toBe(false);
+  });
+
+  it("keeps a heading and a wrapped list item one unit each, even with several sentences", () => {
+    const rule = bodied(
+      "# Use the logger",
+      "Write through the module logger.",
+      "",
+      "- Never print to the console. Use the logger.",
+      "  It keeps the format.",
+    );
     for (const [quote, citable] of [
       ["Use the logger", true],
-      ["Write through the module logger", true],
-      ["Never print to the console", true],
-      ["Use the logger Write through the module logger", false],
-      ["Write through the module logger Never print to the console", false],
-      ["A value is read from configuration, never written inline.", true],
-      ["A value is read from", false],
+      ["Write through the module logger.", true],
+      ["Use the logger Write through the module logger.", false],
+      ["Never print to the console. Use the logger. It keeps the format.", true],
+      ["Never print to the console.", false],
     ] as const) {
       expect(quotesRuleSentence(quote, rule), quote).toBe(citable);
     }
