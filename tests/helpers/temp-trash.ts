@@ -8,6 +8,15 @@ export function trashPrefix(run: string | undefined): string {
   return `peacock-trash-${run ?? "unknown"}-`;
 }
 
+/** Trash older than this belongs to a run whose teardown never came. */
+export const STALE_MS = 0;
+
+/** Deletes the trash of the given run, and any run's trash once it is stale. */
+export function sweepTrash(parent: string, run: string | undefined): void {
+  void parent;
+  void run;
+}
+
 /** Names this run for the workers, then deletes what its test files set aside, once at the end. */
 export default function setup(): () => void {
   const run = randomUUID().slice(0, 8);

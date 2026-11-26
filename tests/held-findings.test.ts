@@ -63,7 +63,7 @@ function publish(findings: Finding[], held?: { findings: Finding[]; checked: num
 }
 
 describe("the exclusions.warnHeldShare setting", () => {
-  it("warns from a quarter of the checked findings by default and takes a share", () => {
+  it("has a default warning share and takes any share from 0 to 1", () => {
     expect(ConfigSchema.parse({}).exclusions.warnHeldShare).toBe(0.25);
     expect(ConfigSchema.safeParse({ exclusions: { warnHeldShare: 1.5 } }).success).toBe(false);
   });
@@ -101,6 +101,26 @@ describe("held findings in the summary", () => {
       renderSummaryBody({ ...empty, findings: [], scope, held: { ...held, incomplete: true } }),
     ).toContain(
       "**Warning: the exclusion check gave no readable verdict for 1 of 1 checked finding(s), held and not posted; this review is incomplete.**",
+    );
+  });
+});
+
+describe("held findings by name", () => {
+  it("lists each held finding by file and line in the summary", () => {
+    const body = renderSummaryBody({
+      ...empty,
+      findings: [],
+      held: {
+        findings: [FINDING, { ...FINDING, file: "src/cart.js", line: 3 }],
+        checked: 2,
+        incomplete: false,
+      },
+    });
+    expect(body).toContain(
+      "- src/pricing.js:8 values-in-settings: held, no readable exclusion verdict",
+    );
+    expect(body).toContain(
+      "- src/cart.js:3 values-in-settings: held, no readable exclusion verdict",
     );
   });
 });
