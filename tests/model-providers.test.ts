@@ -4,6 +4,7 @@ import { parseReviewResponse } from "../src/review/parse.js";
 import { loadConfig } from "../src/config/loader.js";
 import { ToolError } from "../src/errors.js";
 import { buildModelPort } from "../src/model/build.js";
+import { z } from "zod";
 import { createBedrockPort } from "../src/model/bedrock.js";
 import { createOpenAiishPort } from "../src/model/openaiish.js";
 import { addUsage, anyRateConfigured, computeCost } from "../src/model/usage.js";
@@ -149,6 +150,26 @@ describe("bedrock adapter contract", () => {
       fetch,
     });
   }
+
+  it("asks for a structured reply in the given schema and returns the object as the reply text", async () => {
+    const { calls, fetch } = capturingFetch({
+      output: {
+        message: {
+          role: "assistant",
+          content: [{ toolUse: { toolUseId: "t1", name: "json", input: { answer: "none" } } }],
+        },
+      },
+      stopReason: "tool_use",
+      usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+    });
+    const reply = await bedrockPort("eu.anthropic.claude-test", fetch).complete({
+      system: "sys",
+      user: "usr",
+      structured: { name: "verdict", schema: z.object({ answer: z.enum(["none", "some"]) }) },
+    });
+    expect(JSON.stringify(calls[0]?.body)).toContain('"enum":["none","some"]');
+    expect(JSON.parse(reply.text)).toEqual({ answer: "none" });
+  });
 
   it("puts a cache point after the stable prefix of an Anthropic model's system prompt", async () => {
     const { calls, fetch } = capturingFetch(canned);
