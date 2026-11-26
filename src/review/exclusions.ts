@@ -61,7 +61,7 @@ function excerptAround(lines: readonly string[], line: number): string {
   const to = Math.min(lines.length, line + AFTER);
   const out: string[] = [];
   for (let at = from; at <= to; at += 1) {
-    out.push(`${at === line ? ">>" : "  "}${String(at).padStart(4)}| ${lines[at - 1] ?? ""}`);
+    out.push(`${at === line ? ">>" : "  "}${String(at).padStart(4)}| ${String(lines[at - 1])}`);
   }
   return out.join("\n");
 }
