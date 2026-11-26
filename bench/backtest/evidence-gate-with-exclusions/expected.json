@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "src/pricing.js",
+      "line": 8,
+      "guidelineId": "values-in-settings",
+      "severity": "MAJOR",
+      "why": "an amount compared inline; the case proves it is posted in every repeat whatever confidence the model gives it"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "src/pricing.js",
+      "line": 4,
+      "guidelineId": "values-in-settings",
+      "why": "a default used only when the setting is missing, which the guideline lists as an exclusion"
+    }
+  ]
+}

@@ -42,8 +42,10 @@ export const ReviewSchema = z.strictObject({
   exclude: z.array(z.string()).default([]),
   /** Reviews larger than this are skipped, never truncated. */
   maxDiffBytes: z.number().int().positive().default(1_000_000),
-  /** Findings under this confidence stay in the report but are never rendered or posted. */
+  /** Findings under this confidence stay in the report but are never rendered or posted; under `posting: evidence` it gates observations only. */
   confidenceFloor: z.number().min(0).max(1).default(0.5),
+  /** What decides whether a violation is posted: its evidence (a placed quote, the guideline's own sentence, a cleared exclusion verdict) or the model's confidence against the floor. */
+  posting: z.enum(["evidence", "confidence"]).default("evidence"),
   /** Opt-in: let the model report observations that cite no guideline. */
   generalPass: z.boolean().default(false),
   /** Opt-in: turn recurring uncited candidates into promotable guideline drafts. */

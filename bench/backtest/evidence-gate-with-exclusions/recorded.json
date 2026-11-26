@@ -1,0 +1,24 @@
+{
+  "findings": [
+    {
+      "guidelineId": "values-in-settings",
+      "file": "src/pricing.js",
+      "line": 4,
+      "quote": "  return settings.get(\"lookbackDays\") || 30;",
+      "guidelineQuote": "A business value such as a limit or an amount is read from a setting, never compared inline.",
+      "title": "Lookback days written inline",
+      "body": "The number 30 is written inline; read it from a setting.",
+      "confidence": 0.4
+    },
+    {
+      "guidelineId": "values-in-settings",
+      "file": "src/pricing.js",
+      "line": 8,
+      "quote": "  return basket.total >= 50;",
+      "guidelineQuote": "A business value such as a limit or an amount is read from a setting, never compared inline.",
+      "title": "Free shipping amount compared inline",
+      "body": "The amount 50 is compared inline; read it from a setting.",
+      "confidence": 0.4
+    }
+  ]
+}

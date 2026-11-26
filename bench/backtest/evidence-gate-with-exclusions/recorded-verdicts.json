@@ -1,0 +1,42 @@
+{
+  "structured": {
+    "default": [
+      {
+        "text": "{\"exclusion\":\"A default used only when the setting is missing is not a business value.\",\"reason\":\"30 applies only when the setting is unset.\"}",
+        "finishReason": "stop"
+      }
+    ],
+    "amount": [
+      {
+        "text": "{\"exclusion\":\"none\",\"reason\":\"50 is an amount compared inline.\"}",
+        "finishReason": "stop"
+      }
+    ]
+  },
+  "truncated, then fenced on the plain retry": {
+    "default": [
+      { "text": "", "finishReason": "length" },
+      {
+        "text": "```json\n{\"exclusion\": \"A default used only when the setting is missing is not a business value.\", \"reason\": \"a fallback\"}\n```",
+        "finishReason": "stop"
+      }
+    ],
+    "amount": [
+      { "text": "", "finishReason": "length" },
+      {
+        "text": "Verdict: {\"exclusion\": \"none\", \"reason\": \"an amount\"}",
+        "finishReason": "stop"
+      }
+    ]
+  },
+  "unreadable twice": {
+    "default": [
+      { "text": "", "finishReason": "length" },
+      { "text": "{\"verdict\": \"excluded\"}", "finishReason": "stop" }
+    ],
+    "amount": [
+      { "text": "", "finishReason": "length" },
+      { "text": "I cannot decide this.", "finishReason": "stop" }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+diff --git a/src/pricing.js b/src/pricing.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/pricing.js
+@@ -0,0 +1,9 @@
++import { settings } from "./settings.js";
++
++export function lookbackDays() {
++  return settings.get("lookbackDays") || 30;
++}
++
++export function freeShipping(basket) {
++  return basket.total >= 50;
++}
