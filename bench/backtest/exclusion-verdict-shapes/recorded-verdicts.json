@@ -1,0 +1,42 @@
+{
+  "structured": {
+    "fallback": [
+      {
+        "text": "{\"exclusion\":\"A fallback applied only when the configured value is absent is not a tunable value.\",\"reason\":\"30 applies only when the setting is unset.\"}",
+        "finishReason": "stop"
+      }
+    ],
+    "amount": [
+      {
+        "text": "{\"exclusion\":\"none\",\"reason\":\"50 is an amount compared inline.\"}",
+        "finishReason": "stop"
+      }
+    ]
+  },
+  "truncated, then fenced on the plain retry": {
+    "fallback": [
+      { "text": "", "finishReason": "length" },
+      {
+        "text": "```json\n{\"exclusion\": \"A fallback applied only when the configured value is absent is not a tunable value.\", \"reason\": \"a fallback\"}\n```",
+        "finishReason": "stop"
+      }
+    ],
+    "amount": [
+      { "text": "", "finishReason": "length" },
+      {
+        "text": "Verdict: {\"exclusion\": \"none\", \"reason\": \"an amount\"}",
+        "finishReason": "stop"
+      }
+    ]
+  },
+  "unreadable twice": {
+    "fallback": [
+      { "text": "", "finishReason": "length" },
+      { "text": "{\"verdict\": \"excluded\"}", "finishReason": "stop" }
+    ],
+    "amount": [
+      { "text": "", "finishReason": "length" },
+      { "text": "I cannot decide this.", "finishReason": "stop" }
+    ]
+  }
+}

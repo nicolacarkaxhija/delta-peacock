@@ -1,0 +1,24 @@
+{
+  "findings": [
+    {
+      "guidelineId": "limits-from-config",
+      "file": "src/pricing.js",
+      "line": 4,
+      "quote": "  return settings.get(\"retentionDays\") || 30;",
+      "guidelineQuote": "A limit or an amount that operations may tune is read from configuration, never compared as a literal.",
+      "title": "Retention days written inline",
+      "body": "The number 30 is written inline; read it from a setting.",
+      "confidence": 0.9
+    },
+    {
+      "guidelineId": "limits-from-config",
+      "file": "src/pricing.js",
+      "line": 8,
+      "quote": "  return basket.total >= 50;",
+      "guidelineQuote": "A limit or an amount that operations may tune is read from configuration, never compared as a literal.",
+      "title": "Free shipping amount compared inline",
+      "body": "The amount 50 is compared inline; read it from a setting.",
+      "confidence": 0.9
+    }
+  ]
+}

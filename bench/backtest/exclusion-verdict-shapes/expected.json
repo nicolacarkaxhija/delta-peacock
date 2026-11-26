@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "src/pricing.js",
+      "line": 8,
+      "guidelineId": "limits-from-config",
+      "severity": "MAJOR",
+      "why": "an amount compared as a literal; the case proves every readable verdict shape keeps it in every repeat"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "src/pricing.js",
+      "line": 4,
+      "guidelineId": "limits-from-config",
+      "why": "a fallback applied only when the setting is absent, which the guideline lists as an exclusion"
+    }
+  ]
+}
