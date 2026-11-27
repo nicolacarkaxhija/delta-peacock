@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.11.1...delta-peacock-v0.12.0) (2026-11-27)
+
+
+### Features
+
+* **review:** add review.posting: evidence (environment variable DELTA_PEACOCK_REVIEW_POSTING), an opt in that posts a violation on its evidence (a placed quote, a whole sentence of its rule text, an explicit exclusion verdict) instead of its reported confidence; audit follows the same rule and, since it asks no exclusion verdict, holds a violation whose guideline lists exclusions; the default stays confidence and will change to evidence in a later release ([39648cc](https://github.com/nicolacarkaxhija/delta-peacock/commit/39648cc8c2b8767cc510e48a208a9824b25a60a6))
+
+
+### Bug Fixes
+
+* **exclusions:** a finding whose exclusion verdict is unreadable used to be posted as if no exclusion applied; it is now held: never posted, not counted for the gate or the exit code, its earlier comment, thread and task left as they are, and the log and the summary name it as held; when held findings reach exclusions.warnHeldShare of the checked ones (default 0.25, environment variable DELTA_PEACOCK_EXCLUSIONS_WARN_HELD_SHARE) both warn that the review is incomplete ([ea83ebb](https://github.com/nicolacarkaxhija/delta-peacock/commit/ea83ebb6b7f2630fc3aae1b911f989dbf4a5f65f))
+
 ## [0.11.1](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.11.0...delta-peacock-v0.11.1) (2026-11-17)
 
 
