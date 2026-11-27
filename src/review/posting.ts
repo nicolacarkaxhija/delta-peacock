@@ -21,11 +21,16 @@ export interface PostingContext {
  */
 export function isPosted(finding: Finding, review: Review, context: PostingContext = {}): boolean {
   if (review.posting === "evidence" && finding.kind === "violation") {
-    if (finding.unplaced === true) return false;
+    if (isHeldUnplaced(finding, review)) return false;
     const listed = context.guideline?.exclusions?.length ?? 0;
     return !(context.verdictsAsked === false && listed > 0);
   }
   return (finding.confidence ?? 1) >= review.confidenceFloor;
+}
+
+/** True for a violation held under evidence because its quote sits on no line; the report counts it apart from the floor. */
+export function isHeldUnplaced(finding: Finding, review: Review): boolean {
+  return review.posting === "evidence" && finding.kind === "violation" && finding.unplaced === true;
 }
 
 /** The option the prompt and the parser take under posting on evidence. */

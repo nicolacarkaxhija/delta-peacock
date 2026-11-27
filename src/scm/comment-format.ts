@@ -296,6 +296,8 @@ export interface SummaryInput {
   /** Model findings on no added or edited line of the change. */
   droppedOffChange?: number;
   filtered: number;
+  /** Violations held under posting: evidence because their quote sits on no line. */
+  unplaced?: number;
   /** Findings on a form the repository lists as accepted; counted, never posted. */
   accepted?: number;
   gate: GateDecision;
@@ -771,6 +773,7 @@ export function renderSummaryBody(
       ? [plural(input.accepted, "accepted finding")]
       : []),
     ...(input.filtered > 0 ? [plural(input.filtered, "low-confidence finding")] : []),
+    ...((input.unplaced ?? 0) > 0 ? [plural(input.unplaced ?? 0, "unplaced violation")] : []),
     ...(input.droppedUncited > 0
       ? [`${plural(input.droppedUncited, "finding")} citing no guideline`]
       : []),

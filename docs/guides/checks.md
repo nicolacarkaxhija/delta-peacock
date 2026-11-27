@@ -471,7 +471,9 @@ the model reports: its quote placed on a line of the change, a whole sentence of
 the cited sentence, and, under a guideline with `exclusions`, a verdict that cleared it. A cited
 sentence that is not a whole sentence of the rule text drops the finding as misquoted, a finding
 whose quote could not be placed is held, and a model finding whose exclusion check was skipped
-(the model could not run for part of the change) is held.
+(the model could not run for part of the change) is held. A held finding that sits on no line stays
+in the report's `filtered` list with `unplaced: true` and the note that says why, and the log and
+the summary comment count it as unplaced rather than under the confidence floor.
 
 A citable unit follows the markdown structure of the guideline body:
 
