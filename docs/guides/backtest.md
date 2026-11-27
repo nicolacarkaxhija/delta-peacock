@@ -107,7 +107,9 @@ It fails when any finding is wrong, when a finding appears in some repeats and n
 The table shows per case: the findings expected, then found, right, wrong and missed per repeat,
 the findings the review dropped off the change per repeat (see
 [findings on changed lines](checks.md#findings-on-changed-lines)), the drift, the mean time and
-the cost of all repeats. The total line and `summary.json` carry the same count as `offChange`. Logs and reports of every review land in
+the cost of all repeats. The total line and `summary.json` carry the same count as `offChange`; a finding withheld on a
+re-indented line is not in that count and shows only as `droppedReindentedFindings` in the run's
+report. Logs and reports of every review land in
 `<cases>/runs/<timestamp>/`, with each refused candidate in the log for tracing a miss.
 
 ## The baseline

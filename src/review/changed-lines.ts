@@ -15,8 +15,9 @@ function spanOf(finding: Finding): number[] {
 
 /**
  * Keeps a model finding only where the change added or edited a line under
- * it; hunk context and a line that only changes its whitespace do not count. A guideline that declares `scope: file`,
- * a finding with no line and an observation pass unchanged.
+ * it; hunk context and a line that only changes its indentation do not count.
+ * A guideline that declares `scope: file`, a finding with no line and an
+ * observation pass unchanged.
  */
 export function keepOnChangedLines(
   findings: readonly Finding[],

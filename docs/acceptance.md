@@ -102,9 +102,11 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   `pnpm exec vitest run tests/posting tests/rule-sentences tests/evidence-gate-backtest tests/evidence-skipped-check tests/audit-posting`.
 - `findings on changed lines`: a model finding whose span touches no added or edited line is
   dropped before the exclusion check and counted in the report, the log, the summary comment and
-  the backtest, unless its guideline declares `scope: file`; a line that only changes the
-  whitespace of a removed line of its hunk is not an edited line, and a finding on such lines alone
-  is withheld as `reindented` and counted apart in the report, the log and the summary comment.
+  the backtest, unless its guideline declares `scope: file`; a line that differs from a removed
+  line of its hunk only in leading and trailing whitespace, in order, holding a word character and
+  outside a whitespace significant file, is not an edited line, and a finding on such lines alone
+  is withheld as `reindented` and counted apart in the report, the log and the summary comment
+  (the backtest counts off-change drops only; a re-indented drop shows in each run's report).
   On its own: `pnpm exec vitest run tests/changed-lines tests/git-diff tests/backtest.test.ts`.
 - `unreadable replies`: every batch's prompt leaves the window room for the reply and a margin, a
   file over the batch budget is cut at its hunks, a reply with no readable JSON is asked again

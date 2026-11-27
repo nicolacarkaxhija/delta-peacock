@@ -332,10 +332,17 @@ the report's `rejectedCandidates` with the reason `off-change` and counted in
 `droppedOffChangeFindings`, in the log line `n finding(s) off the change` and in the summary
 comment's `Not posted: n findings off the change`.
 
-An added line that reads the same as a removed line of the same hunk once all whitespace is gone
-is not written by the change either: the change only re-indented it, for example inside a new
-wrapper. Each removed line pairs with one added line. A finding whose added lines are all such
-lines is withheld the same way, with the reason `reindented` in `rejectedCandidates`, counted in
+An added line that differs from a removed line of the same hunk only in its leading and trailing
+whitespace is not written by the change either: the change only re-indented it, for example inside
+a new wrapper. Its inner text must be identical, so a space removed between two tokens or inside a
+string is an edit. The pairing keeps order: the removed and added lines of a hunk are matched as
+their longest common sequence, so a line moved past others is an edit, and each removed line pairs
+with at most one added line. A line with no word character, such as a lone brace or a blank line,
+never pairs, and neither does any line of a file whose indentation is syntax: the list
+`WHITESPACE_SIGNIFICANT` in `src/git/diff.ts` (YAML, Python and other indentation based formats),
+and any file with no extension, such as a Makefile. Withholding a finding is the risky direction,
+so in doubt a line counts as added. A finding whose added lines are all re-indented lines is
+withheld the same way, with the reason `reindented` in `rejectedCandidates`, counted in
 `droppedReindentedFindings`, in the log line `n finding(s) withheld: their line is only
 re-indented` and in the summary comment's `Not posted: n findings on re-indented lines`.
 
