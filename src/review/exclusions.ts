@@ -169,6 +169,8 @@ export interface ExclusionOptions {
   linesOf: (file: string) => readonly string[] | undefined;
   /** Calls in flight at once. */
   concurrency: number;
+  /** How each verdict call asks; pick when unset. */
+  verdict?: "pick" | "each";
 }
 
 /** What one verdict call settled, shared by every finding with the same key. */

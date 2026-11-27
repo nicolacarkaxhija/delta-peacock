@@ -1,0 +1,24 @@
+{
+  "findings": [
+    {
+      "guidelineId": "views-show-only",
+      "file": "src/views/facets.js",
+      "line": 4,
+      "quote": "  const totals = require(\"../totals.js\");",
+      "guidelineQuote": "A require in a view is a finding.",
+      "title": "View requires a module",
+      "body": "The view requires the totals module; the model should carry the count.",
+      "confidence": 0.8
+    },
+    {
+      "guidelineId": "views-show-only",
+      "file": "src/views/facets.js",
+      "line": 6,
+      "quote": "    const isColor = facet.id.indexOf(\"color\") > -1;",
+      "guidelineQuote": "A computation that produces new data in a view is a finding.",
+      "title": "View derives a color flag from facet ids",
+      "body": "The view searches facet ids to classify them; the model should provide the flag.",
+      "confidence": 0.55
+    }
+  ]
+}

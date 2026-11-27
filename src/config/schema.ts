@@ -182,6 +182,8 @@ export const ExclusionsSchema = z.strictObject({
   model: ModelRefSchema.optional(),
   /** From this share of checked findings held for want of a readable verdict, the run warns that the review is incomplete. */
   warnHeldShare: z.number().min(0).max(1).default(WARN_HELD_SHARE),
+  /** pick asks for one listed sentence or none; each asks a yes or no per listed sentence and a copy of the flagged line. */
+  verdict: z.enum(["pick", "each"]).default("pick"),
 });
 
 /** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */

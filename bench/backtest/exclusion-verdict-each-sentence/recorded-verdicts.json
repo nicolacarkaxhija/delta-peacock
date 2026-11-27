@@ -1,0 +1,10 @@
+{
+  "pick": {
+    "require": [{ "text": "{\"exclusion\":\"none\",\"reason\":\"a require is named by the rule\"}", "finishReason": "stop" }],
+    "flag": [{ "text": "{\"exclusion\":\"none\",\"reason\":\"the line searches a string to compute a flag\"}", "finishReason": "stop" }]
+  },
+  "each": {
+    "require": [{ "text": "{\"line\":\"  const totals = require(\\\"../totals.js\\\");\",\"sentences\":[{\"n\":1,\"covers\":\"no\"},{\"n\":2,\"covers\":\"no\"}],\"reason\":\"a require is neither formatting nor a stored text check\"}", "finishReason": "stop" }],
+    "flag": [{ "text": "{\"line\":\"    const isColor = facet.id.indexOf(\\\"color\\\") > -1;\",\"sentences\":[{\"n\":1,\"covers\":\"no\"},{\"n\":2,\"covers\":\"yes\"}],\"reason\":\"a flag stored from indexOf on a facet id\"}", "finishReason": "stop" }]
+  }
+}

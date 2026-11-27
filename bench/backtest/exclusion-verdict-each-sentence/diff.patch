@@ -1,0 +1,15 @@
+diff --git a/src/views/facets.js b/src/views/facets.js
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/src/views/facets.js
+@@ -0,0 +1,9 @@
++import { escape } from "../escape.js";
++
++export function facetList(model) {
++  const totals = require("../totals.js");
++  return model.facets.map((facet) => {
++    const isColor = facet.id.indexOf("color") > -1;
++    return `<li class="${isColor ? "swatch" : "text"}">${escape(facet.label)} ${totals.count(facet)}</li>`;
++  });
++}

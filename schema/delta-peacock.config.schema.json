@@ -738,6 +738,14 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "verdict": {
+          "default": "pick",
+          "type": "string",
+          "enum": [
+            "pick",
+            "each"
+          ]
         }
       },
       "additionalProperties": false

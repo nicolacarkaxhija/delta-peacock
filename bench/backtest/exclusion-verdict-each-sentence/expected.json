@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "src/views/facets.js",
+      "line": 4,
+      "guidelineId": "views-show-only",
+      "severity": "MAJOR",
+      "why": "a require in a view, which the rule names and no listed sentence covers"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "src/views/facets.js",
+      "line": 6,
+      "guidelineId": "views-show-only",
+      "why": "a flag stored from a text check on a model value, which the guideline lists as an exclusion; a verdict that picks one sentence answered none for this shape"
+    }
+  ]
+}

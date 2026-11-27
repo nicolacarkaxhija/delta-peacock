@@ -372,6 +372,159 @@ describe("the exclusion check", () => {
   });
 });
 
+describe("the exclusion check with verdict: each", () => {
+  const SECOND = "A constant the module defines is never a finding.";
+  const LINE = "  return name.length;";
+  const both = guideline(
+    GUARD.replace(`  - ${EXCLUSION}\n`, `  - ${EXCLUSION}\n  - ${SECOND}\n`).replace(
+      `it. ${EXCLUSION}`,
+      `it. ${EXCLUSION} ${SECOND}`,
+    ),
+  );
+  const each = (port: ModelPort) => ({ ...options(port, both), verdict: "each" as const });
+
+  it("asks for the flagged line copied and a numbered yes or no per listed sentence, in a structured reply of that shape", async () => {
+    const { port, requests } = scripted(
+      verdict({
+        line: LINE,
+        sentences: [
+          { n: 1, covers: "no" },
+          { n: 2, covers: "no" },
+        ],
+        reason: "r",
+      }),
+    );
+    await applyExclusions([FINDING], each(port));
+    const schema = requests[0]?.structured?.schema;
+    expect(requests[0]?.user).toContain(`1. ${EXCLUSION}\n2. ${SECOND}`);
+    expect(requests[0]?.system).toContain('"sentences": [{"n": 1, "covers": "yes or no"}');
+    expect(requests[0]?.temperature).toBe(0);
+    const answer = (covers: string[]) => ({
+      line: LINE,
+      sentences: covers.map((one, index) => ({ n: index + 1, covers: one })),
+      reason: "r",
+    });
+    expect(schema?.safeParse(answer(["no", "yes"])).success).toBe(true);
+    expect(schema?.safeParse(answer(["no"])).success).toBe(false);
+    expect(schema?.safeParse(answer(["no", "maybe"])).success).toBe(false);
+  });
+
+  it("drops a finding whose answer says yes for any listed sentence and names the first such sentence", async () => {
+    const { port } = scripted(
+      verdict({
+        line: LINE,
+        sentences: [
+          { n: 1, covers: "no" },
+          { n: 2, covers: "YES" },
+        ],
+        reason: "a constant",
+      }),
+    );
+    const outcome = await applyExclusions([FINDING], each(port));
+    expect(outcome.kept).toEqual([]);
+    expect(outcome.tally).toMatchObject({ checked: 1, excluded: 1, unverified: 0 });
+    expect(outcome.notices).toEqual([
+      `exclusions: src/app.js:2 guard-before-use: dropped, the guideline excludes it (structured answer): "${SECOND}"`,
+    ]);
+  });
+
+  it("keeps a finding every listed sentence is answered no for, the line copied with other spacing", async () => {
+    const { port } = scripted(
+      verdict({
+        line: "return   name.length;",
+        sentences: [
+          { n: 1, covers: "no" },
+          { n: 2, covers: " No " },
+        ],
+        reason: "neither applies",
+      }),
+    );
+    const outcome = await applyExclusions([FINDING], each(port));
+    expect(outcome.kept).toEqual([FINDING]);
+    expect(outcome.tally).toMatchObject({ checked: 1, excluded: 0, unverified: 0 });
+  });
+
+  it("holds a finding whose answer copies another line, skips or reorders a sentence, or answers neither yes nor no", async () => {
+    const two = [
+      { n: 1, covers: "no" },
+      { n: 2, covers: "no" },
+    ];
+    for (const [answer, why] of [
+      [
+        { line: "function greet(name) {", sentences: two },
+        "the verdict copies a line other than the flagged one",
+      ],
+      [
+        { line: LINE, sentences: [{ n: 1, covers: "no" }] },
+        "the verdict does not answer every listed sentence in order",
+      ],
+      [
+        {
+          line: LINE,
+          sentences: [
+            { n: 2, covers: "no" },
+            { n: 1, covers: "no" },
+          ],
+        },
+        "the verdict does not answer every listed sentence in order",
+      ],
+      [
+        {
+          line: LINE,
+          sentences: [
+            { n: 1, covers: "no" },
+            { n: 2, covers: "maybe" },
+          ],
+        },
+        "the verdict answers a sentence with neither yes nor no",
+      ],
+      [{ exclusion: "none", reason: "r" }, "no readable verdict"],
+    ] as const) {
+      const { port, requests } = scripted(verdict(answer));
+      const outcome = await applyExclusions([FINDING], each(port));
+      expect(requests, why).toHaveLength(2);
+      expect(outcome.kept, why).toEqual([]);
+      expect(outcome.tally.unverified, why).toBe(1);
+      expect(outcome.notices[0], why).toBe(
+        `exclusions: src/app.js:2 guard-before-use: no verdict (${why}); held, not posted`,
+      );
+    }
+  });
+
+  it("says a reply ran out of output tokens when the plain text retry is cut too", async () => {
+    const { port } = scripted(
+      { text: "", finishReason: "length" },
+      { text: '{"line": "  return', finishReason: "length" },
+    );
+    const outcome = await applyExclusions([FINDING], each(port));
+    expect(outcome.notices[0]).toBe(
+      "exclusions: src/app.js:2 guard-before-use: no verdict (the reply ran out of output tokens); held, not posted",
+    );
+  });
+
+  it("reads a fenced answer on the plain text retry and takes any copy when the line is unreadable", async () => {
+    const { port } = scripted(
+      { text: "", finishReason: "length" },
+      "```json\n" +
+        verdict({
+          line: "whatever the model saw",
+          sentences: [
+            { n: 1, covers: "yes" },
+            { n: 2, covers: "no" },
+          ],
+          reason: "a parameter",
+        }) +
+        "\n```",
+    );
+    const outcome = await applyExclusions([FINDING], {
+      ...each(port),
+      linesOf: () => undefined,
+    });
+    expect(outcome.tally).toMatchObject({ excluded: 1, plainText: 1 });
+    expect(outcome.notices[0]).toContain(`(plain text answer): "${EXCLUSION}"`);
+  });
+});
+
 describe("a review with an excluded finding", () => {
   function repo(): string {
     const cwd = makeRepo();
@@ -464,6 +617,35 @@ describe("a review with an excluded finding", () => {
     expect(report.findings).toHaveLength(1);
   });
 
+  it("asks a yes or no per listed sentence under exclusions.verdict: each and drops the finding on a yes", async () => {
+    const cwd = repo();
+    const systems: string[] = [];
+    const port: ModelPort = {
+      complete(request) {
+        systems.push(request.system);
+        const text = request.system.includes("exclusion check")
+          ? verdict({
+              line: "  return name.length;",
+              sentences: [{ n: 1, covers: "yes" }],
+              reason: "a parameter",
+            })
+          : REVIEW;
+        return Promise.resolve({ text });
+      },
+    };
+    const code = await runCli(["review", "--report", "r.json", "--fail-on", "MAJOR"], {
+      cwd,
+      env: { DELTA_PEACOCK_EXCLUSIONS_VERDICT: "each" },
+      out: () => undefined,
+      err: () => undefined,
+      modelPort: port,
+    });
+    const report = JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
+    expect(code).toBe(0);
+    expect(report.findings).toEqual([]);
+    expect(systems.filter((system) => system.includes('"sentences"'))).toHaveLength(1);
+  });
+
   it("sends only the verdicts to exclusions.model and prices them at its own rates", async () => {
     const cwd = repo();
     const asked: { review: number; verdicts: number; refs: string[] } = {
@@ -521,6 +703,12 @@ describe("the exclusions.model setting", () => {
     });
     expect(parsed.success).toBe(false);
     expect(JSON.stringify(parsed.error?.issues)).toContain("exclusions.model.baseUrl");
+  });
+
+  it("asks for one listed sentence or none unless exclusions.verdict says each", () => {
+    expect(ConfigSchema.parse({}).exclusions.verdict).toBe("pick");
+    expect(ConfigSchema.parse({ exclusions: { verdict: "each" } }).exclusions.verdict).toBe("each");
+    expect(ConfigSchema.safeParse({ exclusions: { verdict: "all" } }).success).toBe(false);
   });
 
   it("prices a verdict at the rates of its own model under one ceiling", () => {

@@ -1,0 +1,23 @@
+# A synthetic case: an excluded flag that a pick verdict cleared, asked per sentence instead.
+model:
+  provider: bedrock
+  id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
+context:
+  providers: []
+review:
+  target: main
+  guidelinesDir: guidelines
+  generalPass: false
+  repoConfigPath: ""
+  posting: evidence
+exclusions:
+  verdict: each
+gate:
+  failOn: MAJOR
+calibration:
+  enabled: false
+cost:
+  rateInputPer1M: 1.10
+  rateOutputPer1M: 5.50
+stats:
+  enabled: false
