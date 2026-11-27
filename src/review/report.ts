@@ -1,7 +1,7 @@
 import { fingerprintOf, type Finding, type ProposedGuideline } from "../domain/finding.js";
 import type { ModelUnavailability } from "../model/unavailable.js";
 import type { LeftCandidate } from "./checks/judge.js";
-import type { ExclusionTally } from "./exclusions.js";
+import type { ExclusionTally, ExclusionVerdict } from "./exclusions.js";
 import type { RejectedCandidate } from "./parse.js";
 
 const REJECTED_CAP = 200;
@@ -110,6 +110,8 @@ export interface ReviewReport {
   unparsedBatches?: UnparsedBatch[];
   /** Findings held against a guideline's exclusions; present when any was. */
   exclusions?: ExclusionTally;
+  /** The verdict of each finding held against a guideline's exclusions; present when any was. */
+  exclusionVerdicts?: ExclusionVerdict[];
   /** What the static checks found and what became of it; present when a guideline is checked. */
   checks?: CheckTally;
   /** Present when model.provider is none: the run checked facts only. */
@@ -190,6 +192,7 @@ export function buildReport(input: {
   lineTextOf?: (finding: Finding) => string | undefined;
   checks?: CheckTally;
   exclusions?: ExclusionTally;
+  exclusionVerdicts?: ExclusionVerdict[];
   factsOnly?: FactsOnly;
   semgrep?: SemgrepTally;
 }): ReviewReport {
@@ -246,6 +249,9 @@ export function buildReport(input: {
       : {}),
     ...(input.checks !== undefined ? { checks: input.checks } : {}),
     ...(input.exclusions !== undefined ? { exclusions: input.exclusions } : {}),
+    ...(input.exclusionVerdicts !== undefined
+      ? { exclusionVerdicts: input.exclusionVerdicts }
+      : {}),
     ...(input.factsOnly !== undefined ? { factsOnly: input.factsOnly } : {}),
     ...(input.semgrep !== undefined ? { semgrep: input.semgrep } : {}),
   };

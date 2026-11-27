@@ -75,6 +75,7 @@ export const ENV_VARS: Readonly<Record<string, string>> = {
   DELTA_PEACOCK_CALIBRATION_MODEL: "calibration.model",
   DELTA_PEACOCK_EXCLUSIONS_MODEL: "exclusions.model",
   DELTA_PEACOCK_EXCLUSIONS_WARN_HELD_SHARE: "exclusions.warnHeldShare",
+  DELTA_PEACOCK_EXCLUSIONS_VERDICT: "exclusions.verdict",
   DELTA_PEACOCK_SEMGREP_ENABLED: "semgrep.enabled",
   DELTA_PEACOCK_SEMGREP_COMMAND: "semgrep.command",
   DELTA_PEACOCK_SEMGREP_TIMEOUT_SECONDS: "semgrep.timeoutSeconds",

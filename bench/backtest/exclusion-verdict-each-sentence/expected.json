@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "file": "src/receipt.js",
+      "line": 4,
+      "guidelineId": "dates-through-formatter",
+      "severity": "MAJOR",
+      "why": "date parts joined by hand for a person, which the rule names and no listed sentence covers"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "src/receipt.js",
+      "line": 5,
+      "guidelineId": "dates-through-formatter",
+      "why": "an ISO timestamp for a file name, which the guideline lists as outside the rule; a verdict that picks one sentence can still answer none for it"
+    }
+  ]
+}

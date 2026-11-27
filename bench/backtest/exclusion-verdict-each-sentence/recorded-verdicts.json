@@ -1,0 +1,10 @@
+{
+  "pick": {
+    "shown": [{ "text": "{\"exclusion\":\"none\",\"reason\":\"date parts joined for display\"}", "finishReason": "stop" }],
+    "stamp": [{ "text": "{\"exclusion\":\"none\",\"reason\":\"the date is formatted without formatDate\"}", "finishReason": "stop" }]
+  },
+  "each": {
+    "shown": [{ "text": "{\"line\":\"const shown = `${order.placed.getDate()}.${order.placed.getMonth() + 1}`;\",\"sentences\":[{\"n\":1,\"covers\":\"no\"},{\"n\":2,\"covers\":\"no\"}]}", "finishReason": "stop" }],
+    "stamp": [{ "text": "{\"line\":\"const stamp = order.placed.toISOString();\",\"sentences\":[{\"n\":1,\"covers\":\"yes\"},{\"n\":2,\"covers\":\"no\"}]}", "finishReason": "stop" }]
+  }
+}

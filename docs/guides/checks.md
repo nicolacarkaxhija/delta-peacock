@@ -433,6 +433,37 @@ lists exclusions, once per distinct line. The verdicts are priced at the verdict
 as `verdicts <n> tokens in, <m> out on <id>` and adds them to the total and the month, and the
 report carries them apart under `exclusionModel` (id, usage, cost) rather than in `usage`.
 
+### A yes or no per listed sentence (experimental)
+
+`exclusions.verdict: each` (`DELTA_PEACOCK_EXCLUSIONS_VERDICT`) is experimental and unmeasured:
+no backtest with a model has shown yet that it excludes more of what a guideline lists without
+dropping right findings. By default (`pick`) a verdict names one listed sentence or `none`, and a
+model that weighs the rule against the list can answer `none` for a line a listed sentence names.
+Under `each` the same single call numbers the listed sentences and asks for the start of
+the trimmed flagged line copied into `line` (as many characters as `LINE_COPY_CHARS` in
+`src/review/exclusions.ts` names, or the whole line when it is shorter), then a `yes` or `no` for every sentence in order. The flagged line and the code around it
+are framed as data under review, and the reviewer's title and body are left out, so the answer
+rests on the sentences and the code. The finding is dropped when any sentence is answered `yes`,
+and the log names the first such sentence as the one that excludes it.
+
+`each` adds reasons to hold a finding: a copy that, whitespace aside, is not a true start of the
+flagged line (text the line does not hold, or another line), or that does not cover the first `LINE_COPY_MIN_CHARS` characters of the trimmed line (the whole
+line when it is shorter), an answer list that skips or reorders a sentence, and an answer
+other than `yes` or `no` (case and spacing aside) each hold it as `exclusion-unverified`, like
+an unreadable verdict. When the flagged line cannot be read, any copy is taken. Held findings
+count toward `exclusions.warnHeldShare`, so a model that copies or answers badly can make a review
+report itself incomplete. Under `review.posting: evidence` a hold replaces a post: the finding is
+not posted and does not gate. It costs no extra call. The synthetic case
+`exclusion-verdict-each-sentence` holds the shape it is meant for.
+
+### Verdicts in the report
+
+The report's `exclusionVerdicts` lists one entry per checked finding: its file, line and
+guideline, the form that asked (`pick` or `each`), `sentence` (the excluding sentence counted from
+1 in the guideline's `exclusions` list, or `null`), `answers` (the `yes` or `no` per sentence
+under `each`) and `held: true` when no readable verdict came back. A cleared finding is listed too.
+The model's own reason is never recorded.
+
 ## Posting on evidence
 
 With `review.posting: evidence` a violation is posted on its evidence instead of the confidence
