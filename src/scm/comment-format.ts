@@ -773,7 +773,9 @@ export function renderSummaryBody(
       ? [plural(input.accepted, "accepted finding")]
       : []),
     ...(input.filtered > 0 ? [plural(input.filtered, "low-confidence finding")] : []),
-    ...((input.unplaced ?? 0) > 0 ? [plural(input.unplaced ?? 0, "unplaced violation")] : []),
+    ...(input.unplaced !== undefined && input.unplaced > 0
+      ? [plural(input.unplaced, "unplaced violation")]
+      : []),
     ...(input.droppedUncited > 0
       ? [`${plural(input.droppedUncited, "finding")} citing no guideline`]
       : []),

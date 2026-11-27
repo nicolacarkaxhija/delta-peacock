@@ -141,8 +141,8 @@ export function renderReview(review: RenderableReview): string {
     ...(review.filtered > 0
       ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]
       : []),
-    ...((review.unplaced ?? 0) > 0
-      ? [`${String(review.unplaced ?? 0)} violation(s) held: not placed on a line (report only)`]
+    ...(review.unplaced !== undefined && review.unplaced > 0
+      ? [`${String(review.unplaced)} violation(s) held: not placed on a line (report only)`]
       : []),
     ...(review.held !== undefined
       ? [
