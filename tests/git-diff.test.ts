@@ -89,7 +89,7 @@ describe("reindentedLines", () => {
       "+    const list = items.map((item) => item.name);",
       '+    return list.join(", ");',
       '+    return list.join(", ");',
-      "+\tconst total=items.length;",
+      "+\tconst total = items.length;",
       "+  }",
       '+  return "";',
       "\\ No newline at end of file",
@@ -111,4 +111,63 @@ describe("reindentedLines", () => {
       ["other.js", new Set()],
     ]);
   });
+
+  const oneHunk = (file: string, removed: string[], added: string[]): string =>
+    [
+      `diff --git a/${file} b/${file}`,
+      `--- a/${file}`,
+      `+++ b/${file}`,
+      `@@ -1,${String(removed.length)} +1,${String(added.length)} @@`,
+      ...removed.map((line) => `-${line}`),
+      ...added.map((line) => `+${line}`),
+      "",
+    ].join("\n");
+
+  it.each([
+    [
+      "whitespace inside a string literal",
+      "a.js",
+      [`  const label = "a b";`],
+      [`    const label = "ab";`],
+      [],
+    ],
+    ["two tokens joined", "a.js", ["  return value;"], ["    returnvalue;"], []],
+    ["two operators joined", "a.js", ["  total = a - -b;"], ["    total = a--b;"], []],
+    ["a brace only line", "a.js", ["  }"], ["    }"], []],
+    ["a blank line", "a.js", [""], ["  "], []],
+    [
+      "a line moved above the lines it followed",
+      "a.js",
+      ["  first();", "  second();", "  third();"],
+      ["    third();", "    first();", "    second();"],
+      [2, 3],
+    ],
+    [
+      "a closing brace the change adds",
+      "a.js",
+      ["  run();", "}"],
+      ["  if (ready) {", "    run();", "  }", "}"],
+      [2],
+    ],
+    [
+      "a YAML key shifted under a new parent",
+      "deploy/config.yaml",
+      ["name: web"],
+      ["  name: web"],
+      [],
+    ],
+    [
+      "a Python statement shifted into a new block",
+      "src/report.py",
+      ["    return total"],
+      ["        return total"],
+      [],
+    ],
+    ["a recipe line shifted in a Makefile", "Makefile", ["\tbuild"], ["\t\tbuild"], []],
+  ])(
+    "pairs only a word bearing line, in order, with its inner text unchanged, outside whitespace significant files: %s",
+    (_, file, removed, added, expected) => {
+      expect(reindentedLines(oneHunk(file, removed, added)).get(file)).toEqual(new Set(expected));
+    },
+  );
 });
