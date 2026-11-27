@@ -18,6 +18,7 @@ import {
   type ChangeScope,
   LocalDiffUnavailableError,
   newLineTexts,
+  reindentedLines,
   resolveTargetRef,
   stagedDiff,
   type AcquiredDiff,
@@ -407,8 +408,11 @@ export async function runReview(
     dedupeFindings(placeFindings(open.kept, linesOfFile)),
     diffLines,
     parseOptions.guidelinesById,
+    reindentedLines(redacted.text),
   );
   const placed = onChange.kept;
+  const offChange = onChange.dropped.filter((one) => one.reason === "off-change").length;
+  const reindented = onChange.dropped.length - offChange;
   // a case the guideline says is never a finding is held against every finding it could excuse
   const excluded =
     noOpenReview || placed.length === 0
@@ -676,7 +680,8 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
       droppedStructural,
-      droppedOffChange: onChange.dropped.length,
+      droppedOffChange: offChange,
+      droppedReindented: reindented,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       droppedMisquoted: parsed.droppedMisquoted,
@@ -749,7 +754,8 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOutOfScope: parsed.droppedOutOfScope,
       droppedStructural,
-      droppedOffChange: onChange.dropped.length,
+      droppedOffChange: offChange,
+      droppedReindented: reindented,
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       droppedMisquoted: parsed.droppedMisquoted,
@@ -839,7 +845,8 @@ export async function runReview(
       findings: kept,
       proposals,
       droppedUncited: parsed.droppedUncited,
-      droppedOffChange: onChange.dropped.length,
+      droppedOffChange: offChange,
+      droppedReindented: reindented,
       filtered: filtered.length - unplaced,
       ...(unplaced > 0 ? { unplaced } : {}),
       ...(accepted.length > 0 ? { accepted: accepted.length } : {}),

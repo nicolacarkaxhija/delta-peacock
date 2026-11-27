@@ -67,6 +67,8 @@ export interface ReviewReport {
   droppedStructuralFindings: number;
   /** Model findings on no added or edited line of the change; present when any were dropped. */
   droppedOffChangeFindings?: number;
+  /** Model findings whose added lines only re-indent a removed line; present when any were withheld. */
+  droppedReindentedFindings?: number;
   adjustedLines: number;
   /** Findings the model returned in an unreadable shape (or a truncated tail). */
   droppedMalformedFindings: number;
@@ -166,6 +168,7 @@ export function buildReport(input: {
   droppedOutOfScope?: number;
   droppedStructural?: number;
   droppedOffChange?: number;
+  droppedReindented?: number;
   adjustedLines: number;
   droppedMalformed?: number;
   droppedMisquoted?: number;
@@ -227,6 +230,9 @@ export function buildReport(input: {
     droppedStructuralFindings: input.droppedStructural ?? 0,
     ...((input.droppedOffChange ?? 0) > 0
       ? { droppedOffChangeFindings: input.droppedOffChange }
+      : {}),
+    ...(input.droppedReindented !== undefined && input.droppedReindented > 0
+      ? { droppedReindentedFindings: input.droppedReindented }
       : {}),
     adjustedLines: input.adjustedLines,
     droppedMalformedFindings: input.droppedMalformed ?? 0,

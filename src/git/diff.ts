@@ -1,3 +1,4 @@
+import path from "node:path";
 import picomatch from "picomatch";
 import { ToolError } from "../errors.js";
 import { runGit } from "./git.js";
@@ -310,6 +311,118 @@ export function newLineTexts(diff: string): Map<string, Map<number, string>> {
       }
     }
     result.set(filePath, lines);
+  }
+  return result;
+}
+
+/** Extensions of files whose indentation is syntax, where a shifted line is a real change. */
+const WHITESPACE_SIGNIFICANT: readonly string[] = [
+  ".coffee",
+  ".elm",
+  ".fs",
+  ".fsi",
+  ".fsx",
+  ".haml",
+  ".hs",
+  ".jade",
+  ".lhs",
+  ".markdown",
+  ".md",
+  ".mk",
+  ".nim",
+  ".pug",
+  ".py",
+  ".pyi",
+  ".pyw",
+  ".rst",
+  ".sass",
+  ".slim",
+  ".styl",
+  ".yaml",
+  ".yml",
+];
+
+/** True when no line of the file may count as re-indented: a listed extension, or none at all, as for a Makefile. */
+function isWhitespaceSignificant(file: string): boolean {
+  const extension = path.posix.extname(file).toLowerCase();
+  return extension === "" || WHITESPACE_SIGNIFICANT.includes(extension);
+}
+
+/** One hunk, each line trimmed: its removed lines, its added lines and their new line numbers. */
+interface Hunk {
+  removed: string[];
+  added: string[];
+  numbers: number[];
+}
+
+/** The added lines of a hunk that keep their order against the removed ones: a longest common subsequence. */
+function pairedInOrder({ removed, added, numbers }: Hunk): number[] {
+  const same = (r: number, a: number): boolean => {
+    const text = String(removed[r]);
+    return text === added[a] && /\w/.test(text);
+  };
+  // pairs left from removed[r..] and added[a..], one row per removed line plus a zero row and column
+  const width = added.length + 1;
+  const longest = new Int32Array((removed.length + 1) * width);
+  const at = (r: number, a: number): number => Number(longest[r * width + a]);
+  for (let r = removed.length - 1; r >= 0; r -= 1) {
+    for (let a = added.length - 1; a >= 0; a -= 1) {
+      longest[r * width + a] = same(r, a)
+        ? at(r + 1, a + 1) + 1
+        : Math.max(at(r + 1, a), at(r, a + 1));
+    }
+  }
+  const paired: number[] = [];
+  let r = 0;
+  let a = 0;
+  while (r < removed.length && a < added.length) {
+    if (same(r, a)) {
+      paired.push(Number(numbers[a]));
+      r += 1;
+      a += 1;
+    } else if (at(r + 1, a) >= at(r, a + 1)) {
+      r += 1;
+    } else {
+      a += 1;
+    }
+  }
+  return paired;
+}
+
+/**
+ * New-file lines per file whose only change is leading or trailing whitespace:
+ * each pairs, in order, with a removed line of the same hunk holding the same
+ * inner text and at least one word character. Lines of a whitespace significant
+ * file never count, since withholding a finding is the risky direction.
+ */
+export function reindentedLines(diff: string): Map<string, Set<number>> {
+  const result = new Map<string, Set<number>>();
+  for (const chunk of diff.split(/^(?=diff --git )/m)) {
+    const filePath = headerPath(chunk);
+    if (filePath === undefined) continue;
+    const hunks: Hunk[] = [];
+    let newLine = 0;
+    for (const line of chunk.split("\n")) {
+      const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+      if (hunk) {
+        newLine = Number(hunk[1]);
+        hunks.push({ removed: [], added: [], numbers: [] });
+        continue;
+      }
+      const current = hunks.at(-1);
+      if (current === undefined) continue; // still in the chunk header
+      if (line.startsWith("+")) {
+        current.added.push(line.slice(1).trim());
+        current.numbers.push(newLine);
+        newLine += 1;
+      } else if (line.startsWith("-")) {
+        current.removed.push(line.slice(1).trim());
+      } else if (!line.startsWith("\\")) {
+        newLine += 1;
+      }
+    }
+    const significant = isWhitespaceSignificant(filePath);
+    result.set(filePath, new Set(significant ? [] : hunks.flatMap(pairedInOrder)));
   }
   return result;
 }

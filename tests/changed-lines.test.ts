@@ -30,7 +30,11 @@ const ON_ADDED: Violation = {
   quote: "  return name.length;",
 };
 
-const ON_CONTEXT: Violation = { ...ON_ADDED, line: 1, quote: "function greet(name) {" };
+const ON_CONTEXT: Violation = {
+  ...ON_ADDED,
+  line: 1,
+  quote: "function greet(name) {",
+};
 
 const ADDED = new Map([["src/app.js", new Map([[2, "  return name.length;"]])]]);
 
@@ -41,12 +45,18 @@ describe("findings on changed lines only", () => {
     const outcome = keepOnChangedLines([ON_ADDED, ON_CONTEXT], ADDED, rules);
     expect(outcome.kept).toEqual([ON_ADDED]);
     expect(outcome.dropped).toEqual([
-      expect.objectContaining({ reason: "off-change", guidelineId: "guard-before-use" }),
+      expect.objectContaining({
+        reason: "off-change",
+        guidelineId: "guard-before-use",
+      }),
     ]);
   });
 
   it("keeps a finding whose quoted span reaches an added line", () => {
-    const spanning = { ...ON_CONTEXT, quote: "function greet(name) {\n  return name.length;" };
+    const spanning = {
+      ...ON_CONTEXT,
+      quote: "function greet(name) {\n  return name.length;",
+    };
     expect(keepOnChangedLines([spanning], ADDED, rules).kept).toEqual([spanning]);
   });
 
@@ -58,6 +68,18 @@ describe("findings on changed lines only", () => {
   it("keeps a finding under a guideline that declares file scope", () => {
     const fileWide = new Map([["guard-before-use", { scope: "file" as const }]]);
     expect(keepOnChangedLines([ON_CONTEXT], ADDED, fileWide).kept).toEqual([ON_CONTEXT]);
+  });
+
+  it("withholds a finding whose added lines are only re-indented, and keeps one that reaches a written line", () => {
+    const reindented = new Map([["src/app.js", new Set([2])]]);
+    const outcome = keepOnChangedLines([ON_ADDED, ON_CONTEXT], ADDED, rules, reindented);
+    expect(outcome.kept).toEqual([]);
+    expect(outcome.dropped.map((one) => one.reason)).toEqual(["reindented", "off-change"]);
+    const written = new Map([
+      ["src/app.js", new Map([...(ADDED.get("src/app.js") ?? []), [3, "}"]])],
+    ]);
+    const reaching = { ...ON_ADDED, quote: "  return name.length;\n}" };
+    expect(keepOnChangedLines([reaching], written, rules, reindented).kept).toEqual([reaching]);
   });
 
   it("leaves an observation and a finding with no line alone", () => {
@@ -146,6 +168,71 @@ describe("a review whose model flags an unchanged line", () => {
   });
 });
 
+describe("a review whose model flags a line the change only re-indents", () => {
+  const BEFORE = [
+    "function render(items) {",
+    "  const list = items.map((item) => item.name);",
+    '  return list.join(", ");',
+    "}",
+    "",
+  ].join("\n");
+  const AFTER = [
+    "function render(items) {",
+    "  if (items.length > 0) {",
+    "    const list = items.map((item) => item.name);",
+    '    return list.join(", ");',
+    "  }",
+    '  return "";',
+    "}",
+    "",
+  ].join("\n");
+
+  const flagged = (line: number, quote: string) => ({
+    guidelineId: "guard-before-use",
+    file: "src/list.js",
+    line,
+    quote,
+    guidelineQuote: "Check a value for null before reading a property of it.",
+    title: "Read before a null check",
+    body: "items is read without a guard.",
+  });
+
+  it("withholds the finding on the re-indented line, posts the one on the written line and says why", async () => {
+    const cwd = makeRepo();
+    write(cwd, "guidelines/guard.md", RULE);
+    write(cwd, "src/list.js", BEFORE);
+    commitAll(cwd, "rules");
+    git(cwd, "checkout", "-q", "-b", "feature");
+    write(cwd, "src/list.js", AFTER);
+    commitAll(cwd, "change");
+    const findings = [
+      flagged(2, "  if (items.length > 0) {"),
+      flagged(3, "    const list = items.map((item) => item.name);"),
+    ];
+    const out: string[] = [];
+    await runCli(["review", "--report", "r.json"], {
+      cwd,
+      env: {},
+      out: (text) => out.push(text),
+      err: () => undefined,
+      modelPort: {
+        complete: () => Promise.resolve({ text: JSON.stringify({ findings }) }),
+      },
+    });
+    const report = JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings.map((finding) => finding.line)).toEqual([2]);
+    expect(report.droppedReindentedFindings).toBe(1);
+    expect(report.droppedOffChangeFindings).toBeUndefined();
+    expect(
+      report.rejectedCandidates?.map((one) => [
+        one.reason,
+        (JSON.parse(one.raw) as { line: number }).line,
+      ]),
+    ).toEqual([["reindented", 3]]);
+    expect(out.join("")).toContain("1 finding(s) withheld: their line is only re-indented");
+  });
+});
+
 describe("the summary comment", () => {
   it("names the findings off the change among those not posted", () => {
     const body = renderSummaryBody({
@@ -157,5 +244,19 @@ describe("the summary comment", () => {
       gate: { threshold: "none", failing: 0, failed: false },
     });
     expect(body).toContain("_Not posted: 4 findings off the change._");
+  });
+
+  it("names the findings withheld on re-indented lines among those not posted, one or more", () => {
+    const body = (droppedReindented: number) =>
+      renderSummaryBody({
+        findings: [],
+        proposals: [],
+        droppedUncited: 0,
+        droppedReindented,
+        filtered: 0,
+        gate: { threshold: "none", failing: 0, failed: false },
+      });
+    expect(body(1)).toContain("_Not posted: 1 finding on a re-indented line._");
+    expect(body(2)).toContain("_Not posted: 2 findings on re-indented lines._");
   });
 });
