@@ -447,8 +447,8 @@ rests on the sentences and the code. The finding is dropped when any sentence is
 and the log names the first such sentence as the one that excludes it.
 
 `each` adds reasons to hold a finding: a copy that, whitespace aside, is not a true start of the
-flagged line (text the line does not hold, or another line), or that is shorter than the whole
-line and than `LINE_COPY_MIN_CHARS`, an answer list that skips or reorders a sentence, and an answer
+flagged line (text the line does not hold, or another line), or that does not cover the first `LINE_COPY_MIN_CHARS` characters of the trimmed line (the whole
+line when it is shorter), an answer list that skips or reorders a sentence, and an answer
 other than `yes` or `no` (case and spacing aside) each hold it as `exclusion-unverified`, like
 an unreadable verdict. When the flagged line cannot be read, any copy is taken. Held findings
 count toward `exclusions.warnHeldShare`, so a model that copies or answers badly can make a review

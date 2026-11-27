@@ -41,10 +41,10 @@ const PICK_SYSTEM = [
   'Reply with JSON only, in this shape: {"exclusion": "<one listed sentence, copied exactly, or none>", "reason": "<one plain sentence without dashes>"}',
 ].join("\n");
 
-/** The characters of the trimmed flagged line a verdict under each copies, so a long line still fits the reply. */
+/** Long enough to tell one line of a file from the lines around it, short enough that the copy costs little output and a long line never runs the reply out of tokens. */
 export const LINE_COPY_CHARS = 120;
 
-/** A copy shorter than this many characters, whitespace aside, holds the finding unless it is the whole line. */
+/** Well below LINE_COPY_CHARS, so a model that miscounts and stops early still names the line; a copy must cover this many characters of the trimmed line's start. */
 export const LINE_COPY_MIN_CHARS = 80;
 
 const EACH_SYSTEM = [
@@ -320,10 +320,11 @@ interface Asked {
 function eachAnswerOf(text: string, finishReason: string | undefined, asked: Asked): Answer {
   const verdict = readShape(text, "sentences", EachVerdict);
   if (verdict === undefined) return { failure: whyUnread(finishReason, false) };
-  // a copy is a true start of the line, long enough to name it; an unreadable line asks nothing
+  // a copy is a true start of the line that covers its first characters; an unreadable line asks nothing
   const line = withoutSpaces(asked.lineText);
   const copy = withoutSpaces(verdict.line);
-  const named = line.startsWith(copy) && copy.length >= Math.min(line.length, LINE_COPY_MIN_CHARS);
+  const covered = withoutSpaces(asked.lineText.trim().slice(0, LINE_COPY_MIN_CHARS));
+  const named = line.startsWith(copy) && copy.length >= covered.length;
   if (line !== "" && !named) {
     return { failure: "the verdict copies a line other than the flagged one" };
   }

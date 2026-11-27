@@ -80,7 +80,7 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   numbers the listed sentences, leaves the reviewer's text out, frames the line as data and asks for
   the start of the trimmed line and a yes or no per sentence; any yes drops the finding under the
   first such sentence, all no keeps it, and a copy that is not a true start of the line or is
-  shorter than both the line and the lower bound, a
+  does not cover the line's first lower bound characters, a
   skipped or reordered sentence or an answer other than yes or no holds it; the default `pick` asks
   as before; the report's `exclusionVerdicts` records each checked finding's sentence number, the
   answers under `each` and holds, never the model's words; the synthetic case
