@@ -246,15 +246,17 @@ describe("the summary comment", () => {
     expect(body).toContain("_Not posted: 4 findings off the change._");
   });
 
-  it("names the findings withheld on re-indented lines among those not posted", () => {
-    const body = renderSummaryBody({
-      findings: [],
-      proposals: [],
-      droppedUncited: 0,
-      droppedReindented: 1,
-      filtered: 0,
-      gate: { threshold: "none", failing: 0, failed: false },
-    });
-    expect(body).toContain("_Not posted: 1 finding on a re-indented line._");
+  it("names the findings withheld on re-indented lines among those not posted, one or more", () => {
+    const body = (droppedReindented: number) =>
+      renderSummaryBody({
+        findings: [],
+        proposals: [],
+        droppedUncited: 0,
+        droppedReindented,
+        filtered: 0,
+        gate: { threshold: "none", failing: 0, failed: false },
+      });
+    expect(body(1)).toContain("_Not posted: 1 finding on a re-indented line._");
+    expect(body(2)).toContain("_Not posted: 2 findings on re-indented lines._");
   });
 });
