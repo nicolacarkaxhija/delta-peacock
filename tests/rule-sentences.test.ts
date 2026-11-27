@@ -458,3 +458,43 @@ describe("quotesRuleSentence on comments and breaks", () => {
     }
   });
 });
+
+describe("quotesRuleSentence on indented lines that start with a marker", () => {
+  it("reads them as code after a blank line when no list is open", () => {
+    for (const [lines, refused] of [
+      [
+        ["Never do this:", "", "    - name: eval", "    - run: x", "    1. step"],
+        ["name: eval", "run: x", "step"],
+      ],
+      [
+        ["Hash every password.", "", "    * @param x", "    * eval(y)"],
+        ["@param x", "eval(y)"],
+      ],
+      [["Hash every password.", "", "\t- run: x"], ["run: x"]],
+    ] as const) {
+      const rule = bodied(...lines);
+      for (const quote of refused) expect(quotesRuleSentence(quote, rule), quote).toBe(false);
+    }
+  });
+
+  it("reads one as a nested item after a blank line while a list is open, and without a blank line under an item", () => {
+    const afterBlank = bodied("- Hash every password.", "", "    - Use a slow hash.");
+    expect(quotesRuleSentence("Use a slow hash.", afterBlank)).toBe(true);
+    const tabbed = bodied("- Hash every password.", "", "\t- Use a slow hash.");
+    expect(quotesRuleSentence("Use a slow hash.", tabbed)).toBe(true);
+    const direct = bodied("- Hash every password.", "    - Use a slow hash.");
+    expect(quotesRuleSentence("Use a slow hash.", direct)).toBe(true);
+  });
+
+  it("joins an indented marker line to the paragraph it follows without a blank line", () => {
+    const rule = bodied("Never do this:", "    - name: eval");
+    expect(quotesRuleSentence("name: eval", rule)).toBe(false);
+    expect(quotesRuleSentence("Never do this: - name: eval", rule)).toBe(true);
+  });
+
+  it("closes the list at a paragraph, so a later indented marker line is code", () => {
+    const rule = bodied("- Hash every password.", "", "Store the hash only.", "", "    - run: x");
+    expect(quotesRuleSentence("Store the hash only.", rule)).toBe(true);
+    expect(quotesRuleSentence("run: x", rule)).toBe(false);
+  });
+});
