@@ -73,6 +73,7 @@ import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { keepOnChangedLines } from "./changed-lines.js";
 import { partitionAccepted, readAcceptedForms } from "./accepted-forms.js";
 import { applyExclusions } from "./exclusions.js";
+import { evidenceFlag, isPosted, skippedCheckContext, type PostingContext } from "./posting.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
@@ -603,6 +604,12 @@ export async function runReview(
     );
   }
 
+  // a model finding that skipped the exclusion check has no verdict to stand on
+  const postingContext = skippedCheckContext(
+    excluded === undefined ? placed : [],
+    checks?.findings ?? [],
+    parseOptions.guidelinesById,
+  );
   const finalized = await finalizeFindings(
     deps,
     config,
@@ -611,6 +618,7 @@ export async function runReview(
     redacted.text,
     usage,
     ceiling.reached(),
+    postingContext,
   );
   const filtered = finalized.filtered;
   const baselined = finalized.baselined;
@@ -1119,6 +1127,7 @@ async function assembleReview(
   const promptOf: PromptOf = (diffText, context) =>
     buildReviewPrompt(guidelines, diffText, {
       generalPass: config.review.generalPass,
+      ...evidenceFlag(config.review),
       language: config.review.language,
       linterInstruction: linterInstruction(linters),
       ...(declared !== undefined ? { declarations: declaredTagsBlock(declared) } : {}),
@@ -1172,6 +1181,7 @@ async function assembleReview(
     guidelinesById: new Map(guidelines.map((guideline) => [guideline.id, guideline])),
     generalPass: config.review.generalPass,
     observationSeverityCap: config.review.observationSeverityCap,
+    ...evidenceFlag(config.review),
   };
   return {
     redacted,
@@ -1606,7 +1616,7 @@ interface FinalizedFindings {
 }
 
 /**
- * The finalize stage: drop findings under the confidence floor, run the
+ * The finalize stage: hold findings the posting rule does not post, run the
  * optional calibration pass (advisory only — it may attach a `calibration`
  * note to a finding but never changes kind, severity, or gate membership,
  * ADR 0008), and split off baselined findings that inform the report but
@@ -1621,8 +1631,9 @@ async function finalizeFindings(
   diffText: string,
   usageIn: ModelUsage | undefined,
   capReached: boolean,
+  postingContext: (finding: Finding) => PostingContext,
 ): Promise<FinalizedFindings> {
-  const partitioned = partitionFindings(findings, config);
+  const partitioned = partitionFindings(findings, config, postingContext);
   const filtered = partitioned.filtered;
   let kept = partitioned.kept;
   let usage = usageIn;
@@ -1667,11 +1678,16 @@ async function finalizeFindings(
   return { kept, filtered, baselined, usage };
 }
 
-function partitionFindings(findings: readonly Finding[], config: Config) {
-  const floor = config.review.confidenceFloor;
+function partitionFindings(
+  findings: readonly Finding[],
+  config: Config,
+  postingContext: (finding: Finding) => PostingContext,
+) {
+  const posted = (finding: Finding): boolean =>
+    isPosted(finding, config.review, postingContext(finding));
   return {
-    kept: findings.filter((finding) => (finding.confidence ?? 1) >= floor),
-    filtered: findings.filter((finding) => (finding.confidence ?? 1) < floor),
+    kept: findings.filter(posted),
+    filtered: findings.filter((finding) => !posted(finding)),
   };
 }
 

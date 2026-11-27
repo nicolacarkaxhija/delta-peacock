@@ -76,6 +76,19 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   sentence once per guideline as a `Never report under this guideline` line; the synthetic case
   `exclusion-verdict-shapes` gives the same findings in three replays of each verdict shape. On
   its own: `pnpm exec vitest run tests/exclusions tests/held-findings tests/exclusion-verdict-backtest`.
+- `posting on evidence`: by default (`review.posting: confidence`) every finding under the
+  confidence floor is held, as before; with `review.posting: evidence` a placed violation is posted
+  whatever confidence the model gave it, a violation whose quote could not be placed is held, a
+  model finding whose exclusion check was skipped is held unless a check found it too, a cited
+  sentence must be a whole citable unit as `docs/guides/checks.md` defines it (markdown blocks: a
+  paragraph's sentences, a whole list item or heading; example blocks and what a label covers,
+  fenced and indented code, block quotes, comments, breaks, exclusion sentences, passages and near
+  quotes are refused) or the finding is
+  dropped as misquoted, the prompt asks the model to leave out what it is unsure of, an observation keeps
+  the floor, and `audit` holds a violation whose guideline lists exclusions; replaying
+  `exclusion-verdict-shapes` three times with a confidence that moves around the floor posts the
+  same findings under `evidence` and drifts under `confidence`. On its own:
+  `pnpm exec vitest run tests/posting tests/rule-sentences tests/evidence-gate-backtest tests/evidence-skipped-check tests/audit-posting`.
 - `findings on changed lines`: a model finding whose span touches no added or edited line is
   dropped before the exclusion check and counted in the report, the log, the summary comment and
   the backtest, unless its guideline declares `scope: file`. On its own:

@@ -121,6 +121,14 @@
           "minimum": 0,
           "maximum": 1
         },
+        "posting": {
+          "default": "confidence",
+          "type": "string",
+          "enum": [
+            "confidence",
+            "evidence"
+          ]
+        },
         "generalPass": {
           "default": false,
           "type": "boolean"

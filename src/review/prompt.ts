@@ -3,6 +3,7 @@ import type { Guideline } from "../domain/guideline.js";
 import type { ModelRequest } from "../model/port.js";
 import { declaredTagsBlock, readDeclaredTags } from "./declared.js";
 import { detectLinters, linterInstruction } from "./linters.js";
+import { evidenceFlag } from "./posting.js";
 
 export interface PromptOptions {
   /** When on, the model may add uncited observations and propose new guidelines. */
@@ -15,6 +16,8 @@ export interface PromptOptions {
   linterInstruction?: string;
   /** The tags the reviewed repository declares, as a prompt block. */
   declarations?: string;
+  /** Set under `review.posting: evidence`: no confidence floor filters a violation. */
+  evidence?: true;
 }
 
 /** Shared by every command that shows the corpus, so the block stays byte-identical. */
@@ -42,6 +45,7 @@ export function buildPromptOptions(
   const tags = readDeclaredTags(root, config.review.repoConfigPath);
   return {
     generalPass: config.review.generalPass,
+    ...evidenceFlag(config.review),
     language: config.review.language,
     linterInstruction: linterInstruction(detectLinters(root)),
     ...(tags !== undefined ? { declarations: declaredTagsBlock(tags) } : {}),
@@ -92,7 +96,9 @@ export function buildReviewPrompt(
     "",
     "Respond with JSON only, no prose around it, in this shape:",
     RESPONSE_SHAPE,
-    'Set "confidence" honestly; uncertain findings with low confidence are filtered, not punished.',
+    options.evidence === true
+      ? 'Report a finding only when its quoted line breaks its quoted sentence; leave out a finding you are unsure of. Set "confidence" honestly.'
+      : 'Set "confidence" honestly; uncertain findings with low confidence are filtered, not punished.',
     'If nothing violates a guideline respond {"findings": []}.',
     ...(options.generalPass ? [GENERAL_PASS] : []),
     // stable prefix: changes only when a tool's config file appears or vanishes

@@ -28,7 +28,7 @@ A sketch attached to an observation recommending the team codify an unwritten ru
 The stable identity of a finding. Two runs that see the same problem produce the same fingerprint.
 
 **Confidence**:
-The model's own certainty in a finding, filtered by a configurable floor.
+The model's own certainty in a finding, filtered by a configurable floor; under `review.posting: evidence` the floor gates observations only and a violation is posted on its evidence.
 
 **Rejected candidate**:
 A raw element the model emitted that the parser refused, for one of three reasons: malformed shape, an uncited guideline, or a file outside the cited guideline's scope. A rejected candidate never becomes a finding.

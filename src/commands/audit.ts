@@ -17,6 +17,7 @@ import { loadBaseline, splitByBaseline, writeBaseline } from "../review/baseline
 import { fingerprintOf } from "../domain/finding.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { parseReviewResponse } from "../review/parse.js";
+import { evidenceFlag, isPosted } from "../review/posting.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
 import { renderReview } from "../review/render.js";
 import { buildReport } from "../review/report.js";
@@ -109,6 +110,7 @@ export async function runAudit(
       guidelinesById: new Map(entry.guidelines.map((guideline) => [guideline.id, guideline])),
       generalPass: config.review.generalPass,
       observationSeverityCap: config.review.observationSeverityCap,
+      ...evidenceFlag(config.review),
     });
     droppedUncited += parsed.droppedUncited;
     droppedOutOfScope += parsed.droppedOutOfScope;
@@ -125,9 +127,15 @@ export async function runAudit(
     }
   }
 
-  const floor = config.review.confidenceFloor;
-  let kept = findings.filter((finding) => (finding.confidence ?? 1) >= floor);
-  const filtered = findings.filter((finding) => (finding.confidence ?? 1) < floor);
+  const byId = new Map(loaded.guidelines.map((guideline) => [guideline.id, guideline]));
+  // audit asks no exclusion verdict, so under evidence a violation its guideline could excuse is held
+  const posted = (finding: Finding): boolean =>
+    isPosted(finding, config.review, {
+      verdictsAsked: false,
+      guideline: finding.kind === "violation" ? byId.get(finding.guidelineId) : undefined,
+    });
+  let kept = findings.filter(posted);
+  const filtered = findings.filter((finding) => !posted(finding));
 
   if (options.writeBaseline === true) {
     const accepted = writeBaseline(deps.cwd, config.review.baselinePath, kept);

@@ -5,6 +5,9 @@ import { SEVERITIES, severityRank, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { plainBody, plainTitle } from "./prose.js";
+import { quotesRuleSentence } from "./rule-sentences.js";
+
+export { quotesRuleSentence };
 
 /** Models write null for "no value" (`"suggestion": null`); that reads as absent, never as malformed. */
 const absentIfNull = <T extends z.ZodType>(schema: T) =>
@@ -42,6 +45,8 @@ export interface ParseOptions {
   generalPass: boolean;
   /** The most severe an observation may be; the model cannot exceed it. */
   observationSeverityCap: Severity;
+  /** Set under `review.posting: evidence`: a violation must quote a whole sentence of its rule text. */
+  evidence?: true;
 }
 
 /**
@@ -231,7 +236,11 @@ function toFinding(
   }
   if (guideline !== undefined) {
     // a finding stands on a sentence the guideline really says, never on a paraphrase
-    if (!quotesGuideline(raw.guidelineQuote, guideline)) return "misquoted";
+    const quoted =
+      options.evidence === true
+        ? quotesRuleSentence(raw.guidelineQuote, guideline)
+        : quotesGuideline(raw.guidelineQuote, guideline);
+    if (!quoted) return "misquoted";
     const violation: Violation = {
       kind: "violation",
       guidelineId: guideline.id,
