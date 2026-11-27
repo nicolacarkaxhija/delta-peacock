@@ -73,6 +73,7 @@ export interface RejectedCandidate {
     | "excluded"
     | "exclusion-unverified"
     | "off-change"
+    | "reindented"
     | `structural:${StructuralCheck}`;
   /** The candidate's JSON, capped; the diff it came from was already redacted. */
   raw: string;

@@ -295,6 +295,8 @@ export interface SummaryInput {
   droppedUncited: number;
   /** Model findings on no added or edited line of the change. */
   droppedOffChange?: number;
+  /** Model findings withheld because their added lines only re-indent a removed line. */
+  droppedReindented?: number;
   filtered: number;
   /** Findings on a form the repository lists as accepted; counted, never posted. */
   accepted?: number;

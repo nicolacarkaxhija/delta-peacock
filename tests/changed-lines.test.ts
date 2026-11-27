@@ -146,6 +146,69 @@ describe("a review whose model flags an unchanged line", () => {
   });
 });
 
+describe("a review whose model flags a line the change only re-indents", () => {
+  const BEFORE = [
+    "function render(items) {",
+    "  const list = items.map((item) => item.name);",
+    '  return list.join(", ");',
+    "}",
+    "",
+  ].join("\n");
+  const AFTER = [
+    "function render(items) {",
+    "  if (items.length > 0) {",
+    "    const list = items.map((item) => item.name);",
+    '    return list.join(", ");',
+    "  }",
+    '  return "";',
+    "}",
+    "",
+  ].join("\n");
+
+  const flagged = (line: number, quote: string) => ({
+    guidelineId: "guard-before-use",
+    file: "src/list.js",
+    line,
+    quote,
+    guidelineQuote: "Check a value for null before reading a property of it.",
+    title: "Read before a null check",
+    body: "items is read without a guard.",
+  });
+
+  it("withholds the finding on the re-indented line, posts the one on the written line and says why", async () => {
+    const cwd = makeRepo();
+    write(cwd, "guidelines/guard.md", RULE);
+    write(cwd, "src/list.js", BEFORE);
+    commitAll(cwd, "rules");
+    git(cwd, "checkout", "-q", "-b", "feature");
+    write(cwd, "src/list.js", AFTER);
+    commitAll(cwd, "change");
+    const findings = [
+      flagged(2, "  if (items.length > 0) {"),
+      flagged(3, "    const list = items.map((item) => item.name);"),
+    ];
+    const out: string[] = [];
+    await runCli(["review", "--report", "r.json"], {
+      cwd,
+      env: {},
+      out: (text) => out.push(text),
+      err: () => undefined,
+      modelPort: { complete: () => Promise.resolve({ text: JSON.stringify({ findings }) }) },
+    });
+    const report = JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
+    expect(report.findings.map((finding) => finding.line)).toEqual([2]);
+    expect(report.droppedReindentedFindings).toBe(1);
+    expect(report.droppedOffChangeFindings).toBeUndefined();
+    expect(
+      report.rejectedCandidates?.map((one) => [
+        one.reason,
+        (JSON.parse(one.raw) as { line: number }).line,
+      ]),
+    ).toEqual([["reindented", 3]]);
+    expect(out.join("")).toContain("1 finding(s) withheld: their line is only re-indented");
+  });
+});
+
 describe("the summary comment", () => {
   it("names the findings off the change among those not posted", () => {
     const body = renderSummaryBody({
@@ -157,5 +220,17 @@ describe("the summary comment", () => {
       gate: { threshold: "none", failing: 0, failed: false },
     });
     expect(body).toContain("_Not posted: 4 findings off the change._");
+  });
+
+  it("names the findings withheld on re-indented lines among those not posted", () => {
+    const body = renderSummaryBody({
+      findings: [],
+      proposals: [],
+      droppedUncited: 0,
+      droppedReindented: 1,
+      filtered: 0,
+      gate: { threshold: "none", failing: 0, failed: false },
+    });
+    expect(body).toContain("_Not posted: 1 finding on a re-indented line._");
   });
 });

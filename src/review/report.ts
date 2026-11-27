@@ -67,6 +67,8 @@ export interface ReviewReport {
   droppedStructuralFindings: number;
   /** Model findings on no added or edited line of the change; present when any were dropped. */
   droppedOffChangeFindings?: number;
+  /** Model findings whose added lines only re-indent a removed line; present when any were withheld. */
+  droppedReindentedFindings?: number;
   adjustedLines: number;
   /** Findings the model returned in an unreadable shape (or a truncated tail). */
   droppedMalformedFindings: number;
