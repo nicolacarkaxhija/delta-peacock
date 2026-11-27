@@ -771,7 +771,7 @@ export async function runReview(
       ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
       ...(checks !== undefined ? { checks: checks.tally } : {}),
       ...(excluded !== undefined && excluded.tally.checked > 0
-        ? { exclusions: excluded.tally }
+        ? { exclusions: excluded.tally, exclusionVerdicts: excluded.verdicts }
         : {}),
       ...(facts !== undefined ? { factsOnly: facts } : {}),
       ...(prepass !== undefined ? { semgrep: semgrepTally(prepass) } : {}),

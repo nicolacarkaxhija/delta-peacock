@@ -192,6 +192,7 @@ export function buildReport(input: {
   lineTextOf?: (finding: Finding) => string | undefined;
   checks?: CheckTally;
   exclusions?: ExclusionTally;
+  exclusionVerdicts?: ExclusionVerdict[];
   factsOnly?: FactsOnly;
   semgrep?: SemgrepTally;
 }): ReviewReport {
@@ -248,6 +249,9 @@ export function buildReport(input: {
       : {}),
     ...(input.checks !== undefined ? { checks: input.checks } : {}),
     ...(input.exclusions !== undefined ? { exclusions: input.exclusions } : {}),
+    ...(input.exclusionVerdicts !== undefined
+      ? { exclusionVerdicts: input.exclusionVerdicts }
+      : {}),
     ...(input.factsOnly !== undefined ? { factsOnly: input.factsOnly } : {}),
     ...(input.semgrep !== undefined ? { semgrep: input.semgrep } : {}),
   };
