@@ -174,6 +174,23 @@ function namedSentence(answer: string, exclusions: readonly string[]): string | 
   return exclusions.find((sentence) => normalized(sentence) === wanted);
 }
 
+/** The characters of the trimmed flagged line a verdict under each copies, so a long line still fits the reply. */
+export const LINE_COPY_CHARS = 120;
+
+/** How one checked finding's verdict ended, without the model's own words. */
+export interface ExclusionVerdict {
+  file: string;
+  line: number;
+  guidelineId: string;
+  form: "pick" | "each";
+  /** The listed sentence that excluded the finding, counted from 1; null when none did or no verdict was read. */
+  sentence: number | null;
+  /** Under each: the answer per listed sentence, in order. */
+  answers?: ("yes" | "no")[];
+  /** Set when no readable verdict came back and the finding was held. */
+  held?: true;
+}
+
 /** Findings held against an exclusion list, and how each ended. */
 export interface ExclusionTally {
   checked: number;
@@ -191,6 +208,8 @@ export interface ExclusionOutcome {
   /** Findings no readable verdict cleared: neither posted nor retired. */
   held: Violation[];
   tally: ExclusionTally;
+  /** One per checked finding, in the order the findings came. */
+  verdicts?: ExclusionVerdict[];
   dropped: RejectedCandidate[];
   usage?: ModelUsage;
   notices: string[];

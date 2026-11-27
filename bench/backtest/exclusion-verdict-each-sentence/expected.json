@@ -1,19 +1,19 @@
 {
   "findings": [
     {
-      "file": "src/views/facets.js",
+      "file": "src/receipt.js",
       "line": 4,
-      "guidelineId": "views-show-only",
+      "guidelineId": "dates-through-formatter",
       "severity": "MAJOR",
-      "why": "a require in a view, which the rule names and no listed sentence covers"
+      "why": "date parts joined by hand for a person, which the rule names and no listed sentence covers"
     }
   ],
   "noFinding": [
     {
-      "file": "src/views/facets.js",
-      "line": 6,
-      "guidelineId": "views-show-only",
-      "why": "a flag stored from a text check on a model value, which the guideline lists as an exclusion; a verdict that picks one sentence answered none for this shape"
+      "file": "src/receipt.js",
+      "line": 5,
+      "guidelineId": "dates-through-formatter",
+      "why": "an ISO timestamp for a file name, which the guideline lists as outside the rule; a verdict that picks one sentence can still answer none for it"
     }
   ]
 }

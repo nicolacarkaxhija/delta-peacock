@@ -1,4 +1,4 @@
-# A synthetic case: an excluded flag that a pick verdict cleared, asked per sentence instead.
+# A synthetic case: a machine timestamp that a listed sentence covers, asked per sentence.
 model:
   provider: bedrock
   id: eu.anthropic.claude-haiku-4-5-20251001-v1:0

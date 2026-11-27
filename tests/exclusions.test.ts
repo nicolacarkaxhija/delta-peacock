@@ -9,7 +9,7 @@ import { parseGuidelineContent } from "../src/guidelines/loader.js";
 import { runCli } from "../src/index.js";
 import type { ModelPort, ModelReply, ModelRequest } from "../src/model/port.js";
 import { SpentError } from "../src/model/spent.js";
-import { applyExclusions } from "../src/review/exclusions.js";
+import { applyExclusions, LINE_COPY_CHARS } from "../src/review/exclusions.js";
 import type { ReviewReport } from "../src/review/report.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
@@ -120,6 +120,9 @@ describe("the exclusion check", () => {
     expect(requests[0]?.user).toContain("<line>\n  return name.length;\n</line>");
     expect(requests[0]?.user).toContain(">>   2|   return name.length;");
     expect(outcome.usage?.inputTokens).toBe(100);
+    expect(outcome.verdicts).toEqual([
+      { file: "src/app.js", line: 2, guidelineId: "guard-before-use", form: "pick", sentence: 1 },
+    ]);
   });
 
   it("asks at temperature 0 for a structured verdict that holds only a listed sentence or none, with room for hidden reasoning", async () => {
@@ -148,6 +151,15 @@ describe("the exclusion check", () => {
     expect(outcome.kept).toEqual([FINDING]);
     expect(outcome.dropped).toEqual([]);
     expect(outcome.notices).toEqual([]);
+    expect(outcome.verdicts).toEqual([
+      {
+        file: "src/app.js",
+        line: 2,
+        guidelineId: "guard-before-use",
+        form: "pick",
+        sentence: null,
+      },
+    ]);
     expect(outcome.tally).toEqual({
       checked: 1,
       excluded: 0,
@@ -382,105 +394,110 @@ describe("the exclusion check with verdict: each", () => {
     ),
   );
   const each = (port: ModelPort) => ({ ...options(port, both), verdict: "each" as const });
+  const answered = (line: string, ...covers: string[]) =>
+    verdict({ line, sentences: covers.map((one, index) => ({ n: index + 1, covers: one })) });
 
-  it("asks for the flagged line copied and a numbered yes or no per listed sentence, in a structured reply of that shape", async () => {
-    const { port, requests } = scripted(
-      verdict({
-        line: LINE,
-        sentences: [
-          { n: 1, covers: "no" },
-          { n: 2, covers: "no" },
-        ],
-        reason: "r",
-      }),
-    );
+  it("asks for a bounded copy of the flagged line and a numbered yes or no per sentence, the line inside the data framing and no reviewer text", async () => {
+    const { port, requests } = scripted(answered(LINE, "no", "no"));
     await applyExclusions([FINDING], each(port));
+    const user = requests[0]?.user ?? "";
     const schema = requests[0]?.structured?.schema;
-    expect(requests[0]?.user).toContain(`1. ${EXCLUSION}\n2. ${SECOND}`);
-    expect(requests[0]?.system).toContain('"sentences": [{"n": 1, "covers": "yes or no"}');
+    expect(user).toContain(`1. ${EXCLUSION}\n2. ${SECOND}`);
+    expect(user).not.toContain("The reviewer said");
+    expect(user).not.toContain(FINDING.body);
+    expect(user.indexOf("data under review")).toBeLessThan(user.indexOf("<line>"));
+    expect(requests[0]?.system).toContain(
+      `{"line": "<the flagged line, trimmed, at most its first ${String(LINE_COPY_CHARS)} characters>", "sentences": [{"n": 1, "covers": "yes or no"}]}`,
+    );
+    expect(requests[0]?.system).not.toContain('"reason"');
     expect(requests[0]?.temperature).toBe(0);
     const answer = (covers: string[]) => ({
       line: LINE,
       sentences: covers.map((one, index) => ({ n: index + 1, covers: one })),
-      reason: "r",
     });
     expect(schema?.safeParse(answer(["no", "yes"])).success).toBe(true);
     expect(schema?.safeParse(answer(["no"])).success).toBe(false);
     expect(schema?.safeParse(answer(["no", "maybe"])).success).toBe(false);
   });
 
-  it("drops a finding whose answer says yes for any listed sentence and names the first such sentence", async () => {
-    const { port } = scripted(
-      verdict({
-        line: LINE,
-        sentences: [
-          { n: 1, covers: "no" },
-          { n: 2, covers: "YES" },
-        ],
-        reason: "a constant",
-      }),
-    );
+  it("drops a finding whose answer says yes for any listed sentence, names the first such sentence and records every answer", async () => {
+    const { port } = scripted(answered(LINE, "no", "YES"));
     const outcome = await applyExclusions([FINDING], each(port));
     expect(outcome.kept).toEqual([]);
     expect(outcome.tally).toMatchObject({ checked: 1, excluded: 1, unverified: 0 });
     expect(outcome.notices).toEqual([
       `exclusions: src/app.js:2 guard-before-use: dropped, the guideline excludes it (structured answer): "${SECOND}"`,
     ]);
+    expect(outcome.verdicts).toEqual([
+      {
+        file: "src/app.js",
+        line: 2,
+        guidelineId: "guard-before-use",
+        form: "each",
+        sentence: 2,
+        answers: ["no", "yes"],
+      },
+    ]);
   });
 
-  it("keeps a finding every listed sentence is answered no for, the line copied with other spacing", async () => {
-    const { port } = scripted(
-      verdict({
-        line: "return   name.length;",
-        sentences: [
-          { n: 1, covers: "no" },
-          { n: 2, covers: " No " },
-        ],
-        reason: "neither applies",
-      }),
-    );
+  it("keeps and records a finding every listed sentence is answered no for, the line copied with other spacing", async () => {
+    const { port } = scripted(answered("return   name.length;", "no", " No "));
     const outcome = await applyExclusions([FINDING], each(port));
     expect(outcome.kept).toEqual([FINDING]);
     expect(outcome.tally).toMatchObject({ checked: 1, excluded: 0, unverified: 0 });
+    expect(outcome.verdicts).toEqual([
+      {
+        file: "src/app.js",
+        line: 2,
+        guidelineId: "guard-before-use",
+        form: "each",
+        sentence: null,
+        answers: ["no", "no"],
+      },
+    ]);
   });
 
-  it("holds a finding whose answer copies another line, skips or reorders a sentence, or answers neither yes nor no", async () => {
-    const two = [
-      { n: 1, covers: "no" },
-      { n: 2, covers: "no" },
-    ];
+  it("takes a copy of the first characters of a line at the bound and over it, and holds a copy cut short of the bound", async () => {
+    const atBound = `  ${"a".repeat(LINE_COPY_CHARS)}  `;
+    const over = `  ${"b".repeat(LINE_COPY_CHARS)}${"c".repeat(40)}`;
+    for (const [line, copy, kept] of [
+      [atBound, "a".repeat(LINE_COPY_CHARS), true],
+      [over, "b".repeat(LINE_COPY_CHARS), true],
+      [over, over.trim(), true],
+      [over, "b".repeat(LINE_COPY_CHARS - 1), false],
+    ] as const) {
+      const { port } = scripted(answered(copy, "no", "no"));
+      const outcome = await applyExclusions([FINDING], {
+        ...each(port),
+        linesOf: () => ["function greet(name) {", line, "}"],
+      });
+      expect(outcome.kept.length, `${String(line.length)} ${String(copy.length)}`).toBe(
+        kept ? 1 : 0,
+      );
+    }
+  });
+
+  it("holds and records a finding whose answer copies another line, skips or reorders a sentence, or answers neither yes nor no", async () => {
     for (const [answer, why] of [
       [
-        { line: "function greet(name) {", sentences: two },
+        answered("function greet(name) {", "no", "no"),
         "the verdict copies a line other than the flagged one",
       ],
+      [answered(LINE, "no"), "the verdict does not answer every listed sentence in order"],
       [
-        { line: LINE, sentences: [{ n: 1, covers: "no" }] },
-        "the verdict does not answer every listed sentence in order",
-      ],
-      [
-        {
+        verdict({
           line: LINE,
           sentences: [
             { n: 2, covers: "no" },
             { n: 1, covers: "no" },
           ],
-        },
+        }),
         "the verdict does not answer every listed sentence in order",
       ],
-      [
-        {
-          line: LINE,
-          sentences: [
-            { n: 1, covers: "no" },
-            { n: 2, covers: "maybe" },
-          ],
-        },
-        "the verdict answers a sentence with neither yes nor no",
-      ],
-      [{ exclusion: "none", reason: "r" }, "no readable verdict"],
+      [answered(LINE, "no", "maybe"), "the verdict answers a sentence with neither yes nor no"],
+      [verdict({ exclusion: "none", reason: "r" }), "no readable verdict"],
     ] as const) {
-      const { port, requests } = scripted(verdict(answer));
+      const { port, requests } = scripted(answer);
       const outcome = await applyExclusions([FINDING], each(port));
       expect(requests, why).toHaveLength(2);
       expect(outcome.kept, why).toEqual([]);
@@ -488,15 +505,28 @@ describe("the exclusion check with verdict: each", () => {
       expect(outcome.notices[0], why).toBe(
         `exclusions: src/app.js:2 guard-before-use: no verdict (${why}); held, not posted`,
       );
+      expect(outcome.verdicts, why).toEqual([
+        {
+          file: "src/app.js",
+          line: 2,
+          guidelineId: "guard-before-use",
+          form: "each",
+          sentence: null,
+          held: true,
+        },
+      ]);
     }
   });
 
-  it("says a reply ran out of output tokens when the plain text retry is cut too", async () => {
-    const { port } = scripted(
+  it("asks the numbered question again as plain text and says the reply ran out of output tokens when both are cut", async () => {
+    const { port, requests } = scripted(
       { text: "", finishReason: "length" },
       { text: '{"line": "  return', finishReason: "length" },
     );
     const outcome = await applyExclusions([FINDING], each(port));
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.structured).toBeUndefined();
+    expect(requests[1]?.user).toContain(`1. ${EXCLUSION}\n2. ${SECOND}`);
     expect(outcome.notices[0]).toBe(
       "exclusions: src/app.js:2 guard-before-use: no verdict (the reply ran out of output tokens); held, not posted",
     );
@@ -505,16 +535,7 @@ describe("the exclusion check with verdict: each", () => {
   it("reads a fenced answer on the plain text retry and takes any copy when the line is unreadable", async () => {
     const { port } = scripted(
       { text: "", finishReason: "length" },
-      "```json\n" +
-        verdict({
-          line: "whatever the model saw",
-          sentences: [
-            { n: 1, covers: "yes" },
-            { n: 2, covers: "no" },
-          ],
-          reason: "a parameter",
-        }) +
-        "\n```",
+      "```json\n" + answered("whatever the model saw", "yes", "no") + "\n```",
     );
     const outcome = await applyExclusions([FINDING], {
       ...each(port),
@@ -611,13 +632,22 @@ describe("a review with an excluded finding", () => {
     );
   });
 
-  it("keeps the finding and gates when no listed case covers it", async () => {
+  it("keeps the finding, gates and records the verdict in the report when no listed case covers it", async () => {
     const { code, report } = await review(verdict({ exclusion: "none" }));
     expect(code).toBe(2);
     expect(report.findings).toHaveLength(1);
+    expect(report.exclusionVerdicts).toEqual([
+      {
+        file: "src/app.js",
+        line: 2,
+        guidelineId: "guard-before-use",
+        form: "pick",
+        sentence: null,
+      },
+    ]);
   });
 
-  it("asks a yes or no per listed sentence under exclusions.verdict: each and drops the finding on a yes", async () => {
+  it("asks a yes or no per listed sentence under exclusions.verdict: each, drops the finding on a yes and records the answers in the report", async () => {
     const cwd = repo();
     const systems: string[] = [];
     const port: ModelPort = {
@@ -627,7 +657,6 @@ describe("a review with an excluded finding", () => {
           ? verdict({
               line: "  return name.length;",
               sentences: [{ n: 1, covers: "yes" }],
-              reason: "a parameter",
             })
           : REVIEW;
         return Promise.resolve({ text });
@@ -644,6 +673,16 @@ describe("a review with an excluded finding", () => {
     expect(code).toBe(0);
     expect(report.findings).toEqual([]);
     expect(systems.filter((system) => system.includes('"sentences"'))).toHaveLength(1);
+    expect(report.exclusionVerdicts).toEqual([
+      {
+        file: "src/app.js",
+        line: 2,
+        guidelineId: "guard-before-use",
+        form: "each",
+        sentence: 1,
+        answers: ["yes"],
+      },
+    ]);
   });
 
   it("sends only the verdicts to exclusions.model and prices them at its own rates", async () => {

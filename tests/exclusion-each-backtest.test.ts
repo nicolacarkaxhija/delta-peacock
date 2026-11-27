@@ -10,10 +10,10 @@ import { replayRepeats } from "./helpers/verdict-replay.js";
 
 const BACKTEST = fileURLToPath(new URL("../bench/backtest", import.meta.url));
 const CASE = "exclusion-verdict-each-sentence";
-const FLAG_LINE = '    const isColor = facet.id.indexOf("color") > -1;';
+const STAMP_LINE = "  const stamp = order.placed.toISOString();";
 const REPEATS = 2;
 
-type Recorded = Record<"pick" | "each", Record<"require" | "flag", Partial<ModelReply>[]>>;
+type Recorded = Record<"pick" | "each", Record<"shown" | "stamp", Partial<ModelReply>[]>>;
 
 /** The case's recorded review, and its recorded verdict for the form each request asks in. */
 function recordedModel(benchCase: BacktestCase): ModelPort {
@@ -28,7 +28,7 @@ function recordedModel(benchCase: BacktestCase): ModelPort {
         return Promise.resolve({ text: review, usage });
       }
       const form = request.system.includes('"sentences"') ? "each" : "pick";
-      const line = request.user.includes(`<line>\n${FLAG_LINE}\n</line>`) ? "flag" : "require";
+      const line = request.user.includes(`<line>\n${STAMP_LINE}\n</line>`) ? "stamp" : "shown";
       return Promise.resolve({ text: "", usage, ...verdicts[form][line][0] });
     },
   };
@@ -61,13 +61,13 @@ describe("the exclusion-verdict-each-sentence backtest case", () => {
   const [benchCase] = loadBacktestCases(BACKTEST, [CASE]);
   if (benchCase === undefined) throw new Error(`${CASE} is missing`);
 
-  it("posts the require and drops the excluded flag in every replay when each sentence gets its own answer", async () => {
+  it("posts the hand joined date and drops the machine timestamp in every replay when each sentence gets its own answer", async () => {
     const clean = { error: undefined, problems: [], wrong: [], missed: 0 };
     expect(await scores(benchCase)).toEqual([clean, clean]);
   });
 
-  it("posts the excluded flag as a wrong finding when the recorded pick verdict answers none", async () => {
-    const leaked = { error: undefined, problems: [], wrong: [6], missed: 0 };
+  it("posts the machine timestamp as a wrong finding when the recorded pick verdict answers none", async () => {
+    const leaked = { error: undefined, problems: [], wrong: [5], missed: 0 };
     expect(await scores(withPick(benchCase))).toEqual([leaked, leaked]);
   });
 });

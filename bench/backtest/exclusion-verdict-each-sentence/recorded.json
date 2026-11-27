@@ -1,24 +1,24 @@
 {
   "findings": [
     {
-      "guidelineId": "views-show-only",
-      "file": "src/views/facets.js",
+      "guidelineId": "dates-through-formatter",
+      "file": "src/receipt.js",
       "line": 4,
-      "quote": "  const totals = require(\"../totals.js\");",
-      "guidelineQuote": "A require in a view is a finding.",
-      "title": "View requires a module",
-      "body": "The view requires the totals module; the model should carry the count.",
+      "quote": "  const shown = `${order.placed.getDate()}.${order.placed.getMonth() + 1}`;",
+      "guidelineQuote": "Joining date parts by hand, such as getDate and getMonth, is a finding.",
+      "title": "Date parts joined by hand",
+      "body": "The receipt joins day and month by hand; use formatDate.",
       "confidence": 0.8
     },
     {
-      "guidelineId": "views-show-only",
-      "file": "src/views/facets.js",
-      "line": 6,
-      "quote": "    const isColor = facet.id.indexOf(\"color\") > -1;",
-      "guidelineQuote": "A computation that produces new data in a view is a finding.",
-      "title": "View derives a color flag from facet ids",
-      "body": "The view searches facet ids to classify them; the model should provide the flag.",
-      "confidence": 0.55
+      "guidelineId": "dates-through-formatter",
+      "file": "src/receipt.js",
+      "line": 5,
+      "quote": "  const stamp = order.placed.toISOString();",
+      "guidelineQuote": "A date shown to a person is formatted by formatDate from the shared formatter.",
+      "title": "Date formatted without the shared formatter",
+      "body": "The order date is formatted with toISOString instead of formatDate.",
+      "confidence": 0.5
     }
   ]
 }

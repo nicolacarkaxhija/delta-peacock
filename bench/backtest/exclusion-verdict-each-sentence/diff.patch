@@ -1,15 +1,14 @@
-diff --git a/src/views/facets.js b/src/views/facets.js
+diff --git a/src/receipt.js b/src/receipt.js
 new file mode 100644
-index 0000000..2222222
+index 0000000..3333333
 --- /dev/null
-+++ b/src/views/facets.js
-@@ -0,0 +1,9 @@
-+import { escape } from "../escape.js";
++++ b/src/receipt.js
+@@ -0,0 +1,8 @@
++import { formatDate } from "./format.js";
 +
-+export function facetList(model) {
-+  const totals = require("../totals.js");
-+  return model.facets.map((facet) => {
-+    const isColor = facet.id.indexOf("color") > -1;
-+    return `<li class="${isColor ? "swatch" : "text"}">${escape(facet.label)} ${totals.count(facet)}</li>`;
-+  });
++export function receipt(order) {
++  const shown = `${order.placed.getDate()}.${order.placed.getMonth() + 1}`;
++  const stamp = order.placed.toISOString();
++  const due = formatDate(order.due);
++  return { text: `Placed ${shown}, due ${due}`, file: `receipt-${stamp}.json` };
 +}
