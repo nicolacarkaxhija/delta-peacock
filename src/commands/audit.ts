@@ -17,7 +17,8 @@ import { loadBaseline, splitByBaseline, writeBaseline } from "../review/baseline
 import { fingerprintOf } from "../domain/finding.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { parseReviewResponse } from "../review/parse.js";
-import { evidenceFlag, isPosted } from "../review/posting.js";
+import { evidenceFlag, holdReason, type PostingContext } from "../review/posting.js";
+import { tagHolds } from "../domain/hold.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
 import { renderReview } from "../review/render.js";
 import { buildReport } from "../review/report.js";
@@ -129,13 +130,16 @@ export async function runAudit(
 
   const byId = new Map(loaded.guidelines.map((guideline) => [guideline.id, guideline]));
   // audit asks no exclusion verdict, so under evidence a violation its guideline could excuse is held
-  const posted = (finding: Finding): boolean =>
-    isPosted(finding, config.review, {
-      verdictsAsked: false,
-      guideline: finding.kind === "violation" ? byId.get(finding.guidelineId) : undefined,
-    });
-  let kept = findings.filter(posted);
-  const filtered = findings.filter((finding) => !posted(finding));
+  const context = (finding: Finding): PostingContext => ({
+    verdictsAsked: false,
+    guideline: finding.kind === "violation" ? byId.get(finding.guidelineId) : undefined,
+  });
+  const reasonOf = (finding: Finding) => holdReason(finding, config.review, context(finding));
+  let kept = findings.filter((finding) => reasonOf(finding) === undefined);
+  const { findings: filtered, counts: holds } = tagHolds(
+    findings.filter((finding) => reasonOf(finding) !== undefined),
+    reasonOf,
+  );
 
   if (options.writeBaseline === true) {
     const accepted = writeBaseline(deps.cwd, config.review.baselinePath, kept);
@@ -168,6 +172,7 @@ export async function runAudit(
       adjustedLines,
       droppedMalformed,
       filtered: filtered.length,
+      holds,
       gate,
     }),
   );

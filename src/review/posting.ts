@@ -1,6 +1,7 @@
 import type { Config } from "../config/schema.js";
 import { fingerprintOf, type Finding } from "../domain/finding.js";
 import type { Guideline } from "../domain/guideline.js";
+import type { HoldReason } from "../domain/hold.js";
 
 type Review = Pick<Config["review"], "posting" | "confidenceFloor">;
 
@@ -12,25 +13,30 @@ export interface PostingContext {
 }
 
 /**
- * Whether a finding that survived every validator is posted. Under evidence a
- * violation stands on what was checked (a whole rule sentence at parse, its
- * quote placed on a line of the change, a cleared exclusion verdict), so a
- * sampled confidence near the floor cannot flip it between runs; one whose
- * quote could not be placed, or whose exclusions no verdict was asked about,
- * is held. An observation cites no guideline and keeps the floor.
+ * Why a finding that survived every validator is held, or undefined when it is
+ * posted. Under evidence a violation stands on what was checked (a whole rule
+ * sentence at parse, its quote placed on a line of the change, a cleared
+ * exclusion verdict), so a sampled confidence near the floor cannot flip it
+ * between runs; one whose quote could not be placed, or whose exclusions no
+ * verdict was asked about, is held. An observation cites no guideline and
+ * keeps the floor.
  */
-export function isPosted(finding: Finding, review: Review, context: PostingContext = {}): boolean {
+export function holdReason(
+  finding: Finding,
+  review: Review,
+  context: PostingContext = {},
+): HoldReason | undefined {
   if (review.posting === "evidence" && finding.kind === "violation") {
-    if (isHeldUnplaced(finding, review)) return false;
+    if (finding.unplaced === true) return "unplaced";
     const listed = context.guideline?.exclusions?.length ?? 0;
-    return !(context.verdictsAsked === false && listed > 0);
+    return context.verdictsAsked === false && listed > 0 ? "unchecked" : undefined;
   }
-  return (finding.confidence ?? 1) >= review.confidenceFloor;
+  return (finding.confidence ?? 1) >= review.confidenceFloor ? undefined : "floor";
 }
 
-/** True for a violation held under evidence because its quote sits on no line; the report counts it apart from the floor. */
-export function isHeldUnplaced(finding: Finding, review: Review): boolean {
-  return review.posting === "evidence" && finding.kind === "violation" && finding.unplaced === true;
+/** Whether a finding that survived every validator is posted. */
+export function isPosted(finding: Finding, review: Review, context: PostingContext = {}): boolean {
+  return holdReason(finding, review, context) === undefined;
 }
 
 /** The option the prompt and the parser take under posting on evidence. */

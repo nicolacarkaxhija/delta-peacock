@@ -6,6 +6,7 @@ import {
   type Violation,
 } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
+import { holdTally, type HoldCounts } from "../domain/hold.js";
 import type { ChangeScope } from "../git/diff.js";
 import { meetsThreshold, SEVERITIES, type Severity } from "../domain/severity.js";
 import type { ModelUnavailability } from "../model/unavailable.js";
@@ -297,9 +298,10 @@ export interface SummaryInput {
   droppedOffChange?: number;
   /** Model findings withheld because their added lines only re-indent a removed line. */
   droppedReindented?: number;
+  /** Findings the posting rule held. */
   filtered: number;
-  /** Violations held under posting: evidence because their quote sits on no line. */
-  unplaced?: number;
+  /** Of those, the ones held per posting: evidence reason; the rest sit under the confidence floor. */
+  holds?: HoldCounts;
   /** Findings on a form the repository lists as accepted; counted, never posted. */
   accepted?: number;
   gate: GateDecision;
@@ -774,10 +776,10 @@ export function renderSummaryBody(
     ...(input.accepted !== undefined && input.accepted > 0
       ? [plural(input.accepted, "accepted finding")]
       : []),
-    ...(input.filtered > 0 ? [plural(input.filtered, "low-confidence finding")] : []),
-    ...(input.unplaced !== undefined && input.unplaced > 0
-      ? [plural(input.unplaced, "unplaced violation")]
-      : []),
+    ...holdTally(input.filtered, input.holds).map(
+      (hold) =>
+        `${plural(hold.count, hold.noun)}${hold.note === undefined ? "" : ` (${hold.note})`}`,
+    ),
     ...(input.droppedUncited > 0
       ? [`${plural(input.droppedUncited, "finding")} citing no guideline`]
       : []),

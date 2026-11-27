@@ -1,5 +1,6 @@
 import type { Finding, ProposedGuideline, Violation } from "../domain/finding.js";
 import type { GateDecision } from "../domain/gate.js";
+import { holdTally, type HoldCounts } from "../domain/hold.js";
 
 export interface RenderableReview {
   violations: readonly Violation[];
@@ -17,10 +18,10 @@ export interface RenderableReview {
   droppedMalformed?: number;
   /** Violations quoting a sentence their guideline does not contain. */
   droppedMisquoted?: number;
-  /** How many findings sit under the confidence floor, report-only. */
+  /** How many findings the posting rule held, report-only. */
   filtered: number;
-  /** Violations held under posting: evidence because their quote sits on no line, report-only. */
-  unplaced?: number;
+  /** Of those, the ones held per posting: evidence reason; the rest sit under the confidence floor. */
+  holds?: HoldCounts;
   /** Findings on a form the repository lists as accepted. */
   accepted?: number;
   /** Findings held for want of a readable exclusion verdict; incomplete when their share reached the warning share. */
@@ -143,12 +144,9 @@ export function renderReview(review: RenderableReview): string {
           `${String(review.accepted)} finding(s) accepted: the repository lists their form as accepted`,
         ]
       : []),
-    ...(review.filtered > 0
-      ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]
-      : []),
-    ...(review.unplaced !== undefined && review.unplaced > 0
-      ? [`${String(review.unplaced)} violation(s) held: not placed on a line (report only)`]
-      : []),
+    ...holdTally(review.filtered, review.holds).map(
+      (hold) => `${String(hold.count)} ${hold.log} (report only)`,
+    ),
     ...(review.held !== undefined
       ? [
           `${String(review.held.count)} finding(s) held: no readable exclusion verdict`,
