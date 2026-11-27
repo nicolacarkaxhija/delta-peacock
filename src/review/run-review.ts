@@ -76,11 +76,12 @@ import { partitionAccepted, readAcceptedForms } from "./accepted-forms.js";
 import { applyExclusions } from "./exclusions.js";
 import {
   evidenceFlag,
-  isHeldUnplaced,
+  holdReason,
   isPosted,
   skippedCheckContext,
   type PostingContext,
 } from "./posting.js";
+import { tagHolds } from "../domain/hold.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
@@ -631,9 +632,10 @@ export async function runReview(
     ceiling.reached(),
     postingContext,
   );
-  const filtered = finalized.filtered;
-  // a violation held for want of a line is counted apart, so the summary names its reason
-  const unplaced = filtered.filter((finding) => isHeldUnplaced(finding, config.review)).length;
+  // each finding held under evidence carries its reason, so no count reads as under the floor
+  const { findings: filtered, counts: holds } = tagHolds(finalized.filtered, (finding) =>
+    holdReason(finding, config.review, postingContext(finding)),
+  );
   const baselined = finalized.baselined;
   usage = finalized.usage;
   // an in-code waiver moves a violation out of the gate but not out of the report
@@ -685,8 +687,8 @@ export async function runReview(
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       droppedMisquoted: parsed.droppedMisquoted,
-      filtered: filtered.length - unplaced,
-      ...(unplaced > 0 ? { unplaced } : {}),
+      filtered: filtered.length,
+      holds,
       accepted: accepted.length,
       waived: waivedEntries,
       ...(heldByExclusions !== undefined
@@ -847,8 +849,8 @@ export async function runReview(
       droppedUncited: parsed.droppedUncited,
       droppedOffChange: offChange,
       droppedReindented: reindented,
-      filtered: filtered.length - unplaced,
-      ...(unplaced > 0 ? { unplaced } : {}),
+      filtered: filtered.length,
+      holds,
       ...(accepted.length > 0 ? { accepted: accepted.length } : {}),
       ...(heldByExclusions !== undefined ? { held: heldByExclusions } : {}),
       gate,

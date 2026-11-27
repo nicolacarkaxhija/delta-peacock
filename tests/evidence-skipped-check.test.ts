@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/index.js";
 import type { ModelPort } from "../src/model/port.js";
 import type { ReviewReport } from "../src/review/report.js";
+import type { ScmPort } from "../src/scm/port.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 const EXCLUSION = "A value the function receives as a parameter is never a finding.";
@@ -55,7 +56,13 @@ const port: ModelPort = {
       : Promise.resolve({ text: REVIEW }),
 };
 
-async function review(posting: string): Promise<ReviewReport> {
+interface Run {
+  out: string;
+  summary: string;
+  report: ReviewReport;
+}
+
+async function review(posting: string): Promise<Run> {
   const cwd = makeRepo();
   write(cwd, "guidelines/guard.md", GUARD);
   write(
@@ -80,25 +87,55 @@ async function review(posting: string): Promise<ReviewReport> {
   write(cwd, "src/app.js", "function greet(name) {\n  return name.length;\n}\n");
   write(cwd, "src/other.js", "function size(item) {\n  return item.size;\n}\n");
   commitAll(cwd, "change");
+  const summary: string[] = [];
+  const scm: ScmPort = {
+    listInlineComments: () => Promise.resolve([]),
+    createInlineComment: () => Promise.resolve(),
+    updateComment: () => Promise.resolve(),
+    deleteComment: () => Promise.resolve(),
+    listSummaryComments: () => Promise.resolve([]),
+    createSummaryComment: (body) => {
+      summary.push(body);
+      return Promise.resolve();
+    },
+    updateSummaryComment: () => Promise.resolve(),
+    postStatus: () => Promise.resolve(),
+  };
+  let out = "";
   await runCli(["review", "--report", "r.json"], {
     cwd,
-    env: {},
-    out: () => undefined,
+    env: {
+      DELTA_PEACOCK_SCM_PROVIDER: "github",
+      DELTA_PEACOCK_SCM_REPOSITORY: "acme/widgets",
+      DELTA_PEACOCK_SCM_PULL_REQUEST: "7",
+    },
+    out: (text) => {
+      out += text;
+    },
     err: () => undefined,
     modelPort: port,
+    scmPort: scm,
+    wait: () => Promise.resolve(),
   });
-  return JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
+  const report = JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
+  return { out, summary: summary.join("\n"), report };
 }
 
 describe("a model finding whose exclusion check was skipped", () => {
   it("posts under the default posting rule, as before", async () => {
-    const report = await review("confidence");
+    const { report } = await review("confidence");
     expect(report.findings.map((finding) => finding.title)).toEqual(["Read before a null check"]);
   });
 
-  it("is held under posting: evidence, since no verdict cleared it", async () => {
-    const report = await review("evidence");
-    expect(report.findings).toEqual([]);
-    expect(report.filtered.map((finding) => finding.title)).toEqual(["Read before a null check"]);
+  it("is held under posting: evidence, since no verdict cleared it, and counted under that reason, never the confidence floor", async () => {
+    const run = await review("evidence");
+    expect(run.report.findings).toEqual([]);
+    expect(run.report.filtered).toEqual([
+      expect.objectContaining({ title: "Read before a null check", holdReason: "unchecked" }),
+    ]);
+    expect(run.out).toContain("1 violation(s) held: exclusion check skipped (report only)");
+    expect(run.out).not.toContain("under the confidence floor");
+    expect(run.summary).toContain("1 unchecked violation (exclusion check skipped)");
+    expect(run.summary).not.toContain("low-confidence");
   });
 });
