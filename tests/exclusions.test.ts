@@ -496,9 +496,12 @@ describe("the exclusion check with verdict: each", () => {
     ]);
   });
 
-  it("takes a true prefix of the line from the lower bound on, or the whole of a shorter line, and holds a short, partial or foreign copy", async () => {
+  it("takes a true start of the line covering its first lower bound characters, or the whole of a shorter line, and holds a short, partial, extended or foreign copy", async () => {
     const long = `  ${"b".repeat(LINE_COPY_CHARS)}${"c".repeat(40)}`;
     const short = "  let total = 0;";
+    // spaced out text: the first LINE_COPY_CHARS characters hold fewer letters than the lower bound
+    const spaced = `    ${"x ".repeat(LINE_COPY_CHARS)}`;
+    const spacedStart = spaced.trim().slice(0, LINE_COPY_CHARS);
     for (const [line, copy, kept] of [
       [long, "b".repeat(LINE_COPY_CHARS), true],
       [long, `${"b".repeat(LINE_COPY_CHARS)}${"c".repeat(20)}`, true],
@@ -507,6 +510,10 @@ describe("the exclusion check with verdict: each", () => {
       [long, "b".repeat(LINE_COPY_MIN_CHARS - 1), false],
       [short, "let total = 0;", true],
       [short, "let total", false],
+      [short, "let total = 0; // and more", false],
+      [spaced, spacedStart, true],
+      [spaced, spaced.trim().slice(0, LINE_COPY_MIN_CHARS), true],
+      [spaced, spaced.trim().slice(0, LINE_COPY_MIN_CHARS - 2), false],
       [long, `${"b".repeat(LINE_COPY_CHARS - 5)}Z`, false],
     ] as const) {
       const { port } = scripted(answered(copy, "no", "no"));
