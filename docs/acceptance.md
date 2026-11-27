@@ -76,6 +76,13 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   sentence once per guideline as a `Never report under this guideline` line; the synthetic case
   `exclusion-verdict-shapes` gives the same findings in three replays of each verdict shape. On
   its own: `pnpm exec vitest run tests/exclusions tests/held-findings tests/exclusion-verdict-backtest`.
+- `verdict per sentence`: with `exclusions.verdict: each` the one verdict call numbers the listed
+  sentences and asks for the flagged line copied and a yes or no per sentence; any yes drops the
+  finding under the first such sentence, all no keeps it, and a copy of another line, a skipped or
+  reordered sentence or an answer other than yes or no holds it; the default `pick` asks as before;
+  the synthetic case `exclusion-verdict-each-sentence` drops its excluded flag under `each` and
+  posts it under `pick` with the recorded none. On its own:
+  `pnpm exec vitest run tests/exclusions tests/exclusion-each-backtest`.
 - `posting on evidence`: by default (`review.posting: confidence`) every finding under the
   confidence floor is held, as before; with `review.posting: evidence` a placed violation is posted
   whatever confidence the model gave it, a violation whose quote could not be placed is held, a

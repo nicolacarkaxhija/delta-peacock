@@ -412,6 +412,7 @@ export async function runReview(
           guidelinesById: parseOptions.guidelinesById,
           linesOf: linesOfFile,
           concurrency: PASS_CONCURRENCY,
+          verdict: config.exclusions.verdict,
         });
   for (const notice of excluded?.notices ?? []) deps.err(`${notice}\n`);
   if (excluded !== undefined && excluded.tally.excluded > 0) {

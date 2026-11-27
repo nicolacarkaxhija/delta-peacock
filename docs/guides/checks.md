@@ -433,6 +433,21 @@ lists exclusions, once per distinct line. The verdicts are priced at the verdict
 as `verdicts <n> tokens in, <m> out on <id>` and adds them to the total and the month, and the
 report carries them apart under `exclusionModel` (id, usage, cost) rather than in `usage`.
 
+### A yes or no per listed sentence
+
+By default a verdict picks one listed sentence or `none`, and a model that weighs the rule
+against the list can answer `none` for a line a listed sentence names. `exclusions.verdict: each`
+(`DELTA_PEACOCK_EXCLUSIONS_VERDICT`) asks the same single call in another shape: the listed
+sentences numbered, the flagged line copied into `line`, and a `yes` or `no` for every sentence
+in order. The finding is dropped when any sentence is answered `yes`, and the log names the first
+such sentence as the one that excludes it. A copied line that differs from the flagged line apart
+from spacing, an answer list that skips or reorders a sentence, or an answer other than `yes` or
+`no` (case and spacing aside) holds the finding as `exclusion-unverified`, like any unreadable
+verdict. When the flagged line cannot be read, any copy is taken. It costs no extra call; whether
+it excludes more of what a guideline lists without dropping right findings is a question for a
+backtest with a model, and the synthetic case `exclusion-verdict-each-sentence` holds the shape it
+is meant for.
+
 ## Posting on evidence
 
 With `review.posting: evidence` a violation is posted on its evidence instead of the confidence
