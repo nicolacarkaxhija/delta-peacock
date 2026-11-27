@@ -117,6 +117,7 @@ describe("a violation whose quote matches no line of the file", () => {
     expect(run.code).toBe(0);
     expect(run.inline).toEqual([]);
     expect(run.report.findings).toEqual([]);
+    expect(run.report.filtered).toEqual([expect.objectContaining({ holdReason: "unplaced" })]);
     expect(run.report.filtered.map((finding) => [finding.unplaced, finding.note])).toEqual([
       [
         true,
