@@ -1,0 +1,25 @@
+diff --git a/packages/gallery_legacy/lib/Thumbnail.js b/packages/gallery_core/lib/Thumbnail.js
+similarity index 89%
+rename from packages/gallery_legacy/lib/Thumbnail.js
+rename to packages/gallery_core/lib/Thumbnail.js
+index b116e59..0334e40 100644
+--- a/packages/gallery_legacy/lib/Thumbnail.js
++++ b/packages/gallery_core/lib/Thumbnail.js
+@@ -1,7 +1,7 @@
+ 'use strict';
+ 
+ /**
+- * @memberof gallery_legacy
++ * @memberof gallery_core
+  * @module Thumbnail
+  * @description Builds thumbnail descriptors for the photo gallery.
+  */
+@@ -9,7 +9,7 @@
+ var WIDTH = 240;
+ 
+ /**
+- * @memberof gallery_legacy
++ * @memberof gallery_core
+  * @class Thumbnail
+  * @classdesc A thumbnail of one picture at the gallery width.
+  * @param {Object} picture the picture with its url and title
