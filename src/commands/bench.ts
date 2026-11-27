@@ -10,6 +10,7 @@ import {
 } from "../bench/harness.js";
 import type { Finding } from "../domain/finding.js";
 import { ToolError } from "../errors.js";
+import { evidenceFlag } from "../review/posting.js";
 import { buildModelPortFor } from "../model/build.js";
 import type { ModelUsage } from "../model/port.js";
 import { addUsage } from "../model/usage.js";
@@ -161,6 +162,7 @@ function reviewFnFrom(deps: RuntimeDeps, flags: Readonly<Record<string, string>>
       guidelinesById,
       generalPass: config.review.generalPass,
       observationSeverityCap: config.review.observationSeverityCap,
+      ...evidenceFlag(config.review),
     };
     const usage: Record<string, ModelUsage> = {};
     let parsed: ParsedReview;

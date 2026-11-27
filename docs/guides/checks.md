@@ -433,6 +433,60 @@ lists exclusions, once per distinct line. The verdicts are priced at the verdict
 as `verdicts <n> tokens in, <m> out on <id>` and adds them to the total and the month, and the
 report carries them apart under `exclusionModel` (id, usage, cost) rather than in `usage`.
 
+## Posting on evidence
+
+With `review.posting: evidence` a violation is posted on its evidence instead of the confidence
+the model reports: its quote placed on a line of the change, a whole sentence of its guideline as
+the cited sentence, and, under a guideline with `exclusions`, a verdict that cleared it. A cited
+sentence that is not a whole sentence of the rule text drops the finding as misquoted, a finding
+whose quote could not be placed is held, and a model finding whose exclusion check was skipped
+(the model could not run for part of the change) is held.
+
+A citable unit follows the markdown structure of the guideline body:
+
+- A paragraph is all its consecutive lines joined; a soft wrap never starts a unit, whatever the
+  next line starts with. A paragraph splits into sentences after `.`, `!` or `?`, any closing
+  quotes or brackets right after it, and a space. `e.g.`, `i.e.` and `vs.` never end a sentence;
+  `etc.` ends one only before a capital letter, a digit, a backtick or a quote.
+- A list item, with the lines it wraps onto, is one unit, however many sentences it holds. A
+  nested item, at any indent, is an item of its own. A heading is one unit, and so is the
+  guideline's title.
+- Fenced code (backtick or tilde fences), indented code, block quotes, HTML comments and thematic
+  breaks are never citable.
+- An example label is `Good`, `Bad`, `Correct`, `Incorrect`, `Wrong`, `Right`, `Example`, `Do` or
+  `Don't`, optionally followed by `example` or a parenthesis, read once a list marker, a quote
+  mark and emphasis are gone. A block that opens with a label and a colon, or is a label alone, is
+  never citable: a rule inside an example block is not citable. A sentence inside a paragraph or a
+  list item that opens with a label and a colon ends what is citable in that block: only the
+  sentences before it count. A block that is only a label also makes the block after it non
+  citable, and a heading that is only a label makes its whole section non citable, up to the next
+  heading of the same or a higher level. Prose that starts with one of these words and has no
+  colon after the label stays citable.
+- The exclusion sentences are never citable.
+
+Authors separate rules with a period or a list item: two rules on two bare lines of one paragraph
+are one unit, and only both together are a valid quote. Before matching, both sides lose their
+spacing differences, a leading `-`, `*`, `+` or number such as `1.` or `1)`, the `*`, `_` and
+backtick marks that touch a word boundary (`a*b` keeps its mark), wrapping quotes, and the closing
+marks `.`, `!`, `?`, `:`, `;`, `"`, `'`, `”` and `’`; every other word and sign must match, so a
+passage shorter than its unit or a near quote is refused. A short heading is citable however short
+it is: the minimum length the default check asks of a quote does not apply here, since a whole
+unit must match.
+
+Limits of this reading, so a guideline author knows what to avoid:
+
+- A list item is one unit whatever its sentences; split two rules into two items.
+- A paragraph directly after a list item, with no blank line between, joins that item.
+- A table is one unit, read as one paragraph.
+- Use `#` headings: an underlined heading reads as a paragraph.
+- An abbreviation beyond `e.g.`, `i.e.`, `vs.` and `etc.` splits its sentence at its dot.
+- An unclosed fence makes everything after it non citable.
+- A paragraph indented four spaces under a list item after a blank line reads as code, and so
+  does an indented line that starts with a marker when no list is open.
+- A block quote line directly after a list item also covers the following item until a blank
+  line.
+- Examples belong in fences or under a label, never in the rule's own sentences.
+
 ## Facts and the judge
 
 Most candidates are measured facts and become findings without a model call. Some turn on

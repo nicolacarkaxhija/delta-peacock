@@ -5,6 +5,9 @@ import { SEVERITIES, severityRank, type Severity } from "../domain/severity.js";
 import { ToolError } from "../errors.js";
 import { appliesTo } from "../guidelines/languages.js";
 import { plainBody, plainTitle } from "./prose.js";
+import { quotesRuleSentence } from "./rule-sentences.js";
+
+export { quotesRuleSentence };
 
 /** Models write null for "no value" (`"suggestion": null`); that reads as absent, never as malformed. */
 const absentIfNull = <T extends z.ZodType>(schema: T) =>
@@ -212,14 +215,6 @@ export function quotesGuideline(
   return normalizeQuote(`${guideline.title}\n${guideline.body}`).includes(wanted);
 }
 
-/** True when the quote is a whole sentence of the guideline's rule text. */
-export function quotesRuleSentence(
-  quote: string | undefined,
-  guideline: Pick<Guideline, "title" | "body" | "exclusions">,
-): boolean {
-  return quotesGuideline(quote, guideline);
-}
-
 /** Undefined means uncited with the general pass off; out-of-scope and misquoted are their own lanes. */
 function toFinding(
   raw: RawShape,
@@ -241,7 +236,11 @@ function toFinding(
   }
   if (guideline !== undefined) {
     // a finding stands on a sentence the guideline really says, never on a paraphrase
-    if (!quotesGuideline(raw.guidelineQuote, guideline)) return "misquoted";
+    const quoted =
+      options.evidence === true
+        ? quotesRuleSentence(raw.guidelineQuote, guideline)
+        : quotesGuideline(raw.guidelineQuote, guideline);
+    if (!quoted) return "misquoted";
     const violation: Violation = {
       kind: "violation",
       guidelineId: guideline.id,

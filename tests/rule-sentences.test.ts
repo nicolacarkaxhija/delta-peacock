@@ -162,6 +162,8 @@ describe("quotesRuleSentence on abbreviations", () => {
     "Weigh speed vs. cost before caching. Pick one vs. Never both.",
     "",
     "Use a guard, e.g. Optional chaining, before reading.",
+    "",
+    "Avoid logs, traces, etc. in hot paths.",
   );
 
   it("ends a sentence at etc. before a capital or a digit, and never at vs. or e.g.", () => {
@@ -177,6 +179,8 @@ describe("quotesRuleSentence on abbreviations", () => {
       ["Pick one vs. Never both.", true],
       ["Use a guard, e.g. Optional chaining, before reading.", true],
       ["Use a guard, e.g.", false],
+      ["Avoid logs, traces, etc. in hot paths.", true],
+      ["Avoid logs, traces, etc.", false],
     ] as const) {
       expect(quotesRuleSentence(quote, rule), quote).toBe(citable);
     }
