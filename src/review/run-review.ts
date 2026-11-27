@@ -73,7 +73,13 @@ import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { keepOnChangedLines } from "./changed-lines.js";
 import { partitionAccepted, readAcceptedForms } from "./accepted-forms.js";
 import { applyExclusions } from "./exclusions.js";
-import { evidenceFlag, isPosted, skippedCheckContext, type PostingContext } from "./posting.js";
+import {
+  evidenceFlag,
+  isHeldUnplaced,
+  isPosted,
+  skippedCheckContext,
+  type PostingContext,
+} from "./posting.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
@@ -622,6 +628,8 @@ export async function runReview(
     postingContext,
   );
   const filtered = finalized.filtered;
+  // a violation held for want of a line is counted apart, so the summary names its reason
+  const unplaced = filtered.filter((finding) => isHeldUnplaced(finding, config.review)).length;
   const baselined = finalized.baselined;
   usage = finalized.usage;
   // an in-code waiver moves a violation out of the gate but not out of the report
@@ -672,7 +680,8 @@ export async function runReview(
       adjustedLines: parsed.adjustedLines,
       droppedMalformed: parsed.droppedMalformed,
       droppedMisquoted: parsed.droppedMisquoted,
-      filtered: filtered.length,
+      filtered: filtered.length - unplaced,
+      ...(unplaced > 0 ? { unplaced } : {}),
       accepted: accepted.length,
       waived: waivedEntries,
       ...(heldByExclusions !== undefined
@@ -831,7 +840,8 @@ export async function runReview(
       proposals,
       droppedUncited: parsed.droppedUncited,
       droppedOffChange: onChange.dropped.length,
-      filtered: filtered.length,
+      filtered: filtered.length - unplaced,
+      ...(unplaced > 0 ? { unplaced } : {}),
       ...(accepted.length > 0 ? { accepted: accepted.length } : {}),
       ...(heldByExclusions !== undefined ? { held: heldByExclusions } : {}),
       gate,
