@@ -1,0 +1,22 @@
+{
+  "findings": [
+    {
+      "file": "packages/gallery_core/lib/Thumbnail.js",
+      "line": 11,
+      "endLine": 21,
+      "guidelineId": "docs-match-signature",
+      "severity": "MINOR",
+      "mustMention": ["@returns"],
+      "why": "the move changed the constructor's doc comment, and the constructor returns this while the doc has no @returns; the guideline excuses only a function that returns nothing"
+    }
+  ],
+  "noFinding": [
+    {
+      "file": "packages/gallery_core/lib/Thumbnail.js",
+      "line": 3,
+      "endLine": 7,
+      "guidelineId": "docs-match-signature",
+      "why": "the module block documents no function"
+    }
+  ]
+}
