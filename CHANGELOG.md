@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.12.0...delta-peacock-v0.13.0) (2026-11-27)
+
+
+### Features
+
+* **exclusions:** add an opt in verdict that answers each listed sentence ([#59](https://github.com/nicolacarkaxhija/delta-peacock/issues/59)) ([30b22f3](https://github.com/nicolacarkaxhija/delta-peacock/commit/30b22f385055d02ed1f55ddef8a882324c421b75))
+
+
+### Bug Fixes
+
+* **review:** count an unplaced violation held under evidence apart from the confidence floor ([#62](https://github.com/nicolacarkaxhija/delta-peacock/issues/62)) ([4c68aaa](https://github.com/nicolacarkaxhija/delta-peacock/commit/4c68aaa97eb6d8f1808e5111e2743a8cf69b5861))
+* **review:** count each finding held under evidence under its own reason ([#64](https://github.com/nicolacarkaxhija/delta-peacock/issues/64)) ([7fd6af7](https://github.com/nicolacarkaxhija/delta-peacock/commit/7fd6af7d3814c5e76221c88dc8ebcb76c954de09))
+* **review:** drop a model finding on a line the change only re-indents ([#63](https://github.com/nicolacarkaxhija/delta-peacock/issues/63)) ([a2db43d](https://github.com/nicolacarkaxhija/delta-peacock/commit/a2db43d074f1c0e4b433bbaa25d36592eef94406))
+
 ## [0.12.0](https://github.com/nicolacarkaxhija/delta-peacock/compare/delta-peacock-v0.11.1...delta-peacock-v0.12.0) (2026-11-27)
 
 
