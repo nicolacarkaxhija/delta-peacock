@@ -171,10 +171,15 @@ export const SemgrepSchema = z.strictObject({
   timeoutSeconds: z.number().int().positive().default(SEMGREP_TIMEOUT_SECONDS),
 });
 
+/** Low enough that a check failing on a sizeable part of the findings never reads as a complete review, high enough that one stray unreadable reply in a long review stays a notice. */
+const WARN_HELD_SHARE = 0.25;
+
 /** The check that holds model findings against a guideline's listed exclusions. */
 export const ExclusionsSchema = z.strictObject({
   /** A model for the verdict calls only; the review model serves when unset. */
   model: ModelRefSchema.optional(),
+  /** From this share of checked findings held for want of a readable verdict, the run warns that the review is incomplete. */
+  warnHeldShare: z.number().min(0).max(1).default(WARN_HELD_SHARE),
 });
 
 /** How the rag strategy retrieves: lexical TF-IDF or real embeddings. */

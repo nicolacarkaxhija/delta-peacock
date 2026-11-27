@@ -66,6 +66,7 @@ export interface RejectedCandidate {
     | "judge-outside"
     | "judge-failed"
     | "excluded"
+    | "exclusion-unverified"
     | "off-change"
     | `structural:${StructuralCheck}`;
   /** The candidate's JSON, capped; the diff it came from was already redacted. */

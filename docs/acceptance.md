@@ -62,12 +62,20 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   model posts and exits as before. On its own:
   `pnpm exec vitest run tests/model-fallback`.
 - `exclusions`: a guideline's `exclusions` must be sentences it says word for word; a finding
-  under it is dropped only when the exclusion check names a listed sentence, and kept on `none`,
-  an unlisted sentence (logged), an unreadable answer or a failed call; the verdict runs at
-  temperature 0, once per guideline, line text and list in a run, and on `exclusions.model` when
-  set, priced at that model's rates; the review prompt carries each listed sentence once per
-  guideline as a `Never report under this guideline` line. On its own:
-  `pnpm exec vitest run tests/exclusions`.
+  under it is dropped only when the exclusion check names a listed sentence and kept on `none`;
+  the verdict is asked as a structured reply whose schema holds only the listed sentences and
+  `none`, then once as plain text; an unlisted sentence, an empty, blank or missing answer, an
+  unreadable answer, a reply that ran out of output or a failed call holds the finding: never
+  posted, recorded as `exclusion-unverified`, counted in the report's `exclusions` tally with the
+  path that answered each verdict, named as held in the log and the summary (whose first line then
+  never reads as clean), its earlier comment, thread and task left as they are; from
+  `exclusions.warnHeldShare` of the checked findings the log and the summary warn that the review
+  is incomplete, and the backtest lists held findings as a problem; a failed call's tokens count;
+  the verdict runs at temperature 0, once per guideline, line text and list in a run, and on
+  `exclusions.model` when set, priced at that model's rates; the review prompt carries each listed
+  sentence once per guideline as a `Never report under this guideline` line; the synthetic case
+  `exclusion-verdict-shapes` gives the same findings in three replays of each verdict shape. On
+  its own: `pnpm exec vitest run tests/exclusions tests/held-findings tests/exclusion-verdict-backtest`.
 - `findings on changed lines`: a model finding whose span touches no added or edited line is
   dropped before the exclusion check and counted in the report, the log, the summary comment and
   the backtest, unless its guideline declares `scope: file`. On its own:

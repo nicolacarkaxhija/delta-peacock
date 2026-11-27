@@ -102,7 +102,7 @@ import {
 import { buildScmPort, pullRequestTarget } from "../scm/build.js";
 import { codeInsightsEnabled, isDryRun, publishReview } from "../scm/publish.js";
 import { compileCustomPatterns, redactDiff, type RedactedDiff } from "./redact.js";
-import { renderReview } from "./render.js";
+import { heldWarning, renderReview } from "./render.js";
 import { harvestUncited } from "./harvest.js";
 import { findWaiver, parseWaivers, type Waiver } from "./waiver.js";
 import {
@@ -413,10 +413,34 @@ export async function runReview(
           concurrency: PASS_CONCURRENCY,
         });
   for (const notice of excluded?.notices ?? []) deps.err(`${notice}\n`);
-  if (excluded !== undefined && excluded.dropped.length > 0) {
+  if (excluded !== undefined && excluded.tally.excluded > 0) {
     deps.err(
-      `${String(excluded.dropped.length)} finding(s) dropped: their guideline says the line is never a finding\n`,
+      `${String(excluded.tally.excluded)} finding(s) dropped: their guideline says the line is never a finding\n`,
     );
+  }
+  if (excluded !== undefined && excluded.tally.checked > 0) {
+    const { tally } = excluded;
+    deps.err(
+      `exclusions: ${String(tally.checked)} finding(s) checked, ${String(tally.excluded)} excluded, ${String(tally.unverified)} held; verdicts answered ${String(tally.structured)} structured, ${String(tally.plainText)} plain text\n`,
+    );
+  }
+  if (excluded !== undefined && excluded.tally.unverified > 0) {
+    deps.err(
+      `exclusions: ${String(excluded.tally.unverified)} of ${String(excluded.tally.checked)} finding(s) got no readable verdict and are held, not posted; the exclusion check did not do its job\n`,
+    );
+  }
+  // held findings at or above the warning share leave the review incomplete, said loudly
+  const heldByExclusions =
+    excluded !== undefined && excluded.held.length > 0
+      ? {
+          findings: excluded.held,
+          checked: excluded.tally.checked,
+          incomplete:
+            excluded.held.length / excluded.tally.checked >= config.exclusions.warnHeldShare,
+        }
+      : undefined;
+  if (heldByExclusions?.incomplete === true) {
+    deps.err(`${heldWarning(heldByExclusions.findings.length, heldByExclusions.checked)}\n`);
   }
   const checks =
     bound.length > 0
@@ -642,6 +666,15 @@ export async function runReview(
       filtered: filtered.length,
       accepted: accepted.length,
       waived: waivedEntries,
+      ...(heldByExclusions !== undefined
+        ? {
+            held: {
+              count: heldByExclusions.findings.length,
+              checked: heldByExclusions.checked,
+              incomplete: heldByExclusions.incomplete,
+            },
+          }
+        : {}),
       gate,
     }),
   );
@@ -728,6 +761,9 @@ export async function runReview(
       ...(linters.length > 0 ? { lintersDetected: linters } : {}),
       ...(unparsedBatches.length > 0 ? { unparsedBatches } : {}),
       ...(checks !== undefined ? { checks: checks.tally } : {}),
+      ...(excluded !== undefined && excluded.tally.checked > 0
+        ? { exclusions: excluded.tally }
+        : {}),
       ...(facts !== undefined ? { factsOnly: facts } : {}),
       ...(prepass !== undefined ? { semgrep: semgrepTally(prepass) } : {}),
       ...(blocked !== undefined ? { budget: blocked } : {}),
@@ -788,6 +824,7 @@ export async function runReview(
       droppedOffChange: onChange.dropped.length,
       filtered: filtered.length,
       ...(accepted.length > 0 ? { accepted: accepted.length } : {}),
+      ...(heldByExclusions !== undefined ? { held: heldByExclusions } : {}),
       gate,
       changedFiles: changedFiles.length,
       scope: acquired.scope,

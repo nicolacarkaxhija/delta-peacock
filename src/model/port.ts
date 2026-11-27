@@ -1,4 +1,5 @@
 import type { ToolSet } from "ai";
+import type { z } from "zod";
 
 /**
  * Default ceiling on a reply's length. The cost guard prices this same number
@@ -24,6 +25,8 @@ export interface ModelRequest {
   temperature?: number;
   /** Ceiling on reply length; defaults to {@link DEFAULT_MAX_OUTPUT_TOKENS}. */
   maxOutputTokens?: number;
+  /** Asks for one JSON object in this schema through the provider's structured output; the reply text is that object. */
+  structured?: { name: string; schema: z.ZodType };
   /** How many leading characters of system every call of one review shares; a provider may cache them. */
   stablePrefix?: number;
 }

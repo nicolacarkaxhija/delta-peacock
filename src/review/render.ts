@@ -19,6 +19,8 @@ export interface RenderableReview {
   filtered: number;
   /** Findings on a form the repository lists as accepted. */
   accepted?: number;
+  /** Findings held for want of a readable exclusion verdict; incomplete when their share reached the warning share. */
+  held?: { count: number; checked: number; incomplete: boolean };
   /** Violations excused by an in-code waiver: reported here, never gating. */
   waived?: readonly {
     guidelineId: string;
@@ -29,6 +31,11 @@ export interface RenderableReview {
     expired?: boolean;
   }[];
   gate: GateDecision;
+}
+
+/** The log line of a run whose held findings reached the warning share. */
+export function heldWarning(count: number, checked: number): string {
+  return `warning: the exclusion check gave no readable verdict for ${String(count)} of ${String(checked)} checked finding(s); this review is incomplete`;
 }
 
 function findingLines(finding: Finding, badge: string): string[] {
@@ -131,6 +138,12 @@ export function renderReview(review: RenderableReview): string {
       : []),
     ...(review.filtered > 0
       ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]
+      : []),
+    ...(review.held !== undefined
+      ? [
+          `${String(review.held.count)} finding(s) held: no readable exclusion verdict`,
+          ...(review.held.incomplete ? [heldWarning(review.held.count, review.held.checked)] : []),
+        ]
       : []),
   ];
   return `${[...sections, ...notices, gateLine(review.gate)].join("\n")}\n`;

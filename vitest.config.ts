@@ -4,7 +4,10 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     setupFiles: ["tests/helpers/temp-dir.ts"],
+    globalSetup: ["tests/helpers/temp-trash.ts"],
     testTimeout: 40000,
+    // the global teardown deletes every test file's temporary repositories at the end of the run
+    teardownTimeout: 600000,
     // fake-server e2e tests occasionally lose a local socket under full
     // parallel load on Windows; deterministic failures still fail twice.
     // Worker cap keeps dozens of short-lived HTTP servers off the same
