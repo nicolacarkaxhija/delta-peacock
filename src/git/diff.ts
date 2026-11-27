@@ -314,6 +314,58 @@ export function newLineTexts(diff: string): Map<string, Map<number, string>> {
   return result;
 }
 
+/** One hunk: its removed lines whitespace aside, and its added lines by new line number. */
+interface Hunk {
+  removed: string[];
+  added: [number, string][];
+}
+
+const withoutWhitespace = (line: string): string => line.replace(/\s+/g, "");
+
+/**
+ * New-file lines per file whose only change is whitespace: each pairs with one
+ * removed line of the same hunk that reads the same once all whitespace is gone.
+ */
+export function reindentedLines(diff: string): Map<string, Set<number>> {
+  const result = new Map<string, Set<number>>();
+  for (const chunk of diff.split(/^(?=diff --git )/m)) {
+    const filePath = headerPath(chunk);
+    if (filePath === undefined) continue;
+    const hunks: Hunk[] = [];
+    let newLine = 0;
+    for (const line of chunk.split("\n")) {
+      const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+      if (hunk) {
+        newLine = Number(hunk[1]);
+        hunks.push({ removed: [], added: [] });
+        continue;
+      }
+      const current = hunks.at(-1);
+      if (current === undefined) continue; // still in the chunk header
+      if (line.startsWith("+")) {
+        current.added.push([newLine, withoutWhitespace(line.slice(1))]);
+        newLine += 1;
+      } else if (line.startsWith("-")) {
+        current.removed.push(withoutWhitespace(line.slice(1)));
+      } else if (!line.startsWith("\\")) {
+        newLine += 1;
+      }
+    }
+    const lines = new Set<number>();
+    for (const { removed, added } of hunks) {
+      const left = [...removed];
+      for (const [number, text] of added) {
+        const at = left.indexOf(text);
+        if (at < 0) continue;
+        left.splice(at, 1);
+        lines.add(number);
+      }
+    }
+    result.set(filePath, lines);
+  }
+  return result;
+}
+
 /** Added lines in a unified diff: the denominator contributor stats normalize by. */
 export function addedLineCount(diff: string): number {
   let count = 0;

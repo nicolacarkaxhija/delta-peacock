@@ -11,6 +11,8 @@ export interface RenderableReview {
   droppedStructural?: number;
   /** Model findings on no added or edited line of the change. */
   droppedOffChange?: number;
+  /** Model findings whose added lines only re-indent a removed line. */
+  droppedReindented?: number;
   adjustedLines: number;
   droppedMalformed?: number;
   /** Violations quoting a sentence their guideline does not contain. */
@@ -119,6 +121,9 @@ export function renderReview(review: RenderableReview): string {
       : []),
     ...((review.droppedOffChange ?? 0) > 0
       ? [`${String(review.droppedOffChange ?? 0)} finding(s) off the change`]
+      : []),
+    ...(review.droppedReindented !== undefined && review.droppedReindented > 0
+      ? [`${String(review.droppedReindented)} finding(s) withheld: their line is only re-indented`]
       : []),
     ...(review.adjustedLines > 0
       ? [`${String(review.adjustedLines)} finding(s) had no usable line and were pinned to line 1`]

@@ -168,6 +168,7 @@ export function buildReport(input: {
   droppedOutOfScope?: number;
   droppedStructural?: number;
   droppedOffChange?: number;
+  droppedReindented?: number;
   adjustedLines: number;
   droppedMalformed?: number;
   droppedMisquoted?: number;
@@ -229,6 +230,9 @@ export function buildReport(input: {
     droppedStructuralFindings: input.droppedStructural ?? 0,
     ...((input.droppedOffChange ?? 0) > 0
       ? { droppedOffChangeFindings: input.droppedOffChange }
+      : {}),
+    ...(input.droppedReindented !== undefined && input.droppedReindented > 0
+      ? { droppedReindentedFindings: input.droppedReindented }
       : {}),
     adjustedLines: input.adjustedLines,
     droppedMalformedFindings: input.droppedMalformed ?? 0,

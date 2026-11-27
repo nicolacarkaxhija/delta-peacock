@@ -332,6 +332,13 @@ the report's `rejectedCandidates` with the reason `off-change` and counted in
 `droppedOffChangeFindings`, in the log line `n finding(s) off the change` and in the summary
 comment's `Not posted: n findings off the change`.
 
+An added line that reads the same as a removed line of the same hunk once all whitespace is gone
+is not written by the change either: the change only re-indented it, for example inside a new
+wrapper. Each removed line pairs with one added line. A finding whose added lines are all such
+lines is withheld the same way, with the reason `reindented` in `rejectedCandidates`, counted in
+`droppedReindentedFindings`, in the log line `n finding(s) withheld: their line is only
+re-indented` and in the summary comment's `Not posted: n findings on re-indented lines`.
+
 A rule about a whole file, such as "every script opens with the use strict directive", can be
 broken by a change that never touches the line it would flag. Such a guideline declares
 `scope: file` in its frontmatter, the word a pattern check already uses, and its findings may sit

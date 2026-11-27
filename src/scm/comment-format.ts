@@ -779,6 +779,11 @@ export function renderSummaryBody(
     ...((input.droppedOffChange ?? 0) > 0
       ? [`${plural(input.droppedOffChange ?? 0, "finding")} off the change`]
       : []),
+    ...(input.droppedReindented !== undefined && input.droppedReindented > 0
+      ? [
+          `${plural(input.droppedReindented, "finding")} on ${input.droppedReindented === 1 ? "a re-indented line" : "re-indented lines"}`,
+        ]
+      : []),
     ...(input.held !== undefined
       ? [`${plural(input.held.findings.length, "held finding")} (no readable exclusion verdict)`]
       : []),

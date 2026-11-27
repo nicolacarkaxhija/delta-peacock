@@ -30,7 +30,11 @@ const ON_ADDED: Violation = {
   quote: "  return name.length;",
 };
 
-const ON_CONTEXT: Violation = { ...ON_ADDED, line: 1, quote: "function greet(name) {" };
+const ON_CONTEXT: Violation = {
+  ...ON_ADDED,
+  line: 1,
+  quote: "function greet(name) {",
+};
 
 const ADDED = new Map([["src/app.js", new Map([[2, "  return name.length;"]])]]);
 
@@ -41,12 +45,18 @@ describe("findings on changed lines only", () => {
     const outcome = keepOnChangedLines([ON_ADDED, ON_CONTEXT], ADDED, rules);
     expect(outcome.kept).toEqual([ON_ADDED]);
     expect(outcome.dropped).toEqual([
-      expect.objectContaining({ reason: "off-change", guidelineId: "guard-before-use" }),
+      expect.objectContaining({
+        reason: "off-change",
+        guidelineId: "guard-before-use",
+      }),
     ]);
   });
 
   it("keeps a finding whose quoted span reaches an added line", () => {
-    const spanning = { ...ON_CONTEXT, quote: "function greet(name) {\n  return name.length;" };
+    const spanning = {
+      ...ON_CONTEXT,
+      quote: "function greet(name) {\n  return name.length;",
+    };
     expect(keepOnChangedLines([spanning], ADDED, rules).kept).toEqual([spanning]);
   });
 
@@ -58,6 +68,18 @@ describe("findings on changed lines only", () => {
   it("keeps a finding under a guideline that declares file scope", () => {
     const fileWide = new Map([["guard-before-use", { scope: "file" as const }]]);
     expect(keepOnChangedLines([ON_CONTEXT], ADDED, fileWide).kept).toEqual([ON_CONTEXT]);
+  });
+
+  it("withholds a finding whose added lines are only re-indented, and keeps one that reaches a written line", () => {
+    const reindented = new Map([["src/app.js", new Set([2])]]);
+    const outcome = keepOnChangedLines([ON_ADDED, ON_CONTEXT], ADDED, rules, reindented);
+    expect(outcome.kept).toEqual([]);
+    expect(outcome.dropped.map((one) => one.reason)).toEqual(["reindented", "off-change"]);
+    const written = new Map([
+      ["src/app.js", new Map([...(ADDED.get("src/app.js") ?? []), [3, "}"]])],
+    ]);
+    const reaching = { ...ON_ADDED, quote: "  return name.length;\n}" };
+    expect(keepOnChangedLines([reaching], written, rules, reindented).kept).toEqual([reaching]);
   });
 
   it("leaves an observation and a finding with no line alone", () => {
@@ -193,7 +215,9 @@ describe("a review whose model flags a line the change only re-indents", () => {
       env: {},
       out: (text) => out.push(text),
       err: () => undefined,
-      modelPort: { complete: () => Promise.resolve({ text: JSON.stringify({ findings }) }) },
+      modelPort: {
+        complete: () => Promise.resolve({ text: JSON.stringify({ findings }) }),
+      },
     });
     const report = JSON.parse(readFileSync(path.join(cwd, "r.json"), "utf8")) as ReviewReport;
     expect(report.findings.map((finding) => finding.line)).toEqual([2]);

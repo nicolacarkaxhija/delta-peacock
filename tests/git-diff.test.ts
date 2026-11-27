@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ToolError } from "../src/errors.js";
-import { mergeBaseDiff, newLineTexts } from "../src/git/diff.js";
+import { mergeBaseDiff, newLineTexts, reindentedLines } from "../src/git/diff.js";
 import { commitAll, git, makeRepo, write } from "./helpers/git.js";
 
 describe("merge-base diff", () => {
@@ -70,5 +70,45 @@ describe("newLineTexts", () => {
       "",
     ].join("\n");
     expect([...newLineTexts(diff)]).toEqual([["x.js", new Map([[2, "new"]])]]);
+  });
+});
+
+describe("reindentedLines", () => {
+  it("names the added lines that only change the whitespace of a removed line in the same hunk, one removed line each", () => {
+    const diff = [
+      "preamble a tool printed",
+      "diff --git a/list.js b/list.js",
+      "--- a/list.js",
+      "+++ b/list.js",
+      "@@ -1,5 +1,8 @@",
+      " function render(items) {",
+      "-  const list = items.map((item) => item.name);",
+      '-  return list.join(", ");',
+      "-  const total = items.length;",
+      "+  if (items.length > 0) {",
+      "+    const list = items.map((item) => item.name);",
+      '+    return list.join(", ");',
+      '+    return list.join(", ");',
+      "+\tconst total=items.length;",
+      "+  }",
+      '+  return "";',
+      "\\ No newline at end of file",
+      " }",
+      "@@ -20,2 +23,2 @@",
+      "-  const label = item.name;",
+      "+  const label = item.title;",
+      "+  const list = items.map((item) => item.name);",
+      "diff --git a/other.js b/other.js",
+      "--- a/other.js",
+      "+++ b/other.js",
+      "@@ -1 +1 @@",
+      "-a",
+      "+b",
+      "",
+    ].join("\n");
+    expect([...reindentedLines(diff)]).toEqual([
+      ["list.js", new Set([3, 4, 6])],
+      ["other.js", new Set()],
+    ]);
   });
 });
