@@ -49,8 +49,8 @@ export const LINE_COPY_MIN_CHARS = 80;
 
 const EACH_SYSTEM = [
   "You are delta-peacock's exclusion check. A reviewer flagged one line under one team guideline. The guideline lists numbered sentences naming cases that are never a finding under it.",
-  `First copy the flagged line into "line", trimmed, at most its first ${String(LINE_COPY_CHARS)} characters. Then answer every listed sentence in order: "yes" when it covers the flagged line, judged by what the code does, not by its names, otherwise "no".`,
-  `Reply with JSON only, in this shape: {"line": "<the flagged line, trimmed, at most its first ${String(LINE_COPY_CHARS)} characters>", "sentences": [{"n": 1, "covers": "yes or no"}]}`,
+  `First copy into "line" the first ${String(LINE_COPY_CHARS)} characters of the trimmed flagged line, or the whole line when it is shorter. Then answer every listed sentence in order: "yes" when it covers the flagged line, judged by what the code does, not by its names, otherwise "no".`,
+  `Reply with JSON only, in this shape: {"line": "<the first ${String(LINE_COPY_CHARS)} characters of the trimmed flagged line, or the whole line when shorter>", "sentences": [{"n": 1, "covers": "yes or no"}]}`,
 ].join("\n");
 
 /** How a verdict call asks: one listed sentence or none, or a yes or no per listed sentence. */
@@ -120,7 +120,7 @@ function exclusionRequest(
         excerpt,
         "</code>",
         "",
-        `Copy the flagged line, trimmed, at most its first ${String(LINE_COPY_CHARS)} characters, then answer yes or no for every listed sentence, in order.`,
+        `Copy the first ${String(LINE_COPY_CHARS)} characters of the trimmed flagged line, or the whole line when it is shorter, then answer yes or no for every listed sentence, in order.`,
       ]
     : [
         flagged,
@@ -320,9 +320,11 @@ interface Asked {
 function eachAnswerOf(text: string, finishReason: string | undefined, asked: Asked): Answer {
   const verdict = readShape(text, "sentences", EachVerdict);
   if (verdict === undefined) return { failure: whyUnread(finishReason, false) };
-  // a copy must hold at least the bounded start of the line; an unreadable line asks nothing
-  const wanted = withoutSpaces(asked.lineText.trim().slice(0, LINE_COPY_CHARS));
-  if (!withoutSpaces(verdict.line).startsWith(wanted)) {
+  // a copy is a true start of the line, long enough to name it; an unreadable line asks nothing
+  const line = withoutSpaces(asked.lineText);
+  const copy = withoutSpaces(verdict.line);
+  const named = line.startsWith(copy) && copy.length >= Math.min(line.length, LINE_COPY_MIN_CHARS);
+  if (line !== "" && !named) {
     return { failure: "the verdict copies a line other than the flagged one" };
   }
   const { sentences } = verdict;

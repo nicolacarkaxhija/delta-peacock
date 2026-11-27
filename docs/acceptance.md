@@ -78,8 +78,9 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   its own: `pnpm exec vitest run tests/exclusions tests/held-findings tests/exclusion-verdict-backtest`.
 - `verdict per sentence` (experimental): with `exclusions.verdict: each` the one verdict call
   numbers the listed sentences, leaves the reviewer's text out, frames the line as data and asks for
-  a bounded copy of the trimmed line and a yes or no per sentence; any yes drops the finding under
-  the first such sentence, all no keeps it, and a copy short of the bound or of another line, a
+  the start of the trimmed line and a yes or no per sentence; any yes drops the finding under the
+  first such sentence, all no keeps it, and a copy that is not a true start of the line or is
+  shorter than both the line and the lower bound, a
   skipped or reordered sentence or an answer other than yes or no holds it; the default `pick` asks
   as before; the report's `exclusionVerdicts` records each checked finding's sentence number, the
   answers under `each` and holds, never the model's words; the synthetic case

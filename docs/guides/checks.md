@@ -439,15 +439,16 @@ report carries them apart under `exclusionModel` (id, usage, cost) rather than i
 no backtest with a model has shown yet that it excludes more of what a guideline lists without
 dropping right findings. By default (`pick`) a verdict names one listed sentence or `none`, and a
 model that weighs the rule against the list can answer `none` for a line a listed sentence names.
-Under `each` the same single call numbers the listed sentences and asks for the flagged line,
-trimmed and cut to the length `LINE_COPY_CHARS` sets in `src/review/exclusions.ts`, copied into
-`line`, then a `yes` or `no` for every sentence in order. The flagged line and the code around it
+Under `each` the same single call numbers the listed sentences and asks for the start of
+the trimmed flagged line copied into `line` (as many characters as `LINE_COPY_CHARS` in
+`src/review/exclusions.ts` names, or the whole line when it is shorter), then a `yes` or `no` for every sentence in order. The flagged line and the code around it
 are framed as data under review, and the reviewer's title and body are left out, so the answer
 rests on the sentences and the code. The finding is dropped when any sentence is answered `yes`,
 and the log names the first such sentence as the one that excludes it.
 
-`each` adds reasons to hold a finding: a copy that does not start with the bounded start of the
-flagged line (whitespace aside), an answer list that skips or reorders a sentence, and an answer
+`each` adds reasons to hold a finding: a copy that, whitespace aside, is not a true start of the
+flagged line (text the line does not hold, or another line), or that is shorter than the whole
+line and than `LINE_COPY_MIN_CHARS`, an answer list that skips or reorders a sentence, and an answer
 other than `yes` or `no` (case and spacing aside) each hold it as `exclusion-unverified`, like
 an unreadable verdict. When the flagged line cannot be read, any copy is taken. Held findings
 count toward `exclusions.warnHeldShare`, so a model that copies or answers badly can make a review
