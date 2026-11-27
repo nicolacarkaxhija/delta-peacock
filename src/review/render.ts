@@ -19,6 +19,8 @@ export interface RenderableReview {
   droppedMisquoted?: number;
   /** How many findings sit under the confidence floor, report-only. */
   filtered: number;
+  /** Violations held under posting: evidence because their quote sits on no line, report-only. */
+  unplaced?: number;
   /** Findings on a form the repository lists as accepted. */
   accepted?: number;
   /** Findings held for want of a readable exclusion verdict; incomplete when their share reached the warning share. */
@@ -143,6 +145,9 @@ export function renderReview(review: RenderableReview): string {
       : []),
     ...(review.filtered > 0
       ? [`${String(review.filtered)} finding(s) under the confidence floor (report only)`]
+      : []),
+    ...(review.unplaced !== undefined && review.unplaced > 0
+      ? [`${String(review.unplaced)} violation(s) held: not placed on a line (report only)`]
       : []),
     ...(review.held !== undefined
       ? [

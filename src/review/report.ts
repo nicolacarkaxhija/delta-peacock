@@ -55,7 +55,7 @@ export interface ReviewReport {
   waived?: WaivedFinding[];
   /** Raw payloads the parser refused, next to the drop counts; capped. */
   rejectedCandidates?: RejectedCandidate[];
-  /** Findings under the confidence floor; kept for tuning, never rendered or posted. */
+  /** Findings not posted: under the confidence floor, or held under posting: evidence; never rendered or posted. */
   filtered: ReportedFinding[];
   /** Findings on a form the repository lists as accepted; never posted, present when any. */
   accepted?: ReportedFinding[];
