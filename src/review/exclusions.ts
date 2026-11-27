@@ -44,6 +44,9 @@ const PICK_SYSTEM = [
 /** The characters of the trimmed flagged line a verdict under each copies, so a long line still fits the reply. */
 export const LINE_COPY_CHARS = 120;
 
+/** A copy shorter than this many characters, whitespace aside, holds the finding unless it is the whole line. */
+export const LINE_COPY_MIN_CHARS = 80;
+
 const EACH_SYSTEM = [
   "You are delta-peacock's exclusion check. A reviewer flagged one line under one team guideline. The guideline lists numbered sentences naming cases that are never a finding under it.",
   `First copy the flagged line into "line", trimmed, at most its first ${String(LINE_COPY_CHARS)} characters. Then answer every listed sentence in order: "yes" when it covers the flagged line, judged by what the code does, not by its names, otherwise "no".`,
