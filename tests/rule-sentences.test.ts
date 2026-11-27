@@ -336,3 +336,125 @@ describe("quotesRuleSentence on emphasis and code marks", () => {
     expect(quotesRuleSentence("Keep ab as written.", rule)).toBe(false);
   });
 });
+
+describe("quotesRuleSentence on sentence ends before closing marks", () => {
+  it("splits after a closing bracket or quote that follows the end mark", () => {
+    for (const [body, first, second] of [
+      ["Never log (secrets.) Always hash.", "Never log (secrets.)", "Always hash."],
+      ['Say "no." Then stop.', 'Say "no."', "Then stop."],
+    ] as const) {
+      const rule = bodied(body);
+      expect(quotesRuleSentence(first, rule), first).toBe(true);
+      expect(quotesRuleSentence(second, rule), second).toBe(true);
+      expect(quotesRuleSentence(body, rule), body).toBe(false);
+    }
+  });
+});
+
+describe("quotesRuleSentence on nested list items", () => {
+  it("keeps a nested item its own unit at two, three or four spaces and a tab", () => {
+    for (const indent of ["  ", "   ", "    ", "\t"]) {
+      const rule = bodied("- Hash every password.", `${indent}- Use a slow hash.`);
+      expect(quotesRuleSentence("Hash every password.", rule), JSON.stringify(indent)).toBe(true);
+      expect(quotesRuleSentence("Use a slow hash.", rule), JSON.stringify(indent)).toBe(true);
+      expect(quotesRuleSentence("Hash every password. - Use a slow hash.", rule)).toBe(false);
+    }
+  });
+});
+
+describe("quotesRuleSentence on a label inside a block", () => {
+  it("cites only what comes before a sentence that opens with a label and a colon", () => {
+    const paragraph = bodied("Read this. Good: use hash(). Then this.");
+    expect(quotesRuleSentence("Read this.", paragraph)).toBe(true);
+    expect(quotesRuleSentence("Good: use hash().", paragraph)).toBe(false);
+    expect(quotesRuleSentence("Then this.", paragraph)).toBe(false);
+    const item = bodied("- Hash every password.", "  Good: bcrypt.");
+    expect(quotesRuleSentence("Hash every password.", item)).toBe(true);
+    expect(quotesRuleSentence("Hash every password. Good: bcrypt.", item)).toBe(false);
+    const wrapped = bodied("Hash every password.", "Good: bcrypt.");
+    expect(quotesRuleSentence("Hash every password.", wrapped)).toBe(true);
+    expect(quotesRuleSentence("Good: bcrypt.", wrapped)).toBe(false);
+  });
+
+  it("keeps a later sentence that starts with a label word but has no colon", () => {
+    const rule = bodied("Read this. Do not log a token.");
+    expect(quotesRuleSentence("Do not log a token.", rule)).toBe(true);
+  });
+});
+
+describe("quotesRuleSentence on a label block and a label heading", () => {
+  it("refuses the block after a block that is only a label, with or without a colon", () => {
+    for (const label of ["Good:", "Bad", "**Example:**"]) {
+      const rule = bodied(
+        "Hash every password.",
+        "",
+        label,
+        "",
+        "Store the hash only.",
+        "",
+        "Rotate keys yearly.",
+      );
+      expect(quotesRuleSentence("Hash every password.", rule), label).toBe(true);
+      expect(quotesRuleSentence("Store the hash only.", rule), label).toBe(false);
+      expect(quotesRuleSentence("Rotate keys yearly.", rule), label).toBe(true);
+    }
+  });
+
+  it("refuses a whole section under a heading that is only a label, up to a heading of the same or a higher level", () => {
+    const rule = bodied(
+      "# Passwords",
+      "Hash every password.",
+      "",
+      "## Bad",
+      "Store it as typed.",
+      "",
+      "### Detail",
+      "Log it on failure.",
+      "",
+      "## Keys",
+      "Rotate keys yearly.",
+    );
+    for (const [quote, citable] of [
+      ["Hash every password.", true],
+      ["Bad", false],
+      ["Store it as typed.", false],
+      ["Detail", false],
+      ["Log it on failure.", false],
+      ["Keys", true],
+      ["Rotate keys yearly.", true],
+    ] as const) {
+      expect(quotesRuleSentence(quote, rule), quote).toBe(citable);
+    }
+  });
+});
+
+describe("quotesRuleSentence on comments and breaks", () => {
+  it("never cites an HTML comment or a thematic break", () => {
+    const rule = bodied(
+      "Hash every password.",
+      "",
+      "<!-- Never cite this. -->",
+      "",
+      "<!--",
+      "Nor this.",
+      "-->",
+      "",
+      "---",
+      "",
+      "* * *",
+      "",
+      "Store the hash only.",
+    );
+    for (const [quote, citable] of [
+      ["Hash every password.", true],
+      ["Never cite this.", false],
+      ["<!-- Never cite this. -->", false],
+      ["Nor this.", false],
+      ["---", false],
+      ["* * *", false],
+      ["Store the hash only.", true],
+    ] as const) {
+      expect(quotesRuleSentence(quote, rule), quote).toBe(citable);
+    }
+  });
+});
