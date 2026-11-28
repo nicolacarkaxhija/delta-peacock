@@ -88,9 +88,10 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   `pick` with the recorded none. On its own:
   `pnpm exec vitest run tests/exclusions tests/exclusion-each-backtest`.
 - `posting on evidence`: by default (`review.posting: confidence`) every finding under the
-  confidence floor is held, as before; with `review.posting: evidence` a placed violation is posted
-  whatever confidence the model gave it, a violation whose quote could not be placed is held (no
-  inline comment, no gate, kept in the report's `filtered` list with `unplaced: true` and its note), a
+  confidence floor is held, as before; in both modes a violation whose quote could not be placed is
+  held (no inline comment, no gate, kept in the report's `filtered` list with `unplaced: true`, its
+  note and `holdReason: unplaced`) and a placed violation beside it still gates; with
+  `review.posting: evidence` a placed violation is posted whatever confidence the model gave it, a
   model finding whose exclusion check was skipped is held unless a check found it too, each finding
   held for a reason other than the floor carries that reason as `holdReason` in the report's
   `filtered` list and is counted under it in the log and the summary comment, never as under the

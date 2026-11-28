@@ -25,6 +25,7 @@ function findingAt(line: number, title: string): Record<string, unknown> {
     guidelineId: "no-console",
     file: "src/app.js",
     line,
+    quote: line === 1 ? "console.log('a');" : "console.log('b');",
     title,
     body: "b",
     guidelineQuote: "Use the logger.",

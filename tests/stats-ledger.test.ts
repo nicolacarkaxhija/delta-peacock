@@ -318,6 +318,7 @@ describe("a review with stats on a pull request", () => {
             guidelineId: "no-console",
             file: "src/app.js",
             line: 1,
+            quote: "console.log(1);",
             title: "One",
             body: "b",
             guidelineQuote: "Use the logger.",

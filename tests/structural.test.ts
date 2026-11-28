@@ -264,6 +264,7 @@ A const declared directly in a loop body crashes on Rhino.
           guidelineId: "no-const-in-loop",
           file: "src/app.js",
           line: findingLine,
+          quote: source.split("\n")[findingLine - 1],
           title: "const declared in a loop",
           body: "Use let instead.",
           guidelineQuote: "A const declared directly in a loop body crashes on Rhino.",

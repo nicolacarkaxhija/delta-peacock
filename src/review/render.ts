@@ -20,7 +20,7 @@ export interface RenderableReview {
   droppedMisquoted?: number;
   /** How many findings the posting rule held, report-only. */
   filtered: number;
-  /** Of those, the ones held per posting: evidence reason; the rest sit under the confidence floor. */
+  /** Of those, the ones held per reason other than the floor; the rest sit under the confidence floor. */
   holds?: HoldCounts;
   /** Findings on a form the repository lists as accepted. */
   accepted?: number;

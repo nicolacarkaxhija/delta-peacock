@@ -626,7 +626,7 @@ export async function runReview(
     ceiling.reached(),
     postingContext,
   );
-  // each finding held under evidence carries its reason, so no count reads as under the floor
+  // each finding held for a reason other than the floor carries it, so no count reads as under the floor
   const { findings: filtered, counts: holds } = tagHolds(finalized.filtered, (finding) =>
     holdReason(finding, config.review, postingContext(finding)),
   );

@@ -11,6 +11,7 @@ const FINDING = JSON.stringify({
       guidelineId: "no-console",
       file: "src/app.js",
       line: 2,
+      quote: "console.log('staged edit');",
       title: "Console",
       body: "b",
       guidelineQuote: "Use the logger.",

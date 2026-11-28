@@ -199,7 +199,7 @@ describe("PR 1 root causes, replayed", () => {
     }
   });
 
-  it("posts a finding whose quote is nowhere in the file on no line, in the summary only", async () => {
+  it("holds a finding whose quote is nowhere in the file: no inline comment, no annotation, no block", async () => {
     const fake = await startFakeBitbucket();
     try {
       const repo = consumerRepo();
@@ -210,8 +210,8 @@ describe("PR 1 root causes, replayed", () => {
         scripted({ text: JSON.stringify({ findings: [finding] }) }).port,
       );
       expect(inlineOf(fake)).toHaveLength(0);
-      expect(summaryOf(fake)).toContain("so this finding is not placed on a line");
-      expect(fake.insightAnnotations[0]?.line).toBeUndefined();
+      expect(fake.insightAnnotations).toHaveLength(0);
+      expect(summaryOf(fake)).not.toContain("Blocked");
     } finally {
       await fake.close();
     }

@@ -28,20 +28,20 @@ export interface PostingContext {
 
 /**
  * Why a finding that survived every validator is held, or undefined when it is
- * posted. Under evidence a violation stands on what was checked (a whole rule
- * sentence at parse, its quote placed on a line of the change, a cleared
- * exclusion verdict), so a sampled confidence near the floor cannot flip it
- * between runs; one whose quote could not be placed, or whose exclusions no
- * verdict was asked about, is held. An observation cites no guideline and
- * keeps the floor.
+ * posted. A violation whose quote could not be placed is held in every mode,
+ * since a gate needs a line to act on. Under evidence a violation stands on
+ * what was checked (a whole rule sentence at parse, its quote placed on a line
+ * of the change, a cleared exclusion verdict), so a sampled confidence near the
+ * floor cannot flip it between runs; one whose exclusions no verdict was asked
+ * about is held. An observation cites no guideline and keeps the floor.
  */
 export function holdReason(
   finding: Finding,
   review: PostingRule,
   context: PostingContext = {},
 ): HoldReason | undefined {
+  if (finding.kind === "violation" && finding.unplaced === true) return "unplaced";
   if (review.posting === "evidence" && finding.kind === "violation") {
-    if (finding.unplaced === true) return "unplaced";
     const listed = context.guideline?.exclusions?.length ?? 0;
     return context.verdictsAsked === false && listed > 0 ? "unchecked" : undefined;
   }

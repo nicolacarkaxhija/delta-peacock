@@ -261,6 +261,7 @@ describe("review.frontmatterContract wired into a review", () => {
               guidelineId: "no-console",
               file: "src/app.js",
               line: 1,
+              quote: "console.log('hi');",
               title: "t",
               body: "b",
               guidelineQuote: "Use the logger.",

@@ -300,7 +300,7 @@ export interface SummaryInput {
   droppedReindented?: number;
   /** Findings the posting rule held. */
   filtered: number;
-  /** Of those, the ones held per posting: evidence reason; the rest sit under the confidence floor. */
+  /** Of those, the ones held per reason other than the floor; the rest sit under the confidence floor. */
   holds?: HoldCounts;
   /** Findings on a form the repository lists as accepted; counted, never posted. */
   accepted?: number;
