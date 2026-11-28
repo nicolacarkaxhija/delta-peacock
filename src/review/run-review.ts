@@ -74,14 +74,8 @@ import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { keepOnChangedLines } from "./changed-lines.js";
 import { partitionAccepted, readAcceptedForms } from "./accepted-forms.js";
 import { applyExclusions } from "./exclusions.js";
-import {
-  evidenceFlag,
-  holdReason,
-  isPosted,
-  skippedCheckContext,
-  type PostingContext,
-} from "./posting.js";
-import { tagHolds } from "../domain/hold.js";
+import { evidenceFlag, skippedCheckContext } from "./posting.js";
+import { holdReason, isPosted, tagHolds, type PostingContext } from "../domain/hold.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {

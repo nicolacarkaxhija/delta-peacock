@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ConfigSchema } from "../src/config/schema.js";
 import type { Finding } from "../src/domain/finding.js";
-import { evidenceFlag, isPosted, skippedCheckContext } from "../src/review/posting.js";
+import { isPosted } from "../src/domain/hold.js";
+import { evidenceFlag, skippedCheckContext } from "../src/review/posting.js";
 import { buildReviewPrompt } from "../src/review/prompt.js";
 
 const VIOLATION: Finding = {

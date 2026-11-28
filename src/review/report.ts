@@ -6,7 +6,7 @@ import type { RejectedCandidate } from "./parse.js";
 
 const REJECTED_CAP = 200;
 import type { GateDecision } from "../domain/gate.js";
-import type { EvidenceHold, HeldFinding } from "../domain/hold.js";
+import type { TaggedHold, HeldFinding } from "../domain/hold.js";
 import type { ModelUsage } from "../model/port.js";
 import type { ComputedCost } from "../model/usage.js";
 
@@ -22,7 +22,7 @@ export type ReportedFinding = Finding & {
   /** Accepted as pre-existing; informs the reader, never the gate. */
   baselined?: true;
   /** Why posting: evidence held it; absent for a finding under the confidence floor. */
-  holdReason?: EvidenceHold;
+  holdReason?: TaggedHold;
 };
 
 /** A violation an in-code waiver excused: recorded here, never gating (ADR 0008). */

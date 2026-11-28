@@ -17,8 +17,8 @@ import { loadBaseline, splitByBaseline, writeBaseline } from "../review/baseline
 import { fingerprintOf } from "../domain/finding.js";
 import { buildPromptOptions, buildReviewPrompt } from "../review/prompt.js";
 import { parseReviewResponse } from "../review/parse.js";
-import { evidenceFlag, holdReason, type PostingContext } from "../review/posting.js";
-import { tagHolds } from "../domain/hold.js";
+import { evidenceFlag } from "../review/posting.js";
+import { holdReason, tagHolds, type PostingContext } from "../domain/hold.js";
 import { compileCustomPatterns, redactDiff } from "../review/redact.js";
 import { renderReview } from "../review/render.js";
 import { buildReport } from "../review/report.js";
