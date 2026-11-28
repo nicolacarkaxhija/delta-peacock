@@ -16,6 +16,7 @@ import {
   isSummaryBody,
   renderSummaryBody,
   renderSummaryLine,
+  heldParts,
   severityCounts,
   severityWord,
   stateLine,
@@ -160,10 +161,18 @@ export function buildInsightReport(
 ): InsightReport {
   const blocked = blockedLine(input, presentation);
   const state = stateLine(input, presentation);
+  // a held finding never gates, but the card still says it exists
+  const held = heldParts(input);
+  const parts = [
+    state,
+    ...(blocked === undefined ? [] : [blocked]),
+    ...(held.length === 0 ? [] : [`Not posted: ${held.join(", ")}`]),
+  ];
+  const details = parts.length === 1 ? state : `${parts.join(". ")}.`;
   return {
     title: presentation.displayName,
     result: INSIGHT_RESULTS[statusState(input)],
-    details: blocked === undefined ? state : `${state}. ${blocked}.`,
+    details,
     counts: [
       { label: "Findings", value: input.findings.length },
       ...severityCounts(input.findings, presentation).map(([word, value]) => ({
@@ -838,7 +847,8 @@ export async function publishReview(
       input.summaryWhenClean !== true &&
       input.factsOnly === undefined &&
       input.unreviewed === undefined &&
-      input.held === undefined;
+      input.held === undefined &&
+      input.filtered === 0;
     const render = quiet ? renderSummaryLine : renderSummaryBody;
     await upsertSummary(scm, presentation, render(summaryInput, presentation));
   }

@@ -480,16 +480,23 @@ The model's own reason is never recorded.
 
 ## Posting on evidence
 
+In both posting modes a violation whose quote could not be placed on a line is held: no inline
+comment, no gate, listed in the report's `filtered` list with `unplaced: true`, its note and
+`holdReason: unplaced`, and counted as an unplaced violation in the log and the summary comment.
+A gate needs a line a developer can act on. An observation on no line keeps the confidence floor.
+
 With `review.posting: evidence` a violation is posted on its evidence instead of the confidence
 the model reports: its quote placed on a line of the change, a whole sentence of its guideline as
 the cited sentence, and, under a guideline with `exclusions`, a verdict that cleared it. A cited
-sentence that is not a whole sentence of the rule text drops the finding as misquoted, a finding
-whose quote could not be placed is held, and a model finding whose exclusion check was skipped
-(the model could not run for part of the change) is held. A held finding that sits on no line stays
-in the report's `filtered` list with `unplaced: true` and the note that says why. Each finding held
-for a reason other than the confidence floor carries it as `holdReason` (`unplaced` or
-`unchecked`) in that list, and the log and the summary comment count it under that reason rather
-than under the confidence floor.
+sentence that is not a whole sentence of the rule text drops the finding as misquoted, and a model
+finding whose exclusion check was skipped (the model could not run for part of the change) is held.
+Each finding held for a reason other than the confidence floor carries it as `holdReason`
+(`unplaced` or `unchecked`) in that list, and the log and the summary comment count it under that
+reason rather than under the confidence floor.
+
+A held finding never makes a run look clean: on a host with Code Insights the summary keeps its
+`Not posted` line and the card names the held count per reason, while its result still follows
+the gate.
 
 A citable unit follows the markdown structure of the guideline body:
 

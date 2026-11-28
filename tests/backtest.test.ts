@@ -327,7 +327,7 @@ describe("the backtest command", () => {
   it("fails on a wrong finding, naming it, and writes the logs and the report", async () => {
     const dir = makeCases({
       a: {},
-      b: { after: BASE_APP.replace("name;", "name + 1;"), expected: { findings: [] } },
+      b: { expected: { findings: [] } },
     });
     const io = capture();
     const model = scripted(found([CONSOLE_FINDING]));

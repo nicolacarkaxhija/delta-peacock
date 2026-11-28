@@ -27,6 +27,12 @@ function makeScenario(): string {
   return repo;
 }
 
+/** The first line a request's diff adds to a file, as the model would quote it. */
+function firstAddedLine(user: string, file: string | undefined): string {
+  const after = user.slice(user.indexOf(`+++ b/${String(file)}`));
+  return /\n\+(?!\+\+)(.*)/.exec(after)?.[1] ?? "";
+}
+
 function scriptedModel(text: string): { port: ModelPort; requests: ModelRequest[] } {
   const requests: ModelRequest[] = [];
   return {
@@ -40,19 +46,22 @@ function scriptedModel(text: string): { port: ModelPort; requests: ModelRequest[
   };
 }
 
-const CITED = JSON.stringify({
-  findings: [
-    {
-      guidelineId: "no-console",
-      file: "src/app.js",
-      line: 2,
-      title: "Console call added",
-      body: "Replace the console.log with the logger.",
-      // stable across this file's guideline-mutation tests: the title never changes, only the body
-      guidelineQuote: "No console statements",
-    },
-  ],
-});
+const CITED_FINDING = {
+  guidelineId: "no-console",
+  file: "src/app.js",
+  line: 2,
+  quote: "  console.log(name);",
+  title: "Console call added",
+  body: "Replace the console.log with the logger.",
+  // stable across this file's guideline-mutation tests: the title never changes, only the body
+  guidelineQuote: "No console statements",
+};
+
+const CITED = JSON.stringify({ findings: [CITED_FINDING] });
+
+/** The cited finding quoting the line a scenario holds. */
+const citedQuoting = (quote: string): string =>
+  JSON.stringify({ findings: [{ ...CITED_FINDING, quote }] });
 
 interface RunResult {
   code: number;
@@ -185,7 +194,9 @@ describe("review end to end (local mode)", () => {
     commitAll(repo, "add logging with a waiver");
     const { code, stdout } = await review(
       repo,
-      scriptedModel(CITED).port,
+      scriptedModel(
+        citedQuoting("console.log(name); // delta-peacock:allow no-console — legacy shim"),
+      ).port,
       "--fail-on",
       "MAJOR",
       "--report",
@@ -212,7 +223,13 @@ describe("review end to end (local mode)", () => {
       "function greet(name) {\n  console.log(name); // delta-peacock:allow no-console — shim until=2020-01-01\n  return name;\n}\n",
     );
     commitAll(repo, "add logging with an expired waiver");
-    const { code, stdout } = await review(repo, scriptedModel(CITED).port, "--fail-on", "MAJOR");
+    const quote = "console.log(name); // delta-peacock:allow no-console — shim until=2020-01-01";
+    const { code, stdout } = await review(
+      repo,
+      scriptedModel(citedQuoting(quote)).port,
+      "--fail-on",
+      "MAJOR",
+    );
     expect(code).toBe(0); // an expired waiver still suppresses the gate (ADR 0008)
     expect(stdout).toContain("expired");
   });
@@ -403,6 +420,7 @@ describe("review end to end (local mode)", () => {
           guidelineId: "no-console",
           file: "src/app.js",
           line: 3,
+          quote: "  return name;",
           title: "Maybe also here",
           body: "unsure",
           confidence: 0.2,
@@ -657,7 +675,7 @@ describe("line-anchor repair", () => {
     const { code, stdout } = await review(repo, scriptedModel(reply).port, "--report", "r.json");
     expect(code).toBe(0);
     const report = JSON.parse(readFileSync(path.join(repo, "r.json"), "utf8")) as ReviewReport;
-    return { stdout, finding: report.findings[0] };
+    return { stdout, finding: report.findings[0], held: report.filtered[0] };
   }
 
   it("moves a finding to the line it quotes", async () => {
@@ -688,8 +706,8 @@ describe("line-anchor repair", () => {
     expect(finding?.unplaced).toBeUndefined();
   });
 
-  it("places no finding whose quote is not in the file, and drops its suggestion", async () => {
-    const { finding } = await reviewed(makeScenario(), {
+  it("places no finding whose quote is not in the file, drops its suggestion and holds it", async () => {
+    const { finding, held } = await reviewed(makeScenario(), {
       file: "src/app.js",
       line: 2,
       quote: "this.exact.text.appears.nowhere();",
@@ -697,21 +715,24 @@ describe("line-anchor repair", () => {
       body: "Replace it with the logger.",
       suggestion: "logger.info(name);",
     });
-    expect(finding?.unplaced).toBe(true);
-    expect(finding?.suggestion).toBeUndefined();
-    expect(finding?.note).toContain("is not in `src/app.js`");
+    expect(finding).toBeUndefined();
+    expect(held?.unplaced).toBe(true);
+    expect(held?.holdReason).toBe("unplaced");
+    expect(held?.suggestion).toBeUndefined();
+    expect(held?.note).toContain("is not in `src/app.js`");
   });
 
-  it("places no finding that quotes nothing", async () => {
-    const { finding } = await reviewed(makeScenario(), {
+  it("places and posts no finding that quotes nothing", async () => {
+    const { finding, held } = await reviewed(makeScenario(), {
       file: "src/app.js",
       line: 2,
       title: "Console call added",
       body: "Replace it with the logger.",
       suggestion: "logger.info(name);",
     });
-    expect(finding?.unplaced).toBe(true);
-    expect(finding?.suggestion).toBeUndefined();
+    expect(finding).toBeUndefined();
+    expect(held?.unplaced).toBe(true);
+    expect(held?.suggestion).toBeUndefined();
   });
 
   it("never lets a suggestion replace a line other than the one quoted", async () => {
@@ -742,6 +763,7 @@ describe("duplicate finding collapse", () => {
           guidelineId: "no-console",
           file: "src/app.js",
           line: 2,
+          quote: "  console.log(name);",
           title: "Console call added",
           body: "Replace the console.log with the logger.",
           guidelineQuote: "No console statements",
@@ -750,6 +772,7 @@ describe("duplicate finding collapse", () => {
           guidelineId: "no-console",
           file: "src/app.js",
           line: 2,
+          quote: "  console.log(name);",
           title: "Console statement present",
           body: "This line calls console.log directly.",
           guidelineQuote: "No console statements",
@@ -758,6 +781,7 @@ describe("duplicate finding collapse", () => {
           guidelineId: "no-console",
           file: "src/app.js",
           line: 3,
+          quote: "  return name;",
           title: "A genuinely distinct finding",
           body: "A different line; must not be merged away with the others.",
           guidelineQuote: "No console statements",
@@ -810,6 +834,7 @@ describe("partial batch parse failures", () => {
                 guidelineId: "no-console",
                 file,
                 line: 1,
+                quote: firstAddedLine(request.user, file),
                 title: "Console call added",
                 body: "Replace with the logger.",
                 guidelineQuote: "No console statements",
@@ -976,6 +1001,7 @@ describe("a batch reply that cannot be parsed", () => {
                 guidelineId: "no-console",
                 file,
                 line: 1,
+                quote: firstAddedLine(request.user, file),
                 title: "Console call added",
                 body: "Replace with the logger.",
                 guidelineQuote: "No console statements",

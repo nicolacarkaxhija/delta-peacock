@@ -370,6 +370,7 @@ describe("review degradation end to end", () => {
                 guidelineId: "no-console",
                 file,
                 line: 1,
+                quote: `console.log('${(file === "src/a.js" ? "a" : "b").repeat(400)}');`,
                 title: "C",
                 body: "b",
                 guidelineQuote: "Use the logger.",

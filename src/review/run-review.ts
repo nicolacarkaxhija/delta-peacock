@@ -74,14 +74,8 @@ import { dedupeFindings, runEnsemble, type MemberOutcome } from "./ensemble.js";
 import { keepOnChangedLines } from "./changed-lines.js";
 import { partitionAccepted, readAcceptedForms } from "./accepted-forms.js";
 import { applyExclusions } from "./exclusions.js";
-import {
-  evidenceFlag,
-  holdReason,
-  isPosted,
-  skippedCheckContext,
-  type PostingContext,
-} from "./posting.js";
-import { tagHolds } from "../domain/hold.js";
+import { evidenceFlag, skippedCheckContext } from "./posting.js";
+import { holdReason, isPosted, tagHolds, type PostingContext } from "../domain/hold.js";
 import { inPool } from "../util/pool.js";
 import { buildReviewPrompt } from "./prompt.js";
 import {
@@ -632,7 +626,7 @@ export async function runReview(
     ceiling.reached(),
     postingContext,
   );
-  // each finding held under evidence carries its reason, so no count reads as under the floor
+  // each finding held for a reason other than the floor carries it, so no count reads as under the floor
   const { findings: filtered, counts: holds } = tagHolds(finalized.filtered, (finding) =>
     holdReason(finding, config.review, postingContext(finding)),
   );

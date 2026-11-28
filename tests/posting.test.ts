@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ConfigSchema } from "../src/config/schema.js";
 import type { Finding } from "../src/domain/finding.js";
-import { evidenceFlag, isPosted, skippedCheckContext } from "../src/review/posting.js";
+import { holdReason, isPosted } from "../src/domain/hold.js";
+import { evidenceFlag, skippedCheckContext } from "../src/review/posting.js";
 import { buildReviewPrompt } from "../src/review/prompt.js";
 
 const VIOLATION: Finding = {
@@ -49,10 +50,22 @@ describe("isPosted", () => {
     expect(isPosted({ ...VIOLATION, confidence: 0.9 }, review("evidence"))).toBe(true);
   });
 
-  it("holds a violation its quote could not place under posting: evidence, whatever its confidence", () => {
-    expect(isPosted({ ...VIOLATION, unplaced: true, confidence: 1 }, review("evidence"))).toBe(
-      false,
-    );
+  it.each([["confidence"], ["evidence"]])(
+    "holds a violation its quote could not place as unplaced under posting: %s, whatever its confidence",
+    (posting) => {
+      expect(holdReason({ ...VIOLATION, unplaced: true, confidence: 1 }, review(posting))).toBe(
+        "unplaced",
+      );
+      expect(holdReason({ ...VIOLATION, unplaced: true }, review(posting))).toBe("unplaced");
+      expect(holdReason({ ...VIOLATION, unplaced: true, confidence: 0.1 }, review(posting))).toBe(
+        "unplaced",
+      );
+    },
+  );
+
+  it("keeps the floor for an unplaced observation, since the hold on no line is for violations", () => {
+    expect(holdReason({ ...OBSERVATION, unplaced: true }, review())).toBe("floor");
+    expect(isPosted({ ...OBSERVATION, unplaced: true, confidence: 0.9 }, review())).toBe(true);
   });
 
   it("holds a violation whose guideline lists exclusions where no verdict was asked, under posting: evidence", () => {

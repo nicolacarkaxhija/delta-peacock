@@ -6,7 +6,7 @@ import type { RejectedCandidate } from "./parse.js";
 
 const REJECTED_CAP = 200;
 import type { GateDecision } from "../domain/gate.js";
-import type { EvidenceHold, HeldFinding } from "../domain/hold.js";
+import type { TaggedHold, HeldFinding } from "../domain/hold.js";
 import type { ModelUsage } from "../model/port.js";
 import type { ComputedCost } from "../model/usage.js";
 
@@ -21,8 +21,8 @@ export type ReportedFinding = Finding & {
   lineText?: string;
   /** Accepted as pre-existing; informs the reader, never the gate. */
   baselined?: true;
-  /** Why posting: evidence held it; absent for a finding under the confidence floor. */
-  holdReason?: EvidenceHold;
+  /** Why it was held, when for a reason other than the confidence floor. */
+  holdReason?: TaggedHold;
 };
 
 /** A violation an in-code waiver excused: recorded here, never gating (ADR 0008). */
@@ -58,7 +58,7 @@ export interface ReviewReport {
   waived?: WaivedFinding[];
   /** Raw payloads the parser refused, next to the drop counts; capped. */
   rejectedCandidates?: RejectedCandidate[];
-  /** Findings not posted: under the confidence floor, or held under posting: evidence with their holdReason; never rendered or posted. */
+  /** Findings not posted: under the confidence floor, or held for another reason given as holdReason; never rendered or posted. */
   filtered: ReportedFinding[];
   /** Findings on a form the repository lists as accepted; never posted, present when any. */
   accepted?: ReportedFinding[];

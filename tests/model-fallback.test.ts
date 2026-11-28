@@ -661,6 +661,7 @@ const SIX = [
   "export const GRID_ROWS = 12;",
   "export const LIST_ROWS = 40;",
   "export const TABLE_ROWS = 30;",
+  "console.log(PAGE_ROWS);",
   "",
 ].join("\n");
 
