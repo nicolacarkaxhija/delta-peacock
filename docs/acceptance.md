@@ -140,8 +140,9 @@ false` restores the review without the pre pass; a Semgrep failure warns and sen
   summary comment, created when missing and edited in place on every later push, naming the
   reviewed commit, the changed files, the files each include or exclude glob left out, the files an
   earlier review already covered and its commit; the commit status and the Insights card stay as
-  they were. On its own:
-  `pnpm exec vitest run tests/scm-render tests/review-root-causes tests/diff-hardening`.
+  they were; a run whose findings are all held is not clean: the summary keeps its `Not posted` line
+  and the card names the held count per reason while its result still passes. On its own:
+  `pnpm exec vitest run tests/scm-render tests/review-root-causes tests/diff-hardening tests/held-clean-run`.
 - `linked references`: every commit, file and line, guideline and finding comment the reviewer
   writes is a link where the host can build its address and plain text where it cannot; a task
   text stays plain; comments and summaries an earlier version wrote are claimed and updated in

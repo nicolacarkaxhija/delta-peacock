@@ -542,7 +542,7 @@ describe("publishReview on a clean run where a card carries the result", () => {
         findings: [],
         proposals: [{ id: "no-magic", severity: "MINOR" as const, rationale: "recurring" }],
         droppedUncited: 0,
-        filtered: 1,
+        filtered: 0,
         gate: PASSED,
         commitStatus: true,
         comments: true,
@@ -571,7 +571,7 @@ describe("publishReview on a clean run where a card carries the result", () => {
 
   it("posts the full template when a finding was accepted, so the count shows", async () => {
     const host = cardHost();
-    await publishReview(host.port, { ...cleanRun("1".repeat(40)), accepted: 2 });
+    await publishReview(host.port, { ...cleanRun("1".repeat(40)), accepted: 2, filtered: 1 });
     expect(host.summaries[0]?.body).toContain(
       "_Not posted: 2 accepted findings, 1 low-confidence finding._",
     );

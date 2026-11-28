@@ -712,6 +712,13 @@ function summaryStateLine(input: SummaryInput, presentation: Presentation): stri
   });
 }
 
+/** Each hold reason with findings held, worded as the summary counts it. */
+export function heldParts(input: Pick<SummaryInput, "filtered" | "holds">): string[] {
+  return holdTally(input.filtered, input.holds).map(
+    (hold) => `${plural(hold.count, hold.noun)}${hold.note === undefined ? "" : ` (${hold.note})`}`,
+  );
+}
+
 /** The summary as its first line alone, for a clean run whose card carries the rest. */
 export function renderSummaryLine(input: SummaryInput, presentation: Presentation): string {
   const line = summaryStateLine(input, presentation);
@@ -776,10 +783,7 @@ export function renderSummaryBody(
     ...(input.accepted !== undefined && input.accepted > 0
       ? [plural(input.accepted, "accepted finding")]
       : []),
-    ...holdTally(input.filtered, input.holds).map(
-      (hold) =>
-        `${plural(hold.count, hold.noun)}${hold.note === undefined ? "" : ` (${hold.note})`}`,
-    ),
+    ...heldParts(input),
     ...(input.droppedUncited > 0
       ? [`${plural(input.droppedUncited, "finding")} citing no guideline`]
       : []),
